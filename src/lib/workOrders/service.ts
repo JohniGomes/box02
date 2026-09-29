@@ -61,9 +61,11 @@ import {
   authorizeAdditionalItemDirectlySchema,
   cancelWorkOrderItemSchema,
   cancelWorkOrderSchema,
+  correctWorkOrderItemExecutorSchema,
   createAdditionalItemSchema,
   createWorkOrderEvidenceMetadataSchema,
   createWorkOrderWithoutQuoteSchema,
+  executeWorkOrderItemSchema,
   registerWorkOrderPaymentSchema,
   updateDiagnosisExplanationSchema,
   updatePreExistingDamagesSchema,
@@ -77,6 +79,7 @@ import {
   AdditionalItemAlreadyDecidedError,
   AdditionalItemNotAuthorizedError,
   AdditionalItemNotEligibleError,
+  InvalidExecutorUserError,
   InvalidWorkOrderItemTransitionError,
   InvalidWorkOrderTransitionError,
   QuoteNotApprovedError,
@@ -94,6 +97,7 @@ import {
 import { findWorkOrderChecklist, listWorkOrderChecklistItems } from "@/lib/db/repositories/workOrderChecklists";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
+import { findUserById } from "@/lib/db/repositories/users";
 
 /** Máquina de estados da OS — qualquer par fora daqui é rejeitado. */
 const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
@@ -393,8 +397,21 @@ export async function setWorkOrderItemStatusService(
   }
 
   let cancelReason: string | undefined;
+  let executedByUserId: string | undefined;
   if (status === "CANCELADO") {
     cancelReason = cancelWorkOrderItemSchema.parse(rawInput).reason;
+  }
+  if (status === "EXECUTADO") {
+    // Ciclo L: executor é sempre explícito. Quando a chamada não informa
+    // rawInput (ex.: chamadas programáticas/testes existentes), assume o
+    // próprio ator por compatibilidade — mas a UI sempre envia o valor
+    // escolhido no seletor, nunca deixa implícito.
+    const parsed = rawInput !== undefined ? executeWorkOrderItemSchema.parse(rawInput) : null;
+    executedByUserId = parsed?.executedByUserId ?? actorUserId;
+    const executor = await findUserById(executedByUserId);
+    if (!executor || executor.status !== "ATIVO") {
+      throw new InvalidExecutorUserError();
+    }
   }
 
   // Correção de concorrência (Sub-etapa 2, risco já identificado na
@@ -421,7 +438,7 @@ export async function setWorkOrderItemStatusService(
       status,
       {
         executedAt: status === "EXECUTADO" ? new Date() : undefined,
-        executedByUserId: status === "EXECUTADO" ? actorUserId : undefined,
+        executedByUserId,
         cancelReason,
       },
       client,
@@ -433,7 +450,62 @@ export async function setWorkOrderItemStatusService(
       action: "WORK_ORDER_ITEM_STATUS_CHANGED",
       entityType: "work_order_item",
       entityId: itemId,
-      metadata: { workOrderId, to: status, cancelReason },
+      metadata: { workOrderId, to: status, cancelReason, executedByUserId },
+    });
+
+    return updated;
+  });
+}
+
+/** Ciclo L — corrige quem executou um item já EXECUTADO (campo editável,
+ * não write-once: DEC de governança 3.5, já que é um registro técnico
+ * interno, não um ponto formal de aceite do cliente). Histórico de
+ * correções fica na auditoria (WORK_ORDER_ITEM_EXECUTOR_CORRECTED). */
+export async function correctWorkOrderItemExecutorService(
+  actorUserId: string,
+  workOrderId: string,
+  itemId: string,
+  rawInput: unknown,
+): Promise<WorkOrderItemRecord> {
+  const { executedByUserId: newExecutedByUserId } = correctWorkOrderItemExecutorSchema.parse(rawInput);
+
+  const workOrder = await findWorkOrderById(workOrderId);
+  if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+  if (workOrder.status === "ENTREGUE" || workOrder.status === "CANCELADA") {
+    throw new InvalidWorkOrderItemTransitionError(
+      "Esta OS já está fechada/cancelada — itens não podem mais mudar.",
+    );
+  }
+
+  const executor = await findUserById(newExecutedByUserId);
+  if (!executor || executor.status !== "ATIVO") {
+    throw new InvalidExecutorUserError();
+  }
+
+  return withTransaction(async (client) => {
+    const item = await lockWorkOrderItemById(itemId, client);
+    if (!item || item.workOrderId !== workOrderId) throw new WorkOrderItemNotFoundError(itemId);
+    if (item.status !== "EXECUTADO") {
+      throw new InvalidWorkOrderItemTransitionError(
+        `Só é possível corrigir o executor de um item "EXECUTADO" (item está "${item.status}").`,
+      );
+    }
+
+    const previousExecutedByUserId = item.executedByUserId;
+    const updated = await setWorkOrderItemStatus(
+      itemId,
+      "EXECUTADO",
+      { executedByUserId: newExecutedByUserId },
+      client,
+    );
+    if (!updated) throw new WorkOrderItemNotFoundError(itemId);
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "WORK_ORDER_ITEM_EXECUTOR_CORRECTED",
+      entityType: "work_order_item",
+      entityId: itemId,
+      metadata: { workOrderId, from: previousExecutedByUserId, to: newExecutedByUserId },
     });
 
     return updated;

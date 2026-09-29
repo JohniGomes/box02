@@ -31,6 +31,15 @@ export async function findUserById(id: string): Promise<UserRecord | null> {
   return result.rows[0] ?? null;
 }
 
+/** Ciclo L — usuários elegíveis para serem selecionados como executor de um
+ * item de OS (seletor manual, já que mais de uma pessoa loga no sistema). */
+export async function listActiveUsers(): Promise<{ id: string; name: string }[]> {
+  const result = await pool.query<{ id: string; name: string }>(
+    `SELECT id, name FROM users WHERE status = 'ATIVO' ORDER BY name`,
+  );
+  return result.rows;
+}
+
 export async function createUser(input: {
   name: string;
   email: string;

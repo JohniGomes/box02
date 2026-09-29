@@ -177,3 +177,17 @@ export class WorkOrderEvidenceNotFoundError extends Error {
     this.name = "WorkOrderEvidenceNotFoundError";
   }
 }
+
+// ============================================================
+// Ciclo L — Rastreabilidade de Execução por Mecânico
+// ============================================================
+
+/** O executor informado (na execução ou numa correção posterior) não é um
+ * usuário ativo do sistema — evita registrar um id inválido ou de usuário
+ * desativado como quem executou o item. */
+export class InvalidExecutorUserError extends Error {
+  constructor() {
+    super("Usuário selecionado não é válido para ser registrado como executor.");
+    this.name = "InvalidExecutorUserError";
+  }
+}

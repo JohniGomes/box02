@@ -13,6 +13,7 @@ import {
 import {
   cancelWorkOrderService,
   closeWorkOrderService,
+  correctWorkOrderItemExecutorService,
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
   getWorkOrderService,
@@ -21,6 +22,7 @@ import {
   setWorkOrderStatusService,
 } from "../service";
 import {
+  InvalidExecutorUserError,
   InvalidWorkOrderItemTransitionError,
   InvalidWorkOrderTransitionError,
   QuoteNotApprovedError,
@@ -39,6 +41,8 @@ async function cleanAll() {
 }
 
 let actorUserId: string;
+let mechanicUserId: string;
+let inactiveUserId: string;
 let customerAId: string;
 let customerBId: string;
 let vehicleAId: string;
@@ -49,6 +53,14 @@ beforeAll(async () => {
   const hash = await hashPassword("senhaTeste123");
   const user = await createUser({ name: "Testador", email: "testador@teste.com", passwordHash: hash });
   actorUserId = user.id;
+  // Ciclo L — um segundo usuário ativo, para testar executor explícito
+  // diferente de quem está logado (ex.: você marcando um item que o
+  // Carlos ou o Mateus executaram).
+  const mechanic = await createUser({ name: "Mecânico Teste", email: "mecanico@teste.com", passwordHash: hash });
+  mechanicUserId = mechanic.id;
+  const inactive = await createUser({ name: "Ex-funcionário", email: "exfuncionario@teste.com", passwordHash: hash });
+  inactiveUserId = inactive.id;
+  await pool.query(`UPDATE users SET status = 'INATIVO' WHERE id = $1`, [inactiveUserId]);
 });
 
 beforeEach(async () => {
@@ -431,6 +443,89 @@ describe("execução e cancelamento de item", () => {
       setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "CANCELADO", { reason: "Tarde demais" }),
     ).rejects.toThrow(InvalidWorkOrderItemTransitionError);
   });
+
+  // ============================================================
+  // Ciclo L — Rastreabilidade de Execução por Mecânico
+  // ============================================================
+
+  it("aceita executor explícito diferente de quem está logado", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    const updated = await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO", {
+      executedByUserId: mechanicUserId,
+    });
+    expect(updated.executedByUserId).toBe(mechanicUserId);
+  });
+
+  it("sem executor explícito, assume quem está logado (compatibilidade)", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    const updated = await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO");
+    expect(updated.executedByUserId).toBe(actorUserId);
+  });
+
+  it("rejeita executor inválido (usuário inativo)", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    await expect(
+      setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO", {
+        executedByUserId: inactiveUserId,
+      }),
+    ).rejects.toThrow(InvalidExecutorUserError);
+  });
+
+  it("rejeita executor inválido (usuário inexistente)", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    await expect(
+      setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO", {
+        executedByUserId: "id-que-nao-existe",
+      }),
+    ).rejects.toThrow(InvalidExecutorUserError);
+  });
+
+  it("corrige o executor de um item já EXECUTADO", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO", {
+      executedByUserId: actorUserId,
+    });
+    const corrected = await correctWorkOrderItemExecutorService(actorUserId, workOrder.id, items[0].id, {
+      executedByUserId: mechanicUserId,
+    });
+    expect(corrected.executedByUserId).toBe(mechanicUserId);
+    expect(corrected.status).toBe("EXECUTADO");
+  });
+
+  it("correção de executor grava auditoria própria", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO", {
+      executedByUserId: actorUserId,
+    });
+    await correctWorkOrderItemExecutorService(actorUserId, workOrder.id, items[0].id, {
+      executedByUserId: mechanicUserId,
+    });
+    const logs = await pool.query(
+      `SELECT metadata FROM audit_logs WHERE "entityId" = $1 AND action = 'WORK_ORDER_ITEM_EXECUTOR_CORRECTED'`,
+      [items[0].id],
+    );
+    expect(logs.rowCount).toBe(1);
+    expect(logs.rows[0].metadata).toMatchObject({ from: actorUserId, to: mechanicUserId });
+  });
+
+  it("rejeita corrigir executor de item que não está EXECUTADO", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    await expect(
+      correctWorkOrderItemExecutorService(actorUserId, workOrder.id, items[0].id, {
+        executedByUserId: mechanicUserId,
+      }),
+    ).rejects.toThrow(InvalidWorkOrderItemTransitionError);
+  });
+
+  it("rejeita corrigir executor para um usuário inválido", async () => {
+    const { workOrder, items } = await newOSWithTwoItems();
+    await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO");
+    await expect(
+      correctWorkOrderItemExecutorService(actorUserId, workOrder.id, items[0].id, {
+        executedByUserId: inactiveUserId,
+      }),
+    ).rejects.toThrow(InvalidExecutorUserError);
+  });
 });
 
 describe("fechamento da OS", () => {
@@ -469,6 +564,19 @@ describe("fechamento da OS", () => {
 
     expect(closed.status).toBe("ENTREGUE");
     expect(closed.totalCents).toBe(10000); // só o item de R$100, não os R$999 cancelados
+  });
+
+  it("Ciclo L: bloqueia correção de executor depois que a OS está ENTREGUE", async () => {
+    const { workOrder, items } = await readyOS();
+    await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO");
+    await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[1].id, "CANCELADO", { reason: "Não" });
+    await closeWorkOrderService(actorUserId, workOrder.id, { deliveryAcceptedName: "João" });
+
+    await expect(
+      correctWorkOrderItemExecutorService(actorUserId, workOrder.id, items[0].id, {
+        executedByUserId: mechanicUserId,
+      }),
+    ).rejects.toThrow(InvalidWorkOrderItemTransitionError);
   });
 
   it("grava work_order_closures com o total no momento do fechamento", async () => {

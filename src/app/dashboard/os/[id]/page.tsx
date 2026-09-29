@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getWorkOrderPaymentsSummaryService, getWorkOrderService, listWorkOrderEvidencesService } from "@/lib/workOrders/service";
 import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { getServiceService } from "@/lib/services/service";
+import { listActiveUsers } from "@/lib/db/repositories/users";
 import { findQuoteVersionById } from "@/lib/db/repositories/quoteVersions";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
 import { formatBRL } from "@/lib/money";
@@ -15,6 +17,7 @@ import {
   CancelWorkOrderForm,
   CloseWorkOrderForm,
   WorkOrderItemActions,
+  WorkOrderItemExecutorInfo,
   WorkOrderStatusActions,
 } from "./WorkOrderActions";
 import { AdditionalItemsSection } from "./AdditionalItemsSection";
@@ -46,6 +49,10 @@ export default async function WorkOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const currentUserId = session.user.id;
+
   const data = await getWorkOrderService(id);
   if (!data) notFound();
 
@@ -53,10 +60,11 @@ export default async function WorkOrderDetailPage({
   const paymentsSummary =
     workOrder.status === "ENTREGUE" ? await getWorkOrderPaymentsSummaryService(workOrder.id) : null;
   const evidences = await listWorkOrderEvidencesService(workOrder.id);
-  const [customer, vehicle, workOrderChecklists] = await Promise.all([
+  const [customer, vehicle, workOrderChecklists, activeUsers] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
     getWorkOrderChecklistsService(workOrder.id),
+    listActiveUsers(),
   ]);
 
   const isOpenForCancel = workOrder.status !== "ENTREGUE" && workOrder.status !== "CANCELADA";
@@ -275,8 +283,22 @@ export default async function WorkOrderDetailPage({
                 </div>
                 {item.status === "PLANEJADO" && isOpenForCancel ? (
                   <div className="mt-2">
-                    <WorkOrderItemActions workOrderId={workOrder.id} itemId={item.id} />
+                    <WorkOrderItemActions
+                      workOrderId={workOrder.id}
+                      itemId={item.id}
+                      users={activeUsers}
+                      currentUserId={currentUserId}
+                    />
                   </div>
+                ) : null}
+                {item.status === "EXECUTADO" ? (
+                  <WorkOrderItemExecutorInfo
+                    workOrderId={workOrder.id}
+                    itemId={item.id}
+                    executedByUserId={item.executedByUserId}
+                    users={activeUsers}
+                    canManage={isOpenForCancel}
+                  />
                 ) : null}
                 {item.cancelReason ? (
                   <p className="mt-1 text-xs text-danger">Motivo: {item.cancelReason}</p>
@@ -302,6 +324,8 @@ export default async function WorkOrderDetailPage({
         <AdditionalItemsSection
           workOrderId={workOrder.id}
           canManage={canManageAdditionals}
+          users={activeUsers}
+          currentUserId={currentUserId}
           items={additionalItems.map((item) => ({
             id: item.id,
             type: item.type,
@@ -313,6 +337,7 @@ export default async function WorkOrderDetailPage({
             authorizationChannel: item.authorizationChannel,
             cancelReason: item.cancelReason,
             customerPhone: customer?.whatsapp ?? customer?.phone ?? null,
+            executedByUserId: item.executedByUserId,
           }))}
         />
       </CollapsibleSection>

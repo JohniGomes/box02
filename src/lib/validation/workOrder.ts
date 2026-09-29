@@ -107,6 +107,18 @@ export const cancelWorkOrderItemSchema = z.object({
 });
 
 // ============================================================
+// Ciclo L — Rastreabilidade de Execução por Mecânico
+// ============================================================
+
+export const executeWorkOrderItemSchema = z.object({
+  executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
+});
+
+export const correctWorkOrderItemExecutorSchema = z.object({
+  executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
+});
+
+// ============================================================
 // Sub-etapa 2 — Adicionais durante a execução
 // ============================================================
 

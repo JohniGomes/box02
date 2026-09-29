@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import {
   cancelWorkOrderService,
   closeWorkOrderService,
+  correctWorkOrderItemExecutorService,
   createAdditionalItemService,
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
@@ -19,6 +20,7 @@ import {
   AdditionalItemAlreadyDecidedError,
   AdditionalItemNotAuthorizedError,
   AdditionalItemNotEligibleError,
+  InvalidExecutorUserError,
   InvalidWorkOrderItemTransitionError,
   InvalidWorkOrderTransitionError,
   QuoteNotApprovedError,
@@ -63,7 +65,8 @@ function friendlyError(err: unknown, fallback: string): ActionResult {
     err instanceof VehicleCustomerNotFoundError ||
     err instanceof AdditionalItemNotAuthorizedError ||
     err instanceof AdditionalItemAlreadyDecidedError ||
-    err instanceof AdditionalItemNotEligibleError
+    err instanceof AdditionalItemNotEligibleError ||
+    err instanceof InvalidExecutorUserError
   ) {
     return { success: false, error: err.message };
   }
@@ -114,15 +117,40 @@ export async function setWorkOrderItemStatusAction(
   workOrderId: string,
   itemId: string,
   status: "EXECUTADO" | "CANCELADO",
-  cancelReason?: string,
+  extra?: { cancelReason?: string; executedByUserId?: string },
 ): Promise<ActionResult> {
   try {
     const userId = await requireUserId();
-    await setWorkOrderItemStatusService(userId, workOrderId, itemId, status, { reason: cancelReason });
+    const rawInput =
+      status === "CANCELADO"
+        ? { reason: extra?.cancelReason }
+        : extra?.executedByUserId
+          ? { executedByUserId: extra.executedByUserId }
+          : undefined;
+    await setWorkOrderItemStatusService(userId, workOrderId, itemId, status, rawInput);
     revalidatePath(`/dashboard/os/${workOrderId}`);
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível atualizar o item.");
+  }
+}
+
+// ============================================================
+// Ciclo L — Rastreabilidade de Execução por Mecânico
+// ============================================================
+
+export async function correctWorkOrderItemExecutorAction(
+  workOrderId: string,
+  itemId: string,
+  executedByUserId: string,
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await correctWorkOrderItemExecutorService(userId, workOrderId, itemId, { executedByUserId });
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível corrigir o executor.");
   }
 }
 

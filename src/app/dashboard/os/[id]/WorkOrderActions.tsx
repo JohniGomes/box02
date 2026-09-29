@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   cancelWorkOrderAction,
   closeWorkOrderAction,
+  correctWorkOrderItemExecutorAction,
   setWorkOrderItemStatusAction,
   setWorkOrderStatusAction,
 } from "../actions";
@@ -77,23 +78,38 @@ export function WorkOrderStatusActions({
   );
 }
 
+export interface ActiveUserOption {
+  id: string;
+  name: string;
+}
+
 export function WorkOrderItemActions({
   workOrderId,
   itemId,
+  users,
+  currentUserId,
 }: {
   workOrderId: string;
   itemId: string;
+  /** Ciclo L: quem pode ser registrado como executor — só usuários ativos. */
+  users: ActiveUserOption[];
+  /** Pré-seleciona o seletor com quem está logado, mas nunca é assumido
+   * implicitamente — a escolha sempre é enviada de forma explícita. */
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
+  const [executorId, setExecutorId] = useState(currentUserId);
   const [error, setError] = useState<string | null>(null);
 
   function markExecuted() {
     setError(null);
     startTransition(async () => {
-      const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "EXECUTADO");
+      const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "EXECUTADO", {
+        executedByUserId: executorId,
+      });
       if (!result.success) {
         setError(result.error ?? "Falha ao marcar como executado.");
         return;
@@ -105,7 +121,9 @@ export function WorkOrderItemActions({
   function confirmCancel() {
     setError(null);
     startTransition(async () => {
-      const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "CANCELADO", reason);
+      const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "CANCELADO", {
+        cancelReason: reason,
+      });
       if (!result.success) {
         setError(result.error ?? "Falha ao cancelar item.");
         return;
@@ -142,7 +160,8 @@ export function WorkOrderItemActions({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2">
+      <ExecutorSelect users={users} value={executorId} onChange={setExecutorId} />
       <div className="flex gap-2">
         <button
           onClick={markExecuted}
@@ -160,6 +179,105 @@ export function WorkOrderItemActions({
         </button>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+    </div>
+  );
+}
+
+/** Seletor de "quem executou" — reutilizado tanto ao marcar um item como
+ * executado quanto ao corrigir o executor depois. */
+function ExecutorSelect({
+  users,
+  value,
+  onChange,
+}: {
+  users: ActiveUserOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium text-muted">Executado por</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
+      >
+        {users.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Ciclo L — exibe quem executou um item já EXECUTADO, com opção de
+ * corrigir (campo editável, não write-once — DEC de governança 3.5).
+ * Reaproveitado tanto pelos itens do orçamento/OS quanto pelos adicionais. */
+export function WorkOrderItemExecutorInfo({
+  workOrderId,
+  itemId,
+  executedByUserId,
+  users,
+  canManage,
+}: {
+  workOrderId: string;
+  itemId: string;
+  executedByUserId: string | null;
+  users: ActiveUserOption[];
+  canManage: boolean;
+}) {
+  const router = useRouter();
+  const [correcting, setCorrecting] = useState(false);
+  const [newExecutorId, setNewExecutorId] = useState(executedByUserId ?? users[0]?.id ?? "");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const executorName = users.find((u) => u.id === executedByUserId)?.name ?? "—";
+
+  function confirmCorrection() {
+    setError(null);
+    startTransition(async () => {
+      const result = await correctWorkOrderItemExecutorAction(workOrderId, itemId, newExecutorId);
+      if (!result.success) {
+        setError(result.error ?? "Falha ao corrigir executor.");
+        return;
+      }
+      setCorrecting(false);
+      router.refresh();
+    });
+  }
+
+  if (correcting) {
+    return (
+      <div className="mt-1 flex flex-col gap-1.5">
+        <ExecutorSelect users={users} value={newExecutorId} onChange={setNewExecutorId} />
+        <div className="flex gap-2">
+          <button
+            onClick={confirmCorrection}
+            disabled={isPending}
+            className="h-8 flex-1 rounded-lg bg-accent text-[11px] font-semibold text-accent-foreground disabled:opacity-50"
+          >
+            Confirmar correção
+          </button>
+          <button onClick={() => setCorrecting(false)} className="h-8 flex-1 rounded-lg border border-border text-[11px]">
+            Voltar
+          </button>
+        </div>
+        {error ? <p className="text-[11px] text-danger">{error}</p> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
+      <span>Executado por: {executorName}</span>
+      {canManage ? (
+        <button onClick={() => setCorrecting(true)} className="font-medium text-accent">
+          Corrigir
+        </button>
+      ) : null}
     </div>
   );
 }

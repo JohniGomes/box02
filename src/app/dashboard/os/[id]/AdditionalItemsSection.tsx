@@ -11,6 +11,7 @@ import {
 } from "../actions";
 import { formatBRL } from "@/lib/money";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
+import { WorkOrderItemExecutorInfo, type ActiveUserOption } from "./WorkOrderActions";
 
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
 const ITEM_TYPE_LABEL: Record<ItemType, string> = { SERVICO: "Serviço", PECA: "Peça", MAO_DE_OBRA: "Mão de obra" };
@@ -26,6 +27,8 @@ export interface AdditionalItemView {
   authorizationChannel: string | null;
   cancelReason: string | null;
   customerPhone: string | null;
+  /** Ciclo L */
+  executedByUserId: string | null;
 }
 
 const DECISION_LABEL: Record<string, string> = { PENDENTE: "Aguardando decisão", APROVADO: "Aprovado", RECUSADO: "Recusado" };
@@ -39,10 +42,15 @@ export function AdditionalItemsSection({
   workOrderId,
   items,
   canManage,
+  users,
+  currentUserId,
 }: {
   workOrderId: string;
   items: AdditionalItemView[];
   canManage: boolean;
+  /** Ciclo L */
+  users: ActiveUserOption[];
+  currentUserId: string;
 }) {
   const [creating, setCreating] = useState(false);
 
@@ -68,7 +76,14 @@ export function AdditionalItemsSection({
       ) : (
         <ul className="flex flex-col gap-3">
           {items.map((item) => (
-            <AdditionalItemCard key={item.id} workOrderId={workOrderId} item={item} canManage={canManage} />
+            <AdditionalItemCard
+              key={item.id}
+              workOrderId={workOrderId}
+              item={item}
+              canManage={canManage}
+              users={users}
+              currentUserId={currentUserId}
+            />
           ))}
         </ul>
       )}
@@ -150,10 +165,14 @@ function AdditionalItemCard({
   workOrderId,
   item,
   canManage,
+  users,
+  currentUserId,
 }: {
   workOrderId: string;
   item: AdditionalItemView;
   canManage: boolean;
+  users: ActiveUserOption[];
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<null | "direct" | "link" | "adjust">(null);
@@ -209,6 +228,16 @@ function AdditionalItemCard({
         </p>
       ) : null}
       {item.cancelReason ? <p className="mt-1 text-xs text-danger">Motivo: {item.cancelReason}</p> : null}
+
+      {item.status === "EXECUTADO" ? (
+        <WorkOrderItemExecutorInfo
+          workOrderId={workOrderId}
+          itemId={item.id}
+          executedByUserId={item.executedByUserId}
+          users={users}
+          canManage={canManage}
+        />
+      ) : null}
 
       {canManage && item.clientDecision === "PENDENTE" && item.status === "PLANEJADO" ? (
         <div className="mt-2 flex flex-col gap-2">
@@ -289,7 +318,12 @@ function AdditionalItemCard({
       ) : null}
 
       {canManage && item.clientDecision === "APROVADO" && item.status === "PLANEJADO" ? (
-        <ExecuteOrCancelButtons workOrderId={workOrderId} itemId={item.id} />
+        <ExecuteOrCancelButtons
+          workOrderId={workOrderId}
+          itemId={item.id}
+          users={users}
+          currentUserId={currentUserId}
+        />
       ) : null}
     </li>
   );
@@ -441,15 +475,28 @@ function AdjustItemForm({
   );
 }
 
-function ExecuteOrCancelButtons({ workOrderId, itemId }: { workOrderId: string; itemId: string }) {
+function ExecuteOrCancelButtons({
+  workOrderId,
+  itemId,
+  users,
+  currentUserId,
+}: {
+  workOrderId: string;
+  itemId: string;
+  users: ActiveUserOption[];
+  currentUserId: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [executorId, setExecutorId] = useState(currentUserId);
   const [error, setError] = useState<string | null>(null);
 
   function markExecuted() {
     setError(null);
     startTransition(async () => {
-      const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "EXECUTADO");
+      const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "EXECUTADO", {
+        executedByUserId: executorId,
+      });
       if (!result.success) {
         setError(result.error ?? "Falha.");
         return;
@@ -459,7 +506,21 @@ function ExecuteOrCancelButtons({ workOrderId, itemId }: { workOrderId: string; 
   }
 
   return (
-    <div className="mt-2 flex flex-col gap-1">
+    <div className="mt-2 flex flex-col gap-1.5">
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] font-medium text-muted">Executado por</span>
+        <select
+          value={executorId}
+          onChange={(e) => setExecutorId(e.target.value)}
+          className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
+        >
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         onClick={markExecuted}
         disabled={isPending}
