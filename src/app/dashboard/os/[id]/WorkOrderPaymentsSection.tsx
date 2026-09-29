@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatBRL } from "@/lib/money";
-import { registerWorkOrderPaymentAction } from "../paymentActions";
+import { refundWorkOrderPaymentAction, registerWorkOrderPaymentAction } from "../paymentActions";
 
 const METHOD_LABEL: Record<string, string> = {
   DINHEIRO: "Dinheiro",
@@ -32,12 +32,23 @@ export interface WorkOrderPaymentView {
   receivedAt: string;
 }
 
+/** Ciclo M */
+export interface WorkOrderPaymentRefundView {
+  id: string;
+  paymentId: string;
+  refundCents: number;
+  reason: string;
+  createdAt: string;
+}
+
 export interface WorkOrderPaymentsSummaryView {
   dueCents: number;
   paidCents: number;
   remainingCents: number;
   status: "EM_ABERTO" | "PARCIALMENTE_PAGO" | "QUITADO";
   payments: WorkOrderPaymentView[];
+  /** Ciclo M */
+  refunds: WorkOrderPaymentRefundView[];
 }
 
 /**
@@ -105,20 +116,38 @@ export function WorkOrderPaymentsSection({
 
       {summary.payments.length > 0 ? (
         <ul className="mb-3 flex flex-col gap-1.5">
-          {summary.payments.map((p) => (
-            <li key={p.id} className="flex items-center justify-between rounded-xl border border-border bg-background p-2.5 text-sm">
-              <div>
-                <span className="font-medium">{formatBRL(p.amountCents)}</span>{" "}
-                <span className="text-xs text-muted">{METHOD_LABEL[p.method]}</span>
-                {p.notes ? <p className="text-xs text-muted">{p.notes}</p> : null}
-              </div>
-              <span className="text-xs text-muted">{new Date(p.receivedAt).toLocaleDateString("pt-BR")}</span>
-            </li>
-          ))}
+          {summary.payments.map((p) => {
+            const refundedCents = summary.refunds
+              .filter((r) => r.paymentId === p.id)
+              .reduce((sum, r) => sum + r.refundCents, 0);
+            return (
+              <PaymentRow
+                key={p.id}
+                workOrderId={workOrderId}
+                payment={p}
+                refundedCents={refundedCents}
+              />
+            );
+          })}
         </ul>
       ) : (
         <p className="mb-3 text-sm text-muted">Nenhum recebimento registrado ainda.</p>
       )}
+
+      {summary.refunds.length > 0 ? (
+        <div className="mb-3 flex flex-col gap-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Estornos</p>
+          {summary.refunds.map((r) => (
+            <div key={r.id} className="rounded-xl border border-danger/20 bg-danger/5 p-2.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-danger">-{formatBRL(r.refundCents)}</span>
+                <span className="text-xs text-muted">{new Date(r.createdAt).toLocaleDateString("pt-BR")}</span>
+              </div>
+              <p className="text-xs text-muted">{r.reason}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {summary.status !== "QUITADO" ? (
         !showForm ? (
@@ -168,5 +197,102 @@ export function WorkOrderPaymentsSection({
         )
       ) : null}
     </section>
+  );
+}
+
+/** Ciclo M — uma linha de recebimento, com opção de estorno (parcial ou
+ * total). O recebimento em si nunca é editado/apagado (DEC-I6 mantida) —
+ * "estornar" sempre cria um lançamento novo e separado. */
+function PaymentRow({
+  workOrderId,
+  payment,
+  refundedCents,
+}: {
+  workOrderId: string;
+  payment: WorkOrderPaymentView;
+  refundedCents: number;
+}) {
+  const router = useRouter();
+  const [refunding, setRefunding] = useState(false);
+  const [refundReais, setRefundReais] = useState("");
+  const [reason, setReason] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const availableCents = payment.amountCents - refundedCents;
+
+  function confirmRefund() {
+    setError(null);
+    startTransition(async () => {
+      const result = await refundWorkOrderPaymentAction(workOrderId, payment.id, { refundReais, reason });
+      if (!result.success) {
+        setError(result.error ?? "Falha ao estornar.");
+        return;
+      }
+      setRefunding(false);
+      setRefundReais("");
+      setReason("");
+      router.refresh();
+    });
+  }
+
+  if (refunding) {
+    return (
+      <li className="rounded-xl border border-border bg-background p-2.5 text-sm">
+        <p className="mb-2 text-xs text-muted">
+          Estornando {formatBRL(payment.amountCents)} ({METHOD_LABEL[payment.method]}) — disponível para estorno:{" "}
+          {formatBRL(availableCents)}
+        </p>
+        <div className="flex flex-col gap-2">
+          <input
+            inputMode="decimal"
+            value={refundReais}
+            onChange={(e) => setRefundReais(e.target.value)}
+            placeholder="Valor a estornar (R$)"
+            className="h-10 rounded-lg border border-border bg-surface px-3 text-sm"
+          />
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Motivo do estorno"
+            className="h-10 rounded-lg border border-border bg-surface px-3 text-sm"
+          />
+          {error ? <p className="text-xs text-danger">{error}</p> : null}
+          <div className="flex gap-2">
+            <button
+              onClick={confirmRefund}
+              disabled={isPending || !refundReais.trim() || reason.trim().length < 3}
+              className="h-9 flex-1 rounded-lg bg-danger text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Confirmar estorno
+            </button>
+            <button onClick={() => setRefunding(false)} className="h-9 flex-1 rounded-lg border border-border text-xs">
+              Voltar
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background p-2.5 text-sm">
+      <div>
+        <span className="font-medium">{formatBRL(payment.amountCents)}</span>{" "}
+        <span className="text-xs text-muted">{METHOD_LABEL[payment.method]}</span>
+        {refundedCents > 0 ? (
+          <p className="text-xs text-danger">Estornado: {formatBRL(refundedCents)}</p>
+        ) : null}
+        {payment.notes ? <p className="text-xs text-muted">{payment.notes}</p> : null}
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted">{new Date(payment.receivedAt).toLocaleDateString("pt-BR")}</span>
+        {availableCents > 0 ? (
+          <button onClick={() => setRefunding(true)} className="text-xs font-medium text-danger">
+            Estornar
+          </button>
+        ) : null}
+      </div>
+    </li>
   );
 }

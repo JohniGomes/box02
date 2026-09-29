@@ -40,10 +40,17 @@ import { createId } from "@paralleldrive/cuid2";
 import { buildEvidenceStorageKey, createR2StorageClient, type StorageClient } from "@/lib/storage/r2";
 import {
   createWorkOrderPayment,
+  findWorkOrderPaymentById,
   listWorkOrderPayments,
   sumWorkOrderPayments,
   type WorkOrderPaymentRecord,
 } from "@/lib/db/repositories/workOrderPayments";
+import {
+  createWorkOrderPaymentRefund,
+  listWorkOrderPaymentRefundsByWorkOrder,
+  sumRefundsForPayment,
+  type WorkOrderPaymentRefundRecord,
+} from "@/lib/db/repositories/workOrderPaymentRefunds";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
 import { findQuoteVersionByNumber } from "@/lib/db/repositories/quoteVersions";
 import { listQuoteItemsByVersion } from "@/lib/db/repositories/quoteItems";
@@ -66,6 +73,7 @@ import {
   createWorkOrderEvidenceMetadataSchema,
   createWorkOrderWithoutQuoteSchema,
   executeWorkOrderItemSchema,
+  refundWorkOrderPaymentSchema,
   registerWorkOrderPaymentSchema,
   updateDiagnosisExplanationSchema,
   updatePreExistingDamagesSchema,
@@ -91,6 +99,8 @@ import {
   WorkOrderNotDeliveredError,
   WorkOrderNotFoundError,
   WorkOrderPaymentExceedsBalanceError,
+  WorkOrderPaymentNotFoundError,
+  WorkOrderPaymentRefundExceedsAmountError,
   WorkOrderReceptionAlreadyAcceptedError,
   WorkOrderReceptionNotAcceptedError,
 } from "./errors";
@@ -661,6 +671,9 @@ export interface WorkOrderPaymentsSummary {
   remainingCents: number;
   status: "EM_ABERTO" | "PARCIALMENTE_PAGO" | "QUITADO";
   payments: WorkOrderPaymentRecord[];
+  /** Ciclo M — estornos já registrados nesta OS (histórico, não afeta o
+   * recebimento original, que continua write-once). */
+  refunds: WorkOrderPaymentRefundRecord[];
 }
 
 /**
@@ -674,9 +687,10 @@ export async function getWorkOrderPaymentsSummaryService(workOrderId: string): P
   const latestClosure = closures[0] ?? null;
   if (!latestClosure) return null;
 
-  const [payments, paidCents] = await Promise.all([
+  const [payments, paidCents, refunds] = await Promise.all([
     listWorkOrderPayments(workOrderId),
     sumWorkOrderPayments(workOrderId),
+    listWorkOrderPaymentRefundsByWorkOrder(workOrderId),
   ]);
 
   const dueCents = latestClosure.totalAtClosureCents;
@@ -684,7 +698,7 @@ export async function getWorkOrderPaymentsSummaryService(workOrderId: string): P
   const status: WorkOrderPaymentsSummary["status"] =
     remainingCents <= 0 ? "QUITADO" : paidCents > 0 ? "PARCIALMENTE_PAGO" : "EM_ABERTO";
 
-  return { dueCents, paidCents, remainingCents, status, payments };
+  return { dueCents, paidCents, remainingCents, status, payments, refunds };
 }
 
 /**
@@ -739,6 +753,62 @@ export async function registerWorkOrderPaymentService(
     });
 
     return payment;
+  });
+}
+
+/**
+ * Ciclo M — estorna (parcial ou total) um recebimento já registrado. O
+ * recebimento original nunca é editado nem apagado (DEC-I6 mantida) — o
+ * estorno é um lançamento novo, separado. A soma dos estornos de um
+ * recebimento nunca pode ultrapassar o valor original dele. O saldo/
+ * status da OS reabre sozinho na próxima leitura (`sumWorkOrderPayments`
+ * já desconta estornos), sem precisar tocar em WorkOrderClosure.
+ */
+export async function refundWorkOrderPaymentService(
+  actorUserId: string,
+  workOrderId: string,
+  paymentId: string,
+  rawInput: unknown,
+): Promise<WorkOrderPaymentRefundRecord> {
+  const input = refundWorkOrderPaymentSchema.parse(rawInput);
+  const refundCents = reaisToCents(input.refundReais);
+  if (refundCents <= 0) {
+    throw new Error("O valor do estorno precisa ser maior que zero.");
+  }
+
+  return withTransaction(async (client) => {
+    const workOrder = await lockWorkOrderById(workOrderId, client);
+    if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+
+    const payment = await findWorkOrderPaymentById(paymentId, client);
+    if (!payment || payment.workOrderId !== workOrderId) throw new WorkOrderPaymentNotFoundError();
+
+    const alreadyRefunded = await sumRefundsForPayment(paymentId, client);
+    const available = payment.amountCents - alreadyRefunded;
+    if (refundCents > available) {
+      throw new WorkOrderPaymentRefundExceedsAmountError(available);
+    }
+
+    const refund = await createWorkOrderPaymentRefund(
+      {
+        paymentId,
+        workOrderId,
+        refundCents,
+        reason: input.reason,
+        refundedByUserId: actorUserId,
+      },
+      client,
+    );
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "WORK_ORDER_PAYMENT_REFUNDED",
+      entityType: "work_order",
+      entityId: workOrderId,
+      metadata: { paymentId, refundCents, reason: input.reason },
+    });
+
+    return refund;
   });
 }
 

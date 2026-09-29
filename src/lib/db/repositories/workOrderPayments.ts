@@ -48,6 +48,16 @@ export async function createWorkOrderPayment(
   return result.rows[0];
 }
 
+export async function findWorkOrderPaymentById(
+  id: string,
+  db: Queryable = pool,
+): Promise<WorkOrderPaymentRecord | null> {
+  const result = await db.query<WorkOrderPaymentRecord>(`SELECT ${COLUMNS} FROM work_order_payments WHERE id = $1`, [
+    id,
+  ]);
+  return result.rows[0] ?? null;
+}
+
 export async function listWorkOrderPayments(
   workOrderId: string,
   db: Queryable = pool,
@@ -59,11 +69,18 @@ export async function listWorkOrderPayments(
   return result.rows;
 }
 
-/** Soma calculada sob demanda — nunca armazenada (evita duplicação com
- * a soma real dos lançamentos, que é sempre a fonte da verdade). */
+/** Soma líquida calculada sob demanda — nunca armazenada (evita
+ * duplicação com a soma real dos lançamentos, que é sempre a fonte da
+ * verdade). Ciclo M: desconta estornos automaticamente, então o
+ * saldo/status da OS reabre sozinho quando um recebimento é estornado,
+ * sem precisar editar o recebimento original (que continua write-once,
+ * DEC-I6) nem WorkOrderClosure. */
 export async function sumWorkOrderPayments(workOrderId: string, db: Queryable = pool): Promise<number> {
   const result = await db.query<{ total: string | null }>(
-    `SELECT COALESCE(SUM("amountCents"), 0) as total FROM work_order_payments WHERE "workOrderId" = $1`,
+    `SELECT
+      COALESCE((SELECT SUM("amountCents") FROM work_order_payments WHERE "workOrderId" = $1), 0)
+      - COALESCE((SELECT SUM("refundCents") FROM work_order_payment_refunds WHERE "workOrderId" = $1), 0)
+      as total`,
     [workOrderId],
   );
   return Number(result.rows[0]?.total ?? 0);

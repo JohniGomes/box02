@@ -8,12 +8,18 @@ import {
   closeWorkOrderService,
   createWorkOrderWithoutQuoteService,
   getWorkOrderPaymentsSummaryService,
+  refundWorkOrderPaymentService,
   registerWorkOrderPaymentService,
   registerWorkOrderReceptionAcceptanceService,
   setWorkOrderItemStatusService,
   setWorkOrderStatusService,
 } from "@/lib/workOrders/service";
-import { WorkOrderNotDeliveredError, WorkOrderPaymentExceedsBalanceError } from "@/lib/workOrders/errors";
+import {
+  WorkOrderNotDeliveredError,
+  WorkOrderPaymentExceedsBalanceError,
+  WorkOrderPaymentNotFoundError,
+  WorkOrderPaymentRefundExceedsAmountError,
+} from "@/lib/workOrders/errors";
 
 async function cleanAll() {
   await pool.query(
@@ -167,6 +173,129 @@ describe("auditoria", () => {
     );
     expect(log.rows.length).toBe(1);
     expect(log.rows[0].metadata.amountCents).toBe(5000);
+  });
+});
+
+describe("Ciclo M — estorno de recebimento (DEC-I6 revisitada)", () => {
+  it("estorno parcial reabre o saldo da OS e volta o status para PARCIALMENTE_PAGO", async () => {
+    const workOrderId = await createDeliveredWorkOrder("200,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "200,00",
+      method: "PIX",
+    });
+    let summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    expect(summary!.status).toBe("QUITADO");
+
+    await refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+      refundReais: "50,00",
+      reason: "Cobrança em duplicidade",
+    });
+    summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    expect(summary!.paidCents).toBe(15000);
+    expect(summary!.remainingCents).toBe(5000);
+    expect(summary!.status).toBe("PARCIALMENTE_PAGO");
+    expect(summary!.refunds).toHaveLength(1);
+  });
+
+  it("estorno total volta o status para EM_ABERTO", async () => {
+    const workOrderId = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "100,00",
+      method: "DINHEIRO",
+    });
+    await refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+      refundReais: "100,00",
+      reason: "Cliente desistiu do serviço",
+    });
+    const summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    expect(summary!.paidCents).toBe(0);
+    expect(summary!.remainingCents).toBe(10000);
+    expect(summary!.status).toBe("EM_ABERTO");
+  });
+
+  it("o recebimento original nunca é alterado por um estorno — write-once mantido (DEC-I6)", async () => {
+    const workOrderId = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "100,00",
+      method: "DINHEIRO",
+    });
+    await refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+      refundReais: "40,00",
+      reason: "Ajuste",
+    });
+    const summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    const stillOriginal = summary!.payments.find((p) => p.id === payment.id);
+    expect(stillOriginal!.amountCents).toBe(10000);
+  });
+
+  it("rejeita estorno acima do valor já estornado disponível do recebimento", async () => {
+    const workOrderId = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "100,00",
+      method: "DINHEIRO",
+    });
+    await refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+      refundReais: "60,00",
+      reason: "Primeiro estorno",
+    });
+    await expect(
+      refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+        refundReais: "50,00",
+        reason: "Segundo estorno, ultrapassa",
+      }),
+    ).rejects.toThrow(WorkOrderPaymentRefundExceedsAmountError);
+  });
+
+  it("rejeita estorno de um recebimento que não pertence à OS informada", async () => {
+    const workOrderId1 = await createDeliveredWorkOrder("100,00");
+    const workOrderId2 = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId1, {
+      amountReais: "50,00",
+      method: "DINHEIRO",
+    });
+    await expect(
+      refundWorkOrderPaymentService(actorUserId, workOrderId2, payment.id, {
+        refundReais: "10,00",
+        reason: "Tentativa cruzada",
+      }),
+    ).rejects.toThrow(WorkOrderPaymentNotFoundError);
+  });
+
+  it("permite registrar novo recebimento depois de um estorno reabrir o saldo", async () => {
+    const workOrderId = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "100,00",
+      method: "DINHEIRO",
+    });
+    await refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+      refundReais: "100,00",
+      reason: "Estorno total",
+    });
+    const newPayment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "100,00",
+      method: "PIX",
+    });
+    expect(newPayment.amountCents).toBe(10000);
+    const summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    expect(summary!.status).toBe("QUITADO");
+  });
+
+  it("grava auditoria WORK_ORDER_PAYMENT_REFUNDED", async () => {
+    const workOrderId = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, workOrderId, {
+      amountReais: "100,00",
+      method: "DINHEIRO",
+    });
+    await refundWorkOrderPaymentService(actorUserId, workOrderId, payment.id, {
+      refundReais: "30,00",
+      reason: "Ajuste de valor",
+    });
+    const log = await pool.query(
+      `SELECT metadata FROM audit_logs WHERE "entityId" = $1 AND action = 'WORK_ORDER_PAYMENT_REFUNDED'`,
+      [workOrderId],
+    );
+    expect(log.rows.length).toBe(1);
+    expect(log.rows[0].metadata.refundCents).toBe(3000);
   });
 });
 

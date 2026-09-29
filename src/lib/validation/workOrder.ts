@@ -205,6 +205,16 @@ export const registerWorkOrderPaymentSchema = z.object({
 export type RegisterWorkOrderPaymentInput = z.infer<typeof registerWorkOrderPaymentSchema>;
 
 // ============================================================
+// Ciclo M — Estorno de recebimento (DEC-I6 revisitada)
+// ============================================================
+
+export const refundWorkOrderPaymentSchema = z.object({
+  refundReais: z.union([z.string(), z.number()]),
+  reason: z.string().trim().min(3, "Informe o motivo do estorno"),
+});
+export type RefundWorkOrderPaymentInput = z.infer<typeof refundWorkOrderPaymentSchema>;
+
+// ============================================================
 // Ciclo J — Evidências/Fotos
 // ============================================================
 

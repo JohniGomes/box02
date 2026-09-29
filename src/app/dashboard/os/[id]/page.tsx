@@ -401,6 +401,13 @@ export default async function WorkOrderDetailPage({
               notes: p.notes,
               receivedAt: p.receivedAt.toISOString(),
             })),
+            refunds: paymentsSummary.refunds.map((r) => ({
+              id: r.id,
+              paymentId: r.paymentId,
+              refundCents: r.refundCents,
+              reason: r.reason,
+              createdAt: r.createdAt.toISOString(),
+            })),
           }}
         />
       ) : null}

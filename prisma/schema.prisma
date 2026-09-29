@@ -96,6 +96,8 @@ model User {
   workOrderEvidencesCreated   WorkOrderEvidence[]
   workOrderChecklistsCompleted WorkOrderChecklist[] @relation("WorkOrderChecklistCompletedBy")
   workOrderChecklistItemsChecked WorkOrderChecklistItem[] @relation("WorkOrderChecklistItemCheckedBy")
+  expensesCreated               Expense[]
+  workOrderPaymentRefunds       WorkOrderPaymentRefund[]
 
   @@map("users")
 }
@@ -603,6 +605,7 @@ model WorkOrder {
   items    WorkOrderItem[]
   closures WorkOrderClosure[]
   payments WorkOrderPayment[]
+  paymentRefunds WorkOrderPaymentRefund[]
   evidences WorkOrderEvidence[]
   evidences WorkOrderEvidence[]
   checklists WorkOrderChecklist[]
@@ -740,6 +743,8 @@ model WorkOrderPayment {
   registeredByUser   User   @relation(fields: [registeredByUserId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
+
+  refunds WorkOrderPaymentRefund[]
 
   @@index([workOrderId])
   @@map("work_order_payments")
@@ -985,4 +990,81 @@ model WorkOrderChecklistItem {
 
   @@index([workOrderChecklistId])
   @@map("work_order_checklist_items")
+}
+
+// ============================================================
+// Ciclo M — Financeiro completo (Fatia 1): Despesas/Contas a
+// Pagar + Estorno de Recebimento
+// ============================================================
+
+/// Lista fechada, editada só neste enum (sem cadastro de categoria em
+/// tela) — decisão explícita da Fatia 1, revisitável se os sócios
+/// pedirem categorias novas.
+enum ExpenseCategory {
+  ALUGUEL
+  SALARIOS
+  FORNECEDORES
+  IMPOSTOS
+  MANUTENCAO_EQUIPAMENTOS
+  UTILIDADES
+  MARKETING
+  OUTROS
+}
+
+/// Despesa/conta a pagar — independente de OS (custo da oficina como um
+/// todo, não de um serviço específico). `status` (PENDENTE/PAGA/ATRASADA)
+/// nunca é armazenado — é sempre calculado na leitura a partir de
+/// `paidAt` e `dueDate`, mesmo padrão já usado no status financeiro da
+/// OS (WorkOrderPaymentsSummary). Fornecedor é texto livre (sem cadastro
+/// próprio, decisão explícita da Fatia 1). Editável enquanto PENDENTE;
+/// sem edição de valor depois de paga neste primeiro corte.
+model Expense {
+  id           String          @id @default(cuid())
+  category     ExpenseCategory
+  description  String
+  supplierName String?
+  amountCents  Int
+  dueDate      DateTime        @db.Date
+
+  paidAt        DateTime?
+  paymentMethod WorkOrderPaymentMethod?
+  notes         String?
+
+  createdByUserId String
+  createdByUser   User   @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dueDate])
+  @@index([paidAt])
+  @@map("expenses")
+}
+
+/// Estorno de um recebimento (DEC-I6 revisitada) — o recebimento
+/// original (`WorkOrderPayment`) continua write-once, nunca editado nem
+/// apagado; o estorno é um registro novo e separado. `sumWorkOrderPayments`
+/// desconta a soma dos estornos automaticamente, então o saldo/status da
+/// OS (EM_ABERTO/PARCIALMENTE_PAGO/QUITADO) reabre sozinho, sem precisar
+/// tocar em WorkOrderClosure nem em closeWorkOrderService. A soma dos
+/// estornos de um recebimento nunca pode ultrapassar o valor original
+/// dele (validado no service, não no banco).
+model WorkOrderPaymentRefund {
+  id          String           @id @default(cuid())
+  paymentId   String
+  payment     WorkOrderPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  workOrderId String
+  workOrder   WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+
+  refundCents Int
+  reason      String
+
+  refundedByUserId String
+  refundedByUser   User   @relation(fields: [refundedByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([workOrderId])
+  @@map("work_order_payment_refunds")
 }

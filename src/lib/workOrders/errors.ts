@@ -157,6 +157,26 @@ export class WorkOrderPaymentExceedsBalanceError extends Error {
 }
 
 // ============================================================
+// Ciclo M — Estorno de recebimento (DEC-I6 revisitada)
+// ============================================================
+
+export class WorkOrderPaymentNotFoundError extends Error {
+  constructor() {
+    super("Recebimento não encontrado para esta OS.");
+    this.name = "WorkOrderPaymentNotFoundError";
+  }
+}
+
+/** A soma dos estornos de um recebimento nunca pode ultrapassar o valor
+ * original dele — o recebimento em si continua write-once (DEC-I6). */
+export class WorkOrderPaymentRefundExceedsAmountError extends Error {
+  constructor(availableCents: number) {
+    super(`O estorno ultrapassa o valor disponível deste recebimento (R$ ${(availableCents / 100).toFixed(2)}).`);
+    this.name = "WorkOrderPaymentRefundExceedsAmountError";
+  }
+}
+
+// ============================================================
 // Ciclo J — Evidências/Fotos
 // ============================================================
 
