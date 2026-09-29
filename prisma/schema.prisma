@@ -98,6 +98,7 @@ model User {
   workOrderChecklistItemsChecked WorkOrderChecklistItem[] @relation("WorkOrderChecklistItemCheckedBy")
   expensesCreated               Expense[]
   workOrderPaymentRefunds       WorkOrderPaymentRefund[]
+  bankReconciliations           BankReconciliation[]
 
   @@map("users")
 }
@@ -745,6 +746,7 @@ model WorkOrderPayment {
   createdAt DateTime @default(now())
 
   refunds WorkOrderPaymentRefund[]
+  reconciliation BankReconciliation?
 
   @@index([workOrderId])
   @@map("work_order_payments")
@@ -1036,6 +1038,8 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  reconciliation BankReconciliation?
+
   @@index([dueDate])
   @@index([paidAt])
   @@map("expenses")
@@ -1067,4 +1071,32 @@ model WorkOrderPaymentRefund {
   @@index([paymentId])
   @@index([workOrderId])
   @@map("work_order_payment_refunds")
+}
+
+/// Conciliação bancária manual (Ciclo N) — marca um recebimento ou uma
+/// despesa paga como "confirmado no extrato". Não toca no lançamento
+/// original (mesmo padrão do estorno): é um registro novo e separado,
+/// que pode ser desfeito (é um check operacional interno, não um
+/// documento assinado pelo cliente). Exatamente um dos dois FKs
+/// (paymentId/expenseId) é preenchido, garantido por CHECK no banco;
+/// UNIQUE em cada FK impede duas conciliações ativas para o mesmo
+/// lançamento.
+model BankReconciliation {
+  id        String @id @default(cuid())
+  entryType String // "RECEBIMENTO" | "DESPESA"
+
+  paymentId String?           @unique
+  payment   WorkOrderPayment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  expenseId String?  @unique
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+
+  reconciledAt DateTime @default(now())
+
+  reconciledByUserId String
+  reconciledByUser   User   @relation(fields: [reconciledByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@map("bank_reconciliations")
 }

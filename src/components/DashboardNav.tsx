@@ -10,6 +10,7 @@ const ITEMS = [
   { label: "Orçamentos", href: "/dashboard/orcamentos" },
   { label: "OS", href: "/dashboard/os" },
   { label: "Despesas", href: "/dashboard/despesas" },
+  { label: "Conciliação", href: "/dashboard/conciliacao" },
   { label: "Configurações", href: "/dashboard/configuracoes" },
 ];
 
