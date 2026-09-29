@@ -1,0 +1,988 @@
+// Schema do Ciclo 1 — Fundação (autenticação, usuários, papéis, permissões, auditoria)
+//
+// Entidades futuras (clientes, veículos, OS, orçamentos, estoque, financeiro, etc.)
+// serão adicionadas em ciclos posteriores, conforme DEV_PLAN.md.
+//
+// Decisão D9 (multi-unidade): NÃO implementada agora (unidade única).
+// O schema foi escrito de forma que adicionar um campo `unitId` opcional
+// no futuro não exige reescrever relacionamentos existentes — mas isso
+// não foi feito preventivamente para não modelar algo que não foi decidido.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Papel funcional do usuário no sistema (ex.: ADMINISTRADOR).
+/// Decisão D10 (diferença ADMINISTRADOR x GESTOR) está pendente:
+/// a tabela existe para suportar múltiplos papéis, mas neste ciclo
+/// apenas ADMINISTRADOR recebe permissões reais.
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+/// Permissão granular (ex.: "work_orders.view"). Ainda não há tela de
+/// negócio usando permissões no Ciclo 1 — a estrutura existe pronta
+/// para os módulos futuros.
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+enum UserStatus {
+  ATIVO
+  INATIVO
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  status       UserStatus @default(ATIVO)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  roles        UserRole[]
+  auditLogs    AuditLog[]
+  workOrdersCreated  WorkOrder[] @relation("WorkOrderCreatedBy")
+  workOrdersDelivered WorkOrder[] @relation("WorkOrderDeliveredBy")
+  workOrdersReceived WorkOrder[] @relation("WorkOrderReceivedBy")
+  workOrderItemsExecuted WorkOrderItem[] @relation("WorkOrderItemExecutedBy")
+  workOrderItemsCreated WorkOrderItem[] @relation("WorkOrderItemCreatedBy")
+  workOrderClosuresClosed WorkOrderClosure[] @relation("WorkOrderClosureClosedBy")
+  workOrderClosuresReopened WorkOrderClosure[] @relation("WorkOrderClosureReopenedBy")
+  workOrderPaymentsRegistered WorkOrderPayment[]
+  workOrderEvidencesCreated   WorkOrderEvidence[]
+  workOrderEvidencesCreated   WorkOrderEvidence[]
+  workOrderChecklistsCompleted WorkOrderChecklist[] @relation("WorkOrderChecklistCompletedBy")
+  workOrderChecklistItemsChecked WorkOrderChecklistItem[] @relation("WorkOrderChecklistItemCheckedBy")
+
+  @@map("users")
+}
+
+/// Log de ações críticas (item 26/39 da especificação). Neste ciclo,
+/// registra apenas login e criação de usuário — outros módulos vão
+/// gravar aqui conforme forem implementados.
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// ============================================================
+// CICLO 2 — CLIENTES
+// ============================================================
+
+enum CustomerType {
+  PF
+  PJ
+}
+
+enum CustomerStatus {
+  ATIVO
+  INATIVO
+}
+
+/// Cliente da oficina (pessoa física ou jurídica). Modelo único (não duas
+/// tabelas separadas) para que Vehicle, Quote e WorkOrder, nos próximos
+/// ciclos, referenciem um único `customerId` independente do tipo.
+///
+/// `document` guarda CPF ou CNPJ normalizado (somente dígitos). É opcional
+/// — nem todo cliente fornece o documento no primeiro atendimento — mas
+/// quando informado, é único (índice parcial: `document IS NOT NULL`).
+/// Duplicidade SEM documento não é bloqueada automaticamente (não há
+/// critério objetivo seguro para isso); ver TECH_DEBT.md.
+model Customer {
+  id     String       @id @default(cuid())
+  type   CustomerType
+  status CustomerStatus @default(ATIVO)
+
+  /// PF: nome completo. PJ: razão social.
+  legalName String
+  /// Só PJ: nome fantasia.
+  tradeName String?
+  /// Só PJ: nome da pessoa de contato/responsável.
+  contactName String?
+
+  /// CPF (PF) ou CNPJ (PJ), somente dígitos. Único quando não nulo.
+  document String?
+
+  /// Telefone e WhatsApp normalizados (somente dígitos, com DDI/DDD).
+  phone    String?
+  whatsapp String?
+  email    String?
+
+  addressStreet       String?
+  addressNumber       String?
+  addressComplement   String?
+  addressNeighborhood String?
+  addressCity         String?
+  addressState        String?
+  addressZipCode      String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles Vehicle[]
+  workOrders WorkOrder[]
+
+  @@map("customers")
+}
+
+// ============================================================
+// CICLO 3 — VEÍCULOS
+// ============================================================
+
+enum VehicleStatus {
+  ATIVO
+  INATIVO
+}
+
+/// Veículo vinculado a um cliente. `customerId` é o proprietário/responsável
+/// ATUAL — transferências de titularidade atualizam este campo e ficam
+/// registradas em AuditLog (ação VEHICLE_TRANSFERRED com metadata
+/// {fromCustomerId, toCustomerId}), sem uma tabela extra de histórico de
+/// propriedade (não solicitada — ver TECH_DEBT.md se isso mudar).
+///
+/// `plate` é opcional (nem todo cadastro prévio tem placa disponível) mas,
+/// quando informada, é normalizada (maiúsculas, sem hífen/espaço) e única.
+model Vehicle {
+  id     String        @id @default(cuid())
+  status VehicleStatus @default(ATIVO)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  /// Normalizada: só letras maiúsculas e dígitos (ABC1234 ou ABC1D23).
+  plate String?
+
+  brand       String?
+  model       String?
+  version     String?
+  yearManufacture Int?
+  yearModel       Int?
+  color       String?
+  /// Texto livre com sugestões na UI (Gasolina/Etanol/Diesel/Flex/GNV/
+  /// Elétrico/Híbrido) — não é enum de banco para não exigir migração a
+  /// cada combinação nova de combustível.
+  fuelType    String?
+  mileage     Int?
+  chassis     String?
+  renavam     String?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotes Quote[]
+  workOrders WorkOrder[]
+
+  @@map("vehicles")
+}
+
+// ============================================================
+// CICLO 4 — ORÇAMENTO (Sub-etapa 1: orçamento interno)
+// ============================================================
+
+/// Configurações simples chave/valor (ex.: validade padrão do orçamento).
+/// Nasce pequena aqui, mas é a base do futuro módulo de Configurações
+/// (item 31 da especificação original) — não precisa ser refeita depois.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+/// Status compartilhado por Quote (espelho de leitura rápida) e
+/// QuoteVersion (o estado real). Ver PROPOSTA_ORCAMENTO_CICLO4.md seção C.
+enum QuoteStatus {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  APROVADO_PARCIAL
+  RECUSADO
+  EXPIRADO
+  CANCELADO
+}
+
+enum QuoteItemType {
+  SERVICO
+  PECA
+  MAO_DE_OBRA
+}
+
+enum QuoteItemDecision {
+  PENDENTE
+  APROVADO
+  RECUSADO
+}
+
+/// Ciclo C1 (Orçamento em três camadas) — NECESSARIO/RECOMENDADO exigem
+/// decisão do cliente e entram no total; INFORMATIVO nunca exige decisão,
+/// nunca entra no total cobrável (mesmo tendo um valor estimado) e nunca
+/// pode virar item de OS. Ver ORCAMENTO_TRES_CAMADAS_ESPECIFICACAO.md.
+enum QuoteItemCategory {
+  NECESSARIO
+  RECOMENDADO
+  INFORMATIVO
+}
+
+/// PERCENTUAL: `value` é percentual × 100 (1050 = 10,50%).
+/// FIXO: `value` é o valor em centavos.
+enum QuoteAdjustmentType {
+  PERCENTUAL
+  FIXO
+}
+
+/// O "processo" do orçamento — não muda de conteúdo, só de status/versão
+/// vigente. O conteúdo de fato mora em QuoteVersion (ver ali o porquê da
+/// separação: nunca sobrescrever uma versão já enviada).
+model Quote {
+  id     String      @id @default(cuid())
+  number String      @unique
+  status QuoteStatus @default(RASCUNHO)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  currentVersionNumber Int @default(1)
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  versions QuoteVersion[]
+
+  @@map("quotes")
+}
+
+/// Conteúdo congelado de uma versão do orçamento. Uma vez que sai de
+/// RASCUNHO, nenhum campo aqui é alterado — qualquer mudança cria uma nova
+/// linha com versionNumber + 1 (ver serviço createNewVersionService).
+/// Valores monetários em centavos (ver nota técnica no plano do Ciclo 4).
+model QuoteVersion {
+  id            String      @id @default(cuid())
+  quoteId       String
+  quote         Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  status        QuoteStatus @default(RASCUNHO)
+
+  validUntil DateTime
+  sentAt     DateTime?
+  decidedAt  DateTime?
+
+  /// Observação interna (só a oficina vê).
+  internalNotes String?
+  /// Mensagem exibida ao cliente na página pública de aprovação.
+  customerMessage String?
+
+  subtotalServicesCents Int @default(0)
+  subtotalPartsCents    Int @default(0)
+  subtotalLaborCents    Int @default(0)
+
+  discountType        QuoteAdjustmentType?
+  discountValue        Int?
+  discountTotalCents   Int @default(0)
+  surchargeType        QuoteAdjustmentType?
+  surchargeValue        Int?
+  surchargeTotalCents  Int @default(0)
+
+  totalCents Int @default(0)
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  items QuoteItem[]
+  approvals QuoteApproval[]
+  accessLinks QuoteAccessLink[]
+  workOrders WorkOrder[]
+
+  @@unique([quoteId, versionNumber])
+  @@map("quote_versions")
+}
+
+/// Linha do orçamento. `catalogItemType`/`catalogItemId` são referências
+/// OPCIONAIS e SEM FK ainda (o catálogo de serviços/peças não existe —
+/// chega em ciclo futuro). Descrição/quantidade/preço ficam sempre
+/// congelados aqui, independente do que aconteça depois no catálogo.
+model QuoteItem {
+  id             String            @id @default(cuid())
+  quoteVersionId String
+  quoteVersion   QuoteVersion      @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+
+  type        QuoteItemType
+  description String
+  quantity    Decimal           @db.Decimal(10, 2)
+  unitPriceCents Int
+  totalCents  Int
+
+  clientDecision QuoteItemDecision @default(PENDENTE)
+
+  /// Ciclo C1 — NECESSARIO/RECOMENDADO/INFORMATIVO. Congelada junto com o
+  /// resto do item (description/unitPriceCents) — nunca relida de lugar
+  /// nenhum depois de criada. INFORMATIVO nunca recebe clientDecision
+  /// diferente de PENDENTE (bloqueado no serviço, não só na UI).
+  category QuoteItemCategory
+
+  catalogItemType String?
+  catalogItemId   String?
+
+  /// Ciclo B (Execução Operacional) — origem opcional no catálogo de
+  /// serviços. Só para rastreabilidade/preenchimento inicial; description/
+  /// unitPriceCents/totalCents SEMPRE continuam sendo a fonte congelada —
+  /// nunca relidos do serviço depois da criação. ON DELETE SET NULL:
+  /// mesmo que o registro do serviço fosse removido diretamente no banco
+  /// (a aplicação nunca expõe exclusão física), o item histórico
+  /// permanece intacto.
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  workOrderItems WorkOrderItem[]
+
+  @@index([serviceId])
+  @@map("quote_items")
+}
+
+// ============================================================
+// CICLO 4 — ORÇAMENTO (Sub-etapa 2: link público e aprovação)
+// ============================================================
+
+enum QuoteApprovalDecision {
+  APROVADO
+  APROVADO_PARCIAL
+  RECUSADO
+}
+
+/// Canal usado tanto para o link de acesso quanto para a decisão
+/// registrada. Hoje só LINK e PRESENCIAL têm uso real — o enum já nasce
+/// pronto para WHATSAPP/EMAIL entrarem depois sem alterar o modelo.
+enum QuoteAccessChannel {
+  LINK
+  PRESENCIAL
+}
+
+/// A decisão do cliente sobre uma versão específica — nunca sobrescrita.
+/// Uma versão tem no máximo uma linha aqui (a primeira e única decisão
+/// válida); tentativas de decidir de novo são rejeitadas pelo serviço.
+model QuoteApproval {
+  id             String                @id @default(cuid())
+  quoteVersionId String
+  quoteVersion   QuoteVersion          @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+
+  decision         QuoteApprovalDecision
+  approverName     String
+  approverDocument String?
+  reason           String?
+  notes            String?
+  channel          QuoteAccessChannel    @default(LINK)
+  decidedAt        DateTime              @default(now())
+  ipAddress        String?
+
+  @@map("quote_approvals")
+}
+
+/// Token de acesso público a uma versão específica do orçamento — a única
+/// credencial exigida (sem login). Revogado automaticamente quando uma
+/// nova versão é criada (ver createNewQuoteVersionService).
+model QuoteAccessLink {
+  id             String             @id @default(cuid())
+  quoteVersionId String
+  quoteVersion   QuoteVersion       @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+
+  /// Gerado com crypto.randomBytes — nunca sequencial/previsível.
+  token     String    @unique
+  channel   QuoteAccessChannel @default(LINK)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@map("quote_access_links")
+}
+
+// ============================================================
+// CICLO 5 — ORDEM DE SERVIÇO (Sub-etapa 1: OS básica)
+// ============================================================
+
+enum WorkOrderStatus {
+  ABERTA
+  EM_DIAGNOSTICO
+  EM_EXECUCAO
+  AGUARDANDO_PECA
+  TESTE_FINAL
+  PRONTA
+  ENTREGUE
+  CANCELADA
+}
+
+/// De onde o item da OS veio. ADICIONAL_DURANTE_EXECUCAO existe desde já
+/// no enum, mas não é usada nesta sub-etapa — chega na Sub-etapa 2.
+enum WorkOrderItemOrigin {
+  DO_ORCAMENTO
+  ADICIONAL_DURANTE_EXECUCAO
+  SEM_ORCAMENTO
+}
+
+enum WorkOrderItemStatus {
+  PLANEJADO
+  EXECUTADO
+  CANCELADO
+}
+
+/// Canal da autorização do cliente para um item (usado de fato só a
+/// partir da Sub-etapa 2, quando ADICIONAL_DURANTE_EXECUCAO existir).
+enum WorkOrderAuthorizationChannel {
+  TELEFONE
+  PRESENCIAL
+  WHATSAPP
+  /// Cliente decidiu sozinho pela página pública (Sub-etapa 2). O WhatsApp
+  /// pode ter sido o transporte da mensagem, mas o CANAL da decisão em si
+  /// é o link — WHATSAPP fica reservado para uma autorização obtida por
+  /// WhatsApp sem link (equivalente a TELEFONE), não usado ativamente.
+  LINK
+}
+
+/// Decisão do cliente sobre um item ADICIONAL_DURANTE_EXECUCAO — mesmo
+/// padrão de QuoteItemDecision, reaproveitado deliberadamente (Sub-etapa 2).
+enum WorkOrderItemClientDecision {
+  PENDENTE
+  APROVADO
+  RECUSADO
+}
+
+/// A OS em si — NUNCA versionada (diferente de Quote/QuoteVersion). A
+/// rastreabilidade (orçado/aprovado/recusado/executado/adicionado/
+/// cancelado/cobrado) é resolvida no nível do item, não duplicando a OS
+/// inteira a cada mudança. Ver ESPECIFICACAO_OS_CICLO5.md para a análise
+/// completa dessa decisão.
+model WorkOrder {
+  id     String          @id @default(cuid())
+  number String          @unique
+  status WorkOrderStatus @default(ABERTA)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  /// Nula quando a OS nasce sem orçamento prévio (D-OS-1 / ponto 3).
+  sourceQuoteVersionId String?
+  sourceQuoteVersion   QuoteVersion? @relation(fields: [sourceQuoteVersionId], references: [id], onDelete: SetNull)
+
+  entryAt     DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  deliveredAt DateTime?
+  cancelledAt DateTime?
+
+  /// Congelada no check-in — nunca recalculada a partir de vehicles.mileage.
+  mileageAtEntry Int
+
+  customerComplaint String?
+  diagnosis         String?
+  technicalNotes    String?
+
+  discountType  QuoteAdjustmentType?
+  discountValue Int?
+  discountTotalCents Int @default(0)
+  surchargeType  QuoteAdjustmentType?
+  surchargeValue Int?
+  surchargeTotalCents Int @default(0)
+  /// Soma só de itens EXECUTADO — nunca inclui PLANEJADO/CANCELADO.
+  /// EXECUTADO ≠ PAGO: este é o valor devido, não o status de recebimento
+  /// (isso é do futuro módulo Financeiro, que não existe ainda).
+  totalCents Int @default(0)
+
+  /// Snapshots — nome do cliente e identificação do veículo no momento da
+  /// criação, para a OS nunca "mudar de conteúdo" se o cadastro for
+  /// editado depois (ponto E da especificação).
+  customerNameSnapshot      String
+  vehiclePlateSnapshot      String?
+  vehicleDescriptionSnapshot String?
+
+  cancelReason String?
+
+  /// Aceite simples na entrega (D-OS-5). CPF opcional; quando informado,
+  /// validado (mesmo validador de CPF já usado no resto do sistema).
+  deliveryAcceptedName     String?
+  deliveryAcceptedDocument String?
+  deliveredByUserId        String?
+  deliveredByUser          User?   @relation("WorkOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
+
+  /// Ciclo F — Termo de Recepção.
+  /// `preExistingDamagesDescription` pertence ao fluxo de recepção, não à
+  /// criação da OS — editável livremente ATÉ o aceite ser registrado.
+  preExistingDamagesDescription String?
+
+  /// Aceite de recepção — write-once (nunca reescrito por nenhuma função
+  /// depois de gravado). Mesmo padrão do aceite de entrega.
+  receptionAcceptedName     String?
+  receptionAcceptedDocument String?
+  receptionAcceptedAt       DateTime?
+  receivedByUserId          String?
+  receivedByUser            User?   @relation("WorkOrderReceivedBy", fields: [receivedByUserId], references: [id], onDelete: SetNull)
+
+  /// Congelados no exato momento do aceite — o Termo lê só daqui depois
+  /// de aceito, nunca de customerComplaint/preExistingDamagesDescription
+  /// "vivos".
+  receptionComplaintSnapshot String?
+  receptionDamagesSnapshot   String?
+
+  /// Snapshot completo e autossuficiente do checklist de entrada (CHK-001)
+  /// no momento do aceite — código, nome, e cada item com descrição,
+  /// obrigatoriedade, ordem e estado marcado/desmarcado. Nunca relido de
+  /// `work_order_checklists`/`work_order_checklist_items` depois de
+  /// gravado — a instância operacional continua existindo e sendo usada
+  /// normalmente, totalmente desacoplada deste snapshot. `null` se nenhum
+  /// checklist de entrada foi iniciado nesta OS até o momento do aceite.
+  receptionChecklistSnapshot Json?
+
+  /// UI do Método BOX 02 — registro de EXPLICAMOS, independente de
+  /// orçamento. Livre, editável a qualquer momento — sem gate, sem
+  /// write-once (mais simples que o Termo de Recepção de propósito: o
+  /// Método não pede aceite formal nesta etapa, só o registro do que foi
+  /// explicado ao cliente).
+  diagnosisExplanationNotes String?
+
+  createdByUserId String
+  createdByUser   User   @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items    WorkOrderItem[]
+  closures WorkOrderClosure[]
+  payments WorkOrderPayment[]
+  evidences WorkOrderEvidence[]
+  evidences WorkOrderEvidence[]
+  checklists WorkOrderChecklist[]
+
+  @@map("work_orders")
+}
+
+/// O coração da rastreabilidade: origin (de onde veio) + status (o que
+/// aconteceu) + sourceQuoteItemId (link de volta ao item de orçamento,
+/// quando aplicável). Nunca apagado fisicamente.
+model WorkOrderItem {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  type        QuoteItemType
+  description String
+  quantity    Decimal @db.Decimal(10, 2)
+  unitPriceCents Int
+  totalCents  Int
+
+  origin WorkOrderItemOrigin
+  sourceQuoteItemId String?
+  sourceQuoteItem   QuoteItem? @relation(fields: [sourceQuoteItemId], references: [id], onDelete: SetNull)
+
+  status WorkOrderItemStatus @default(PLANEJADO)
+
+  executedAt       DateTime?
+  executedByUserId String?
+  executedByUser   User?     @relation("WorkOrderItemExecutedBy", fields: [executedByUserId], references: [id], onDelete: SetNull)
+
+  clientAuthorizedBy   String?
+  clientAuthorizedAt   DateTime?
+  authorizationChannel WorkOrderAuthorizationChannel?
+  authorizationNotes   String?
+  /// IP de quem decidiu pelo link (Sub-etapa 2) — rastro básico, mesmo
+  /// padrão de quote_approvals.ipAddress. NULL para PRESENCIAL/TELEFONE.
+  authorizationIpAddress String?
+
+  /// Decisão do cliente sobre o adicional (Sub-etapa 2) — só relevante
+  /// quando origin = ADICIONAL_DURANTE_EXECUCAO.
+  clientDecision WorkOrderItemClientDecision @default(PENDENTE)
+
+  /// Quem registrou/identificou o item (Sub-etapa 2 — rastreabilidade
+  /// pergunta 3). Nullable: itens DO_ORCAMENTO/SEM_ORCAMENTO criados em
+  /// lote na Sub-etapa 1 não tinham esse campo, ficam NULL.
+  createdByUserId String?
+  createdByUser   User?   @relation("WorkOrderItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  /// Link de acesso público próprio deste item (Sub-etapa 2, AD-2: 1
+  /// item = 1 link, nunca compartilhado). Validade fixa de 48h (AD-3).
+  accessToken           String?   @unique
+  accessTokenExpiresAt  DateTime?
+  accessTokenRevokedAt  DateTime?
+
+  /// Cadeia de correção (Cenários 5/7, AD-6): quando um valor/escopo é
+  /// ajustado, o item antigo é cancelado e este campo, no item NOVO,
+  /// aponta de volta para ele — nunca editamos um item em memória.
+  supersedesItemId String?        @unique
+  supersedesItem   WorkOrderItem? @relation("WorkOrderItemSupersedes", fields: [supersedesItemId], references: [id], onDelete: SetNull)
+  supersededBy     WorkOrderItem? @relation("WorkOrderItemSupersedes")
+
+  catalogItemType String?
+  catalogItemId   String?
+
+  /// Ciclo B — mesma semântica de QuoteItem.serviceId: só origem/
+  /// preenchimento inicial, nunca relido depois da criação.
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  cancelReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checklists WorkOrderChecklist[]
+
+  @@index([serviceId])
+  @@map("work_order_items")
+}
+
+/// Registro de fechamento (D-OS-2). Nesta sub-etapa só a metade de
+/// fechamento é usada; reopenedAt/reopenedByUserId/reopenReason ficam
+/// sempre NULL até a Sub-etapa 3 implementar a reabertura. 1:N com
+/// WorkOrder para permitir múltiplos ciclos de fechar/reabrir no futuro.
+model WorkOrderClosure {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  closedAt          DateTime @default(now())
+  closedByUserId    String
+  closedByUser      User     @relation("WorkOrderClosureClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict)
+  totalAtClosureCents Int
+
+  reopenedAt       DateTime?
+  reopenedByUserId String?
+  reopenedByUser   User?     @relation("WorkOrderClosureReopenedBy", fields: [reopenedByUserId], references: [id], onDelete: SetNull)
+  reopenReason     String?
+
+  @@map("work_order_closures")
+}
+
+// ============================================================
+// Ciclo I — Recebimentos (Financeiro mínimo)
+// ============================================================
+//
+// Só receitas/recebimentos, vinculados diretamente à OS. Nasce só
+// quando a OS chega a ENTREGUE (obrigação financeira nasce no
+// fechamento, DEC-I2). Valor devido é sempre lido de
+// WorkOrderClosure.totalAtClosureCents — nunca duplicado aqui. Saldo e
+// status financeiro são sempre calculados na leitura, nunca
+// armazenados. Cada lançamento é write-once (sem estorno neste ciclo,
+// DEC-I6) — nunca editado nem apagado depois de criado.
+
+enum WorkOrderPaymentMethod {
+  DINHEIRO
+  PIX
+  CARTAO
+  OUTRO
+}
+
+model WorkOrderPayment {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+
+  amountCents Int
+  method      WorkOrderPaymentMethod
+  notes       String?
+
+  receivedAt DateTime @default(now())
+
+  registeredByUserId String
+  registeredByUser   User   @relation(fields: [registeredByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([workOrderId])
+  @@map("work_order_payments")
+}
+
+// ============================================================
+// Ciclo J — Evidências/Fotos
+// ============================================================
+
+enum WorkOrderEvidenceType {
+  GERAL
+  AVARIA
+}
+
+/// Vinculada só à OS (DEC-J4). Mutabilidade: livre antes do aceite de
+/// recepção; depois de `WorkOrder.receptionAcceptedAt` preenchido,
+/// evidências existentes ficam imutáveis (sem editar/excluir) — só
+/// adicionar continua sempre permitido (DEC-J5). Reaproveita
+/// `receptionAcceptedAt` já existente; nenhuma coluna nova para a trava.
+/// Acesso só interno (DEC-J6) — nunca gera URL pública, a aplicação
+/// sempre busca do R2 no servidor.
+model WorkOrderEvidence {
+  id          String                @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+
+  type        WorkOrderEvidenceType
+  description String?
+
+  storageKey String @unique
+  mimeType   String
+  fileSize   Int
+
+  createdByUserId String
+  createdByUser   User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+
+  @@index([workOrderId])
+  @@map("work_order_evidences")
+}
+
+// ============================================================
+// EXECUÇÃO OPERACIONAL — Ciclo A: Biblioteca de Serviços
+// ============================================================
+
+enum ServiceStatus {
+  ATIVO
+  INATIVO
+}
+
+/// Catálogo de serviços reutilizável (EX-1: sem código/SKU no MVP —
+/// busca por nome/categoria basta). Escopo do Ciclo A é só o cadastro em
+/// si; a integração com quote_items/work_order_items (via `serviceId`
+/// nullable, decisão já registrada em EXECUCAO_SERVICOS_CHECKLIST_
+/// ESPECIFICACAO.md) fica para o Ciclo B — nada aqui referencia nem é
+/// referenciado por outra tabela ainda.
+model Service {
+  id                String        @id @default(cuid())
+  name              String
+  category          String?
+  defaultPriceCents Int?
+  status            ServiceStatus @default(ATIVO)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  /// Ciclo H — custo estimado interno (peça + mão de obra juntos, sem
+  /// separação estrutural neste ciclo). Nullable — nunca inferido de
+  /// defaultPriceCents nem de nenhum outro campo. Puramente informativo
+  /// para calcular um preço sugerido de referência; NUNCA é copiado para
+  /// QuoteItem/WorkOrderItem e nunca aparece em nenhuma rota/documento
+  /// voltado ao cliente.
+  costCents Int?
+
+  /// Ciclo D — ambos opcionais, nunca obrigatórios (um serviço funciona
+  /// sem procedimento e sem checklist de execução, como já era antes
+  /// destes campos existirem). ON DELETE SET NULL: inativar/remover o
+  /// procedimento ou checklist nunca quebra o serviço, só desassocia.
+  procedureId String?
+  procedure   Procedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
+
+  executionChecklistId String?
+  executionChecklist   Checklist? @relation(fields: [executionChecklistId], references: [id], onDelete: SetNull)
+
+  quoteItems     QuoteItem[]
+  workOrderItems WorkOrderItem[]
+
+  @@index([status])
+  @@index([name])
+  @@map("services")
+}
+
+// ============================================================
+// EXECUÇÃO OPERACIONAL — Ciclo D: Checklists e Procedimentos
+// ============================================================
+//
+// Cadastro apenas — nenhuma tabela aqui é referenciada por work_orders
+// ou work_order_items neste ciclo. A garantia de que uma OS nunca
+// dependerá do conteúdo ATUAL destes cadastros para reconstruir seu
+// histórico será dada pelo Ciclo E através de CÓPIA (congelamento no
+// momento do uso, mesmo princípio já usado 3x no projeto — orçamento →
+// OS, item → item) — nunca por referência. Isso significa que
+// Checklist/ChecklistItem/Procedure podem continuar sendo editados
+// livremente a qualquer momento (são configuração, não histórico) sem
+// que isso represente risco nenhum para OS futuras, que vão congelar
+// sua própria cópia no instante em que forem usados.
+
+enum ProcedureStatus {
+  ATIVO
+  INATIVO
+}
+
+enum ChecklistStatus {
+  ATIVO
+  INATIVO
+}
+
+enum ChecklistType {
+  ENTRADA
+  EXECUCAO
+  ENTREGA
+}
+
+/// `code` obrigatório e único (POP-001, POP-002...) — rastreabilidade e
+/// identificação, decisão explícita deste ciclo. `steps` é texto livre
+/// de referência (como fazer) — nunca virou dado da OS, por isso nunca
+/// precisa ser versionado: editar o texto depois não reescreve nenhuma
+/// OS passada, porque nenhuma OS jamais guarda o procedimento em si, só
+/// o checklist executado (Ciclo E).
+model Procedure {
+  id                 String          @id @default(cuid())
+  code               String          @unique
+  title              String
+  objective          String?
+  prerequisites      String?
+  steps              String?
+  completionCriteria String?
+  status             ProcedureStatus @default(ATIVO)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  services Service[]
+
+  @@map("procedures")
+}
+
+/// `code` obrigatório e único (CHK-001, CHK-006...). `type` decide o
+/// papel: ENTRADA/ENTREGA são globais por oficina (no máximo um ATIVO de
+/// cada por vez, regra validada no serviço — ver ChecklistService);
+/// EXECUCAO é vinculado a um ou mais Service, sem exclusividade.
+model Checklist {
+  id        String          @id @default(cuid())
+  code      String          @unique
+  name      String
+  type      ChecklistType
+  status    ChecklistStatus @default(ATIVO)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  items    ChecklistItem[]
+  services Service[]
+  workOrderChecklists WorkOrderChecklist[]
+
+  @@index([type, status])
+  @@map("checklists")
+}
+
+/// Item do MOLDE — editável livremente. A cópia congelada (quando um
+/// item é efetivamente marcado numa OS, a partir do Ciclo E) é uma
+/// tabela própria e diferente desta, que nunca lê daqui depois de criada.
+model ChecklistItem {
+  id          String    @id @default(cuid())
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  description String
+  required    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+
+  @@index([checklistId])
+  @@map("checklist_items")
+}
+
+// ============================================================
+// EXECUÇÃO OPERACIONAL — Ciclo E: Execução dos Checklists na OS
+// ============================================================
+//
+// A instância congelada (cópia) de um checklist no momento em que é
+// usado numa OS. NUNCA relê `checklists`/`checklist_items` depois de
+// criada — código/nome/itens são copiados uma única vez, no instante da
+// criação. Editar o molde em Configurações depois não afeta nenhuma
+// instância já existente. `sourceChecklistId` é só metadado de
+// auditoria/rastreabilidade (responde "de qual molde isto veio"),
+// nunca é relido para reconstruir conteúdo.
+
+enum WorkOrderChecklistType {
+  ENTRADA
+  EXECUCAO
+  ENTREGA
+}
+
+model WorkOrderChecklist {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  /// Só para tipo EXECUCAO — a qual item/serviço da OS este checklist
+  /// pertence. Nulo para ENTRADA/ENTREGA (são da OS como um todo).
+  workOrderItemId String?
+  workOrderItem    WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: Cascade)
+
+  /// Só rastreabilidade — nunca relido para conteúdo.
+  sourceChecklistId String?
+  sourceChecklist   Checklist? @relation(fields: [sourceChecklistId], references: [id], onDelete: SetNull)
+
+  code String
+  name String
+  type WorkOrderChecklistType
+
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
+  completedByUserId  String?
+  completedByUser    User?     @relation("WorkOrderChecklistCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  items WorkOrderChecklistItem[]
+
+  @@index([workOrderId])
+  @@index([workOrderItemId])
+  @@map("work_order_checklists")
+}
+
+model WorkOrderChecklistItem {
+  id                   String              @id @default(cuid())
+  workOrderChecklistId String
+  workOrderChecklist   WorkOrderChecklist  @relation(fields: [workOrderChecklistId], references: [id], onDelete: Cascade)
+
+  description String
+  required    Boolean
+  sortOrder   Int
+
+  checked         Boolean   @default(false)
+  checkedAt       DateTime?
+  checkedByUserId String?
+  checkedByUser   User?     @relation("WorkOrderChecklistItemCheckedBy", fields: [checkedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderChecklistId])
+  @@map("work_order_checklist_items")
+}
