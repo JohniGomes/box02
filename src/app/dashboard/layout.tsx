@@ -23,16 +23,10 @@ export default async function DashboardLayout({
             aria-hidden
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
-              <path
-                d="M6 17 12 6l6 11z"
-                stroke="var(--accent)"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-            </svg>
+            {/* eslint-disable-next-line @next/next/no-img-element -- emblema oficial (PNG de referência), não um ícone do design system */}
+            <img src="/box02-mark.png" alt="" className="h-6 w-6 object-contain" />
           </div>
-          <span className="text-sm font-semibold tracking-tight">Oficina OS</span>
+          <span className="text-sm font-semibold tracking-tight">BOX 02</span>
         </div>
 
         <div className="flex items-center gap-3">

@@ -33,18 +33,11 @@ function LoginHeader() {
         aria-hidden
         className="flex h-14 w-14 items-center justify-center rounded-2xl bg-foreground"
       >
-        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none">
-          <path
-            d="M6 17 12 6l6 11z"
-            stroke="var(--accent)"
-            strokeWidth="1.6"
-            strokeLinejoin="round"
-          />
-          <circle cx="12" cy="14" r="1.4" fill="var(--accent)" />
-        </svg>
+        {/* eslint-disable-next-line @next/next/no-img-element -- emblema oficial (PNG de referência), não um ícone do design system */}
+        <img src="/box02-mark.png" alt="" className="h-10 w-10 object-contain" />
       </div>
-      <h1 className="text-xl font-semibold tracking-tight">Oficina OS</h1>
-      <p className="text-sm text-muted">Anápolis/GO</p>
+      <h1 className="text-xl font-semibold tracking-tight">BOX 02</h1>
+      <p className="text-sm text-muted">Centro Automotivo · Anápolis/GO</p>
     </div>
   );
 }

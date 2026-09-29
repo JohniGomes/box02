@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
 /*
-  Identidade visual — OFICINA OS
+  Identidade visual — BOX 02 CENTRO AUTOMOTIVO
   Paleta pensada para uso em ambiente de oficina (tablet/celular sob luz
   forte de galpão): fundo neutro de baixo brilho, texto de alto
-  contraste, e um único acento em amarelo-sinalização (cor comum em
-  ferramentas e sinalização de piso de oficina), usado com moderação
-  em ações primárias e status de atenção.
+  contraste, e o vermelho de marca BOX 02 (#e10600) como único acento,
+  usado com moderação em ações primárias e status de atenção. Cor
+  obtida por amostragem de pixel da arte oficial fornecida pelos sócios
+  (ver docs/BRIEFING_BOX02_IDENTIDADE_OPERACAO.md) — sem manual de marca
+  formal com hex documentado até o momento; validar com os sócios antes
+  de tratar como definitiva.
 */
 :root {
   --background: #f7f7f5;
@@ -14,8 +17,8 @@
   --foreground: #16181c;
   --muted: #6b7075;
   --border: #e2e4e2;
-  --accent: #f2a900;
-  --accent-foreground: #16181c;
+  --accent: #e10600;
+  --accent-foreground: #ffffff;
   --danger: #c0362c;
   --success: #2f7a4d;
 }
