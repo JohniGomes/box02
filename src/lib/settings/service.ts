@@ -46,3 +46,29 @@ export async function setDefaultMarkupPercent(percent: number): Promise<void> {
   }
   await setSetting(PRICING_DEFAULT_MARKUP_PERCENT_KEY, String(percent));
 }
+
+// ============================================================
+// Ciclo O — CRM (histórico consolidado + lembrete de retorno)
+// ============================================================
+
+export const CRM_REENGAGEMENT_THRESHOLD_DAYS_KEY = "crm_reengagement_threshold_days";
+
+/**
+ * Mesmo padrão do markup padrão (Ciclo H, DEC H4-D4): SEM fallback
+ * numérico. O sistema não inventa um limite de dias (ex.: 180) — até
+ * os sócios configurarem, `null` significa genuinamente "ainda não
+ * configurado", e a lista de lembrete de retorno não calcula nada.
+ */
+export async function getReengagementThresholdDays(): Promise<number | null> {
+  const raw = await getSetting(CRM_REENGAGEMENT_THRESHOLD_DAYS_KEY);
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export async function setReengagementThresholdDays(days: number): Promise<void> {
+  if (!Number.isFinite(days) || days <= 0) {
+    throw new Error("O limite de dias precisa ser um número maior que zero.");
+  }
+  await setSetting(CRM_REENGAGEMENT_THRESHOLD_DAYS_KEY, String(Math.round(days)));
+}

@@ -2,10 +2,23 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomerService } from "@/lib/customers/service";
 import { listVehiclesByCustomerService } from "@/lib/vehicles/service";
+import { getCustomerHistoryService } from "@/lib/crm/service";
 import { formatDocument } from "@/lib/validation/document";
 import { formatPhone, whatsappLink } from "@/lib/validation/phone";
 import { formatPlate } from "@/lib/validation/plate";
+import { formatBRL } from "@/lib/money";
 import { CustomerStatusActions } from "./CustomerStatusActions";
+
+const WO_STATUS_LABEL: Record<string, string> = {
+  ABERTA: "Aberta",
+  EM_DIAGNOSTICO: "Em diagnóstico",
+  EM_EXECUCAO: "Em execução",
+  AGUARDANDO_PECA: "Aguardando peça",
+  TESTE_FINAL: "Teste final",
+  PRONTA: "Pronta",
+  ENTREGUE: "Entregue",
+  CANCELADA: "Cancelada",
+};
 
 export default async function CustomerDetailPage({
   params,
@@ -17,6 +30,7 @@ export default async function CustomerDetailPage({
   if (!customer) notFound();
 
   const vehicles = await listVehiclesByCustomerService(id);
+  const history = await getCustomerHistoryService(id);
 
   const address = [
     customer.addressStreet,
@@ -174,11 +188,44 @@ export default async function CustomerDetailPage({
         )}
       </section>
 
-      <section className="rounded-2xl border border-dashed border-border p-5">
-        <h2 className="mb-1 text-sm font-semibold">Ordens de serviço e orçamentos</h2>
-        <p className="text-sm text-muted">
-          Ainda não existem — chegam nos ciclos de OS e Orçamento, conforme o roadmap.
-        </p>
+      <section className="rounded-2xl border border-border bg-surface p-5">
+        <h2 className="mb-3 text-sm font-semibold">Histórico de ordens de serviço</h2>
+        <dl className="mb-3 grid grid-cols-2 gap-2 text-center text-sm">
+          <div>
+            <dt className="text-[10px] text-muted">Total de OS</dt>
+            <dd className="font-semibold">{history.totalWorkOrders}</dd>
+          </div>
+          <div>
+            <dt className="text-[10px] text-muted">Total gasto (OS entregues)</dt>
+            <dd className="font-semibold text-success">{formatBRL(history.totalSpentCents)}</dd>
+          </div>
+        </dl>
+        {history.workOrders.length === 0 ? (
+          <p className="text-sm text-muted">Nenhuma ordem de serviço registrada ainda para este cliente.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {history.workOrders.map((wo) => (
+              <li key={wo.id}>
+                <Link
+                  href={`/dashboard/os/${wo.id}`}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm hover:border-accent"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold">{wo.number}</span>
+                    <span className="text-xs text-muted">
+                      {wo.vehiclePlateSnapshot ?? wo.vehicleDescriptionSnapshot ?? "Veículo não informado"} ·{" "}
+                      {new Date(wo.entryAt).toLocaleDateString("pt-BR")}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="font-semibold">{formatBRL(wo.totalCents)}</span>
+                    <span className="text-xs text-muted">{WO_STATUS_LABEL[wo.status] ?? wo.status}</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <CustomerStatusActions customerId={customer.id} status={customer.status} />

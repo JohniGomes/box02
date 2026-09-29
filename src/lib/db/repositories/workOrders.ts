@@ -421,3 +421,34 @@ export async function searchWorkOrders(
 
   return { items: itemsResult.rows, total: Number(countResult.rows[0]?.count ?? 0) };
 }
+
+export interface CustomerWorkOrderHistoryRow {
+  id: string;
+  number: string;
+  status: WorkOrderStatus;
+  vehiclePlateSnapshot: string | null;
+  vehicleDescriptionSnapshot: string | null;
+  entryAt: Date;
+  deliveredAt: Date | null;
+  totalCents: number;
+}
+
+/** Ciclo O — histórico consolidado do cliente. Sem tabela nova: os
+ * dados já existem em `work_orders`, só falta juntar numa consulta
+ * própria (mais barato e direto que reaproveitar `searchWorkOrders`,
+ * que serve outro caso de uso — busca livre, não histórico de um
+ * cliente específico). */
+export async function listWorkOrdersByCustomer(
+  customerId: string,
+  db: Queryable = pool,
+): Promise<CustomerWorkOrderHistoryRow[]> {
+  const result = await db.query<CustomerWorkOrderHistoryRow>(
+    `SELECT id, number, status, "vehiclePlateSnapshot", "vehicleDescriptionSnapshot",
+            "entryAt", "deliveredAt", "totalCents"
+     FROM work_orders
+     WHERE "customerId" = $1
+     ORDER BY "entryAt" DESC`,
+    [customerId],
+  );
+  return result.rows;
+}

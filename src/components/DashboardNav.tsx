@@ -11,6 +11,7 @@ const ITEMS = [
   { label: "OS", href: "/dashboard/os" },
   { label: "Despesas", href: "/dashboard/despesas" },
   { label: "Conciliação", href: "/dashboard/conciliacao" },
+  { label: "CRM", href: "/dashboard/crm" },
   { label: "Configurações", href: "/dashboard/configuracoes" },
 ];
 

@@ -234,3 +234,33 @@ export async function searchCustomers(
     total: Number(countResult.rows[0]?.count ?? 0),
   };
 }
+
+export interface ReengagementCandidateRow {
+  id: string;
+  legalName: string;
+  phone: string | null;
+  lastDeliveredAt: Date;
+  daysSinceLastDelivery: number;
+}
+
+/** Ciclo O — lembrete de retorno/revisão. Critério: tempo desde a
+ * última OS ENTREGUE (não km — odômetro não é atualizado de forma
+ * confiável fora da abertura de uma OS). Cliente sem nenhuma OS
+ * ENTREGUE nunca aparece aqui (não tem "última visita" para medir);
+ * só clientes ATIVOS entram. */
+export async function listReengagementCandidates(thresholdDays: number): Promise<ReengagementCandidateRow[]> {
+  const result = await pool.query<ReengagementCandidateRow>(
+    `SELECT
+      c.id, c."legalName", c.phone,
+      MAX(wo."deliveredAt") as "lastDeliveredAt",
+      EXTRACT(DAY FROM NOW() - MAX(wo."deliveredAt"))::int as "daysSinceLastDelivery"
+     FROM customers c
+     INNER JOIN work_orders wo ON wo."customerId" = c.id AND wo.status = 'ENTREGUE'
+     WHERE c.status = 'ATIVO'
+     GROUP BY c.id, c."legalName", c.phone
+     HAVING MAX(wo."deliveredAt") < NOW() - ($1 || ' days')::interval
+     ORDER BY MAX(wo."deliveredAt") ASC`,
+    [thresholdDays],
+  );
+  return result.rows;
+}
