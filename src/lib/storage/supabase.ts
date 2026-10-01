@@ -1,12 +1,10 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 /**
- * Ciclo J — abstração de storage, para permitir testar a lógica de
- * negócio (criar/listar/excluir evidência) sem depender de credencial
- * real do R2 — a conectividade com o R2 nunca foi verificada (DEC-J2b),
- * nem neste ambiente de desenvolvimento nem em produção. A interface é
- * o ponto de injeção: os testes passam uma implementação fake; a
- * aplicação real usa `createR2StorageClient()`.
+ * Abstração de storage, para permitir testar a lógica de negócio
+ * (criar/listar/excluir evidência) sem depender de credencial real —
+ * os testes passam uma implementação fake; a aplicação real usa
+ * `createSupabaseStorageClient()`.
  */
 export interface StorageClient {
   putObject(params: { key: string; body: Buffer; contentType: string }): Promise<void>;
@@ -15,28 +13,28 @@ export interface StorageClient {
 }
 
 /**
- * Cliente real, compatível com S3, apontado para o Cloudflare R2 via
- * endpoint customizado. NUNCA testado contra credencial/bucket reais
- * (DEC-J2b) — construído conforme a documentação pública do R2, mas
- * sem validação empírica de conectividade. Variáveis de ambiente
- * necessárias: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
- * R2_BUCKET_NAME.
+ * Cliente real, usando a API S3-compatível do Supabase Storage.
+ * Variáveis de ambiente necessárias: SUPABASE_PROJECT_REF,
+ * SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_SECRET_ACCESS_KEY,
+ * SUPABASE_STORAGE_BUCKET. SUPABASE_S3_REGION é opcional (default "us-east-1").
  */
-export function createR2StorageClient(): StorageClient {
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const bucket = process.env.R2_BUCKET_NAME;
+export function createSupabaseStorageClient(): StorageClient {
+  const projectRef = process.env.SUPABASE_PROJECT_REF;
+  const accessKeyId = process.env.SUPABASE_S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.SUPABASE_S3_SECRET_ACCESS_KEY;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET;
+  const region = process.env.SUPABASE_S3_REGION || "us-east-1";
 
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
+  if (!projectRef || !accessKeyId || !secretAccessKey || !bucket) {
     throw new Error(
-      "Configuração do R2 incompleta — defina R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY e R2_BUCKET_NAME.",
+      "Configuração do Supabase Storage incompleta — defina SUPABASE_PROJECT_REF, SUPABASE_S3_ACCESS_KEY_ID, SUPABASE_S3_SECRET_ACCESS_KEY e SUPABASE_STORAGE_BUCKET.",
     );
   }
 
   const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    region,
+    endpoint: `https://${projectRef}.supabase.co/storage/v1/s3`,
+    forcePathStyle: true,
     credentials: { accessKeyId, secretAccessKey },
   });
 

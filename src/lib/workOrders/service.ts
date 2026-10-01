@@ -37,7 +37,7 @@ import {
   type WorkOrderEvidenceRecord,
 } from "@/lib/db/repositories/workOrderEvidences";
 import { createId } from "@paralleldrive/cuid2";
-import { buildEvidenceStorageKey, createR2StorageClient, type StorageClient } from "@/lib/storage/r2";
+import { buildEvidenceStorageKey, createSupabaseStorageClient, type StorageClient } from "@/lib/storage/supabase";
 import {
   createWorkOrderPayment,
   findWorkOrderPaymentById,
@@ -833,7 +833,7 @@ export async function createWorkOrderEvidenceService(
   workOrderId: string,
   rawInput: unknown,
   fileBuffer: Buffer,
-  storageClient: StorageClient = createR2StorageClient(),
+  storageClient: StorageClient = createSupabaseStorageClient(),
 ): Promise<WorkOrderEvidenceRecord> {
   const input = createWorkOrderEvidenceMetadataSchema.parse(rawInput);
 
@@ -878,7 +878,7 @@ export async function deleteWorkOrderEvidenceService(
   actorUserId: string,
   workOrderId: string,
   evidenceId: string,
-  storageClient: StorageClient = createR2StorageClient(),
+  storageClient: StorageClient = createSupabaseStorageClient(),
 ): Promise<void> {
   const workOrder = await findWorkOrderById(workOrderId);
   if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);

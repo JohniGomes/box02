@@ -13,7 +13,7 @@ import {
   setWorkOrderStatusService,
 } from "@/lib/workOrders/service";
 import { WorkOrderEvidenceLockedError, WorkOrderEvidenceNotFoundError } from "@/lib/workOrders/errors";
-import type { StorageClient } from "@/lib/storage/r2";
+import type { StorageClient } from "@/lib/storage/supabase";
 
 function createFakeStorageClient(): StorageClient & { objects: Map<string, Buffer> } {
   const objects = new Map<string, Buffer>();

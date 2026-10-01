@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { findWorkOrderEvidenceById } from "@/lib/db/repositories/workOrderEvidences";
-import { createR2StorageClient } from "@/lib/storage/r2";
+import { createSupabaseStorageClient } from "@/lib/storage/supabase";
 
 /**
  * Ciclo J — DEC-J6: acesso só interno. Nunca existe URL pública do R2 —
@@ -24,7 +24,7 @@ export async function GET(
     return new Response("Evidência não encontrada.", { status: 404 });
   }
 
-  const storageClient = createR2StorageClient();
+  const storageClient = createSupabaseStorageClient();
   const object = await storageClient.getObject(evidence.storageKey);
   if (!object) {
     return new Response("Arquivo não encontrado no armazenamento.", { status: 404 });
