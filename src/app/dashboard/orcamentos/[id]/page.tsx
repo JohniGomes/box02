@@ -9,6 +9,7 @@ import { QUOTE_STATUS_CLASS, QUOTE_STATUS_LABEL } from "../statusLabels";
 import { CancelQuoteButton, NewVersionButton, SendQuoteButton } from "./QuoteActions";
 import { ConvertQuoteToWorkOrderForm } from "./ConvertQuoteToWorkOrderForm";
 import { CopyLinkButton } from "./CopyLinkButton";
+import { PrintButton } from "@/components/PrintButton";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -41,18 +42,26 @@ export default async function QuoteDetailPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Link href="/dashboard/orcamentos" className="text-sm text-muted hover:underline">
           ← Orçamentos
         </Link>
-        {isDraft ? (
-          <Link
-            href={`/dashboard/orcamentos/${quote.id}/editar`}
-            className="flex h-9 items-center rounded-lg border border-border px-3 text-sm font-medium"
-          >
-            Editar
-          </Link>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <PrintButton label="Imprimir orçamento" />
+          {isDraft ? (
+            <Link
+              href={`/dashboard/orcamentos/${quote.id}/editar`}
+              className="flex h-9 items-center rounded-lg border border-border px-3 text-sm font-medium"
+            >
+              Editar
+            </Link>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="hidden text-center print:block">
+        <p className="text-sm font-semibold">BOX 02 — Centro Automotivo</p>
+        <p className="text-xs text-muted">Anápolis/GO</p>
       </div>
 
       <div>
@@ -145,7 +154,7 @@ export default async function QuoteDetailPage({
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-border p-5">
+      <section className={`rounded-2xl border border-border p-5 ${approval ? "" : "print:hidden"}`}>
         <h2 className="mb-1 text-sm font-semibold">Aprovação do cliente</h2>
         {approval ? (
           <div className="mt-2 flex flex-col gap-1 text-sm">
@@ -177,7 +186,7 @@ export default async function QuoteDetailPage({
       </section>
 
       {allVersions.length > 1 ? (
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section className="rounded-2xl border border-border bg-surface p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold">Histórico de versões</h2>
           <ul className="flex flex-col gap-2">
             {allVersions.map((v) => (
@@ -200,7 +209,7 @@ export default async function QuoteDetailPage({
         </section>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 print:hidden">
         {isDraft ? <SendQuoteButton quoteId={quote.id} /> : null}
         {isApprovedForConversion ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
         {canCreateNewVersion ? <NewVersionButton quoteId={quote.id} /> : null}

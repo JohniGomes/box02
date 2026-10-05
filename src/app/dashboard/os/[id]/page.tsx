@@ -124,9 +124,17 @@ export default async function WorkOrderDetailPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <Link href="/dashboard/os" className="text-sm text-muted hover:underline">
-        ← Ordens de Serviço
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/dashboard/os" className="text-sm text-muted hover:underline">
+          ← Ordens de Serviço
+        </Link>
+        <Link
+          href={`/dashboard/os/${workOrder.id}/imprimir`}
+          className="flex h-9 items-center rounded-lg border border-border px-3 text-sm font-medium hover:border-accent"
+        >
+          Imprimir / Gerar PDF
+        </Link>
+      </div>
 
       {workOrder.status !== "CANCELADA" ? (
         <MethodStepper activeStage={activeStage} showVerificandoBarrier={showVerificando} />

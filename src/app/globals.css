@@ -52,3 +52,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Impressão/PDF (window.print): força tema claro independente do
+   prefers-color-scheme do sistema — texto claro-sobre-escuro do modo
+   escuro ficaria ilegível em papel/PDF branco. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  :root {
+    --background: #ffffff;
+    --surface: #ffffff;
+    --foreground: #16181c;
+    --muted: #4b4f54;
+    --border: #d5d7d5;
+  }
+
+  body {
+    background: #ffffff;
+  }
+}

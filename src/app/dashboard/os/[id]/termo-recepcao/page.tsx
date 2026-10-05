@@ -6,6 +6,7 @@ import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { formatPlate } from "@/lib/validation/plate";
 import type { ReceptionChecklistSnapshot } from "@/lib/db/repositories/workOrders";
+import { PrintButton } from "@/components/PrintButton";
 
 export default async function TermoRecepcaoPage({
   params,
@@ -53,10 +54,11 @@ export default async function TermoRecepcaoPage({
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 print:gap-3">
-      <div className="print:hidden">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Link href={`/dashboard/os/${workOrder.id}`} className="text-sm text-muted hover:underline">
           ← Voltar para a OS
         </Link>
+        <PrintButton />
       </div>
 
       <div className="print:hidden">

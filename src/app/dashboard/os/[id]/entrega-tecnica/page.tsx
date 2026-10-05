@@ -8,6 +8,7 @@ import { findUserById } from "@/lib/db/repositories/users";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { WORK_ORDER_STATUS_LABEL } from "../../statusLabels";
+import { PrintButton } from "@/components/PrintButton";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -56,10 +57,11 @@ export default async function EntregaTecnicaPage({
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 print:gap-3">
-      <div className="print:hidden">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Link href={`/dashboard/os/${workOrder.id}`} className="text-sm text-muted hover:underline">
           ← Voltar para a OS
         </Link>
+        <PrintButton />
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">

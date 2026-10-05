@@ -17,7 +17,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-4">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-4 print:hidden">
         <div className="flex items-center gap-2">
           <div
             aria-hidden
@@ -39,18 +39,18 @@ export default async function DashboardLayout({
         {/* Navegação lateral — visível a partir de telas médias (uso administrativo/desktop) */}
         <nav
           aria-label="Navegação principal"
-          className="hidden w-56 shrink-0 border-r border-border bg-surface p-4 md:block"
+          className="hidden w-56 shrink-0 border-r border-border bg-surface p-4 md:block print:hidden"
         >
           <DashboardNav />
         </nav>
 
-        <main className="flex-1 px-4 py-6 pb-24 md:pb-6">{children}</main>
+        <main className="flex-1 px-4 py-6 pb-24 md:pb-6 print:p-0">{children}</main>
       </div>
 
       {/* Navegação inferior — uso operacional em celular/tablet */}
       <nav
         aria-label="Navegação principal"
-        className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface md:hidden"
+        className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface md:hidden print:hidden"
       >
         <DashboardNav mobile />
       </nav>
