@@ -9,6 +9,7 @@ import {
   type SearchCustomersFilters,
 } from "@/lib/db/repositories/customers";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
+import { listWorkOrdersByCustomer, type CustomerWorkOrderHistoryRow } from "@/lib/db/repositories/workOrders";
 import {
   customerInputSchema,
   normalizeCustomerInput,
@@ -162,6 +163,26 @@ export async function getCustomerService(customerId: string): Promise<CustomerRe
 
 export async function searchCustomersService(filters: SearchCustomersFilters) {
   return searchCustomers(filters);
+}
+
+export interface CustomerHistoryView {
+  workOrders: CustomerWorkOrderHistoryRow[];
+  totalWorkOrders: number;
+  totalSpentCents: number;
+}
+
+/** Histórico consolidado do cliente (OS + total gasto) — usado na
+ * ficha do cliente. */
+export async function getCustomerHistoryService(customerId: string): Promise<CustomerHistoryView> {
+  const workOrders = await listWorkOrdersByCustomer(customerId);
+  const delivered = workOrders.filter((wo) => wo.status === "ENTREGUE");
+  const totalSpentCents = delivered.reduce((sum, wo) => sum + wo.totalCents, 0);
+
+  return {
+    workOrders,
+    totalWorkOrders: workOrders.length,
+    totalSpentCents,
+  };
 }
 
 export type { CustomerInput };

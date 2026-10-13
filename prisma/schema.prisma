@@ -100,6 +100,7 @@ model User {
   workOrderPaymentRefunds       WorkOrderPaymentRefund[]
   bankReconciliations           BankReconciliation[]
   appointmentsCreated            Appointment[]
+  stockMovementsCreated          StockMovement[]
 
   @@map("users")
 }
@@ -1140,4 +1141,59 @@ model Appointment {
   @@index([scheduledAt])
   @@index([customerId])
   @@map("appointments")
+}
+
+enum PartStatus {
+  ATIVO
+  INATIVO
+}
+
+/// Catálogo de peças/insumos — decisão explícita (ver migração 0021):
+/// SEM vínculo automático com OS/orçamento. Saldo de estoque nunca é
+/// armazenado, sempre derivado da soma de StockMovement (mesmo padrão
+/// de WorkOrderPayment/sumWorkOrderPayments).
+model Part {
+  id     String     @id @default(cuid())
+  name   String
+  sku    String?    @unique
+  unit   String     @default("un")
+  costCents Int?
+  minStock  Int?
+  status PartStatus @default(ATIVO)
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
+
+  @@index([name])
+  @@map("parts")
+}
+
+enum StockMovementType {
+  ENTRADA
+  SAIDA
+}
+
+/// Lançamento manual de entrada/saída de estoque. Write-once (sem
+/// update/delete) — mesmo padrão de WorkOrderPayment: corrigir um
+/// lançamento errado é lançar o movimento inverso, não editar o
+/// original.
+model StockMovement {
+  id       String            @id @default(cuid())
+  partId   String
+  part     Part              @relation(fields: [partId], references: [id], onDelete: Restrict)
+  type     StockMovementType
+  quantity Int
+  reason   String?
+
+  createdByUserId String
+  createdByUser   User   @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([partId])
+  @@index([createdAt])
+  @@map("stock_movements")
 }

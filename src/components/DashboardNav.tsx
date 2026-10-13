@@ -10,9 +10,8 @@ const ITEMS = [
   { label: "Veículos", href: "/dashboard/veiculos" },
   { label: "Orçamentos", href: "/dashboard/orcamentos" },
   { label: "OS", href: "/dashboard/os" },
+  { label: "Estoque", href: "/dashboard/estoque" },
   { label: "Despesas", href: "/dashboard/despesas" },
-  { label: "Conciliação", href: "/dashboard/conciliacao" },
-  { label: "CRM", href: "/dashboard/crm" },
   { label: "Configurações", href: "/dashboard/configuracoes" },
 ];
 

@@ -78,6 +78,16 @@ async function main() {
     console.log("Nenhum checklist CHK-DEMO-EXEC encontrado — nada a limpar (catálogo).");
   }
 
+  const demoParts = await pool.query(`SELECT id FROM parts WHERE name LIKE 'DEMO -%'`);
+  if (demoParts.rows.length > 0) {
+    const partIds = demoParts.rows.map((r) => r.id);
+    await pool.query(`DELETE FROM stock_movements WHERE "partId" = ANY($1::text[])`, [partIds]);
+    await pool.query(`DELETE FROM parts WHERE id = ANY($1::text[])`, [partIds]);
+    console.log(`Removidas ${partIds.length} peça(s) DEMO (e movimentações associadas).`);
+  } else {
+    console.log("Nenhuma peça DEMO encontrada — nada a limpar (estoque).");
+  }
+
   console.log("\nLimpeza de dados DEMO concluída. CHK-001, CHK-006 e POP-001-005 (seed real) intocados.");
   await pool.end();
 }

@@ -3,9 +3,13 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerAction, updateCustomerAction, type ActionResult } from "./actions";
+import { createVehicleAction } from "../veiculos/actions";
 import type { CustomerRecord } from "@/lib/db/repositories/customers";
 import { formatDocument } from "@/lib/validation/document";
 import { formatPhone } from "@/lib/validation/phone";
+import { lookupCep } from "@/lib/validation/cep";
+
+const FUEL_TYPES = ["Flex", "Gasolina", "Etanol", "Diesel", "GNV", "Elétrico", "Híbrido"];
 
 type CustomerType = "PF" | "PJ";
 
@@ -26,6 +30,19 @@ export interface CustomerFormValues {
   addressState: string;
   addressZipCode: string;
   notes: string;
+}
+
+export interface VehicleDraftValues {
+  plate: string;
+  brand: string;
+  model: string;
+  color: string;
+  fuelType: string;
+  mileage: string;
+}
+
+function emptyVehicleDraft(): VehicleDraftValues {
+  return { plate: "", brand: "", model: "", color: "", fuelType: "", mileage: "" };
 }
 
 function emptyValues(type: CustomerType): CustomerFormValues {
@@ -70,7 +87,15 @@ export function customerRecordToFormValues(customer: CustomerRecord): CustomerFo
   };
 }
 
-const STEPS = [
+const STEPS_CREATE = [
+  { key: "identificacao", label: "Identificação" },
+  { key: "contato", label: "Contato" },
+  { key: "endereco", label: "Endereço" },
+  { key: "veiculo", label: "Veículo" },
+  { key: "observacoes", label: "Observações" },
+] as const;
+
+const STEPS_EDIT = [
   { key: "identificacao", label: "Identificação" },
   { key: "contato", label: "Contato" },
   { key: "endereco", label: "Endereço" },
@@ -87,10 +112,12 @@ export function CustomerForm({
   initialValues?: CustomerFormValues;
 }) {
   const router = useRouter();
+  const STEPS = mode === "create" ? STEPS_CREATE : STEPS_EDIT;
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<CustomerFormValues>(
     initialValues ?? emptyValues("PF"),
   );
+  const [vehicleDraft, setVehicleDraft] = useState<VehicleDraftValues>(emptyVehicleDraft());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -99,7 +126,15 @@ export function CustomerForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  function updateVehicle<K extends keyof VehicleDraftValues>(key: K, value: VehicleDraftValues[K]) {
+    setVehicleDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
   const isPJ = values.type === "PJ";
+
+  const hasVehicleData =
+    mode === "create" &&
+    (vehicleDraft.plate.trim() || vehicleDraft.brand.trim() || vehicleDraft.model.trim());
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -131,6 +166,27 @@ export function CustomerForm({
       result = await updateCustomerAction(customerId as string, payload);
     }
 
+    if (result.success && hasVehicleData && result.customerId) {
+      const vehicleResult = await createVehicleAction({
+        customerId: result.customerId,
+        plate: vehicleDraft.plate,
+        brand: vehicleDraft.brand,
+        model: vehicleDraft.model,
+        color: vehicleDraft.color,
+        fuelType: vehicleDraft.fuelType,
+        mileage: vehicleDraft.mileage,
+      });
+      if (!vehicleResult.success) {
+        setSubmitting(false);
+        setFormError(
+          `Cliente cadastrado, mas o veículo não pôde ser salvo: ${vehicleResult.error ?? "erro desconhecido"}. Adicione o veículo depois pela ficha do cliente.`,
+        );
+        router.push(`/dashboard/clientes/${result.customerId}`);
+        router.refresh();
+        return;
+      }
+    }
+
     setSubmitting(false);
 
     if (!result.success) {
@@ -148,14 +204,17 @@ export function CustomerForm({
 
   return (
     <div className="flex flex-col gap-5">
-      <StepIndicator currentIndex={step} />
+      <StepIndicator steps={STEPS} currentIndex={step} />
 
-      {step === 0 ? (
+      {STEPS[step].key === "identificacao" ? (
         <FieldsIdentificacao values={values} update={update} errors={fieldErrors} />
       ) : null}
-      {step === 1 ? <FieldsContato values={values} update={update} errors={fieldErrors} /> : null}
-      {step === 2 ? <FieldsEndereco values={values} update={update} errors={fieldErrors} /> : null}
-      {step === 3 ? <FieldsObservacoes values={values} update={update} /> : null}
+      {STEPS[step].key === "contato" ? <FieldsContato values={values} update={update} errors={fieldErrors} /> : null}
+      {STEPS[step].key === "endereco" ? <FieldsEndereco values={values} update={update} errors={fieldErrors} /> : null}
+      {STEPS[step].key === "veiculo" ? (
+        <FieldsVeiculo values={vehicleDraft} update={updateVehicle} />
+      ) : null}
+      {STEPS[step].key === "observacoes" ? <FieldsObservacoes values={values} update={update} /> : null}
 
       {formError ? (
         <p role="alert" className="text-sm text-danger">
@@ -198,10 +257,16 @@ export function CustomerForm({
   );
 }
 
-function StepIndicator({ currentIndex }: { currentIndex: number }) {
+function StepIndicator({
+  steps,
+  currentIndex,
+}: {
+  steps: readonly { key: string; label: string }[];
+  currentIndex: number;
+}) {
   return (
     <ol className="flex items-center gap-2">
-      {STEPS.map((s, i) => (
+      {steps.map((s, i) => (
         <li key={s.key} className="flex flex-1 items-center gap-2">
           <span
             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
@@ -219,7 +284,7 @@ function StepIndicator({ currentIndex }: { currentIndex: number }) {
           >
             {s.label}
           </span>
-          {i < STEPS.length - 1 ? (
+          {i < steps.length - 1 ? (
             <span className="h-px flex-1 bg-border" aria-hidden />
           ) : null}
         </li>
@@ -402,6 +467,28 @@ function FieldsEndereco({
   update: <K extends keyof CustomerFormValues>(key: K, value: CustomerFormValues[K]) => void;
   errors: Record<string, string>;
 }) {
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepNotFound, setCepNotFound] = useState(false);
+
+  async function handleCepBlur() {
+    setCepNotFound(false);
+    const digits = values.addressZipCode.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+
+    setCepLoading(true);
+    const address = await lookupCep(digits);
+    setCepLoading(false);
+
+    if (!address) {
+      setCepNotFound(true);
+      return;
+    }
+    update("addressStreet", address.street);
+    update("addressNeighborhood", address.neighborhood);
+    update("addressCity", address.city);
+    update("addressState", address.state);
+  }
+
   return (
     <FieldGroup>
       <Field label="CEP" htmlFor="addressZipCode">
@@ -410,8 +497,12 @@ function FieldsEndereco({
           inputMode="numeric"
           value={values.addressZipCode}
           onChange={(e) => update("addressZipCode", e.target.value)}
+          onBlur={handleCepBlur}
           className={inputClass}
+          placeholder="00000-000"
         />
+        {cepLoading ? <p className="text-xs text-muted">Buscando endereço…</p> : null}
+        {cepNotFound ? <p className="text-xs text-danger">CEP não encontrado — preencha manualmente.</p> : null}
       </Field>
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2">
@@ -471,6 +562,88 @@ function FieldsEndereco({
           />
         </Field>
       </div>
+    </FieldGroup>
+  );
+}
+
+function FieldsVeiculo({
+  values,
+  update,
+}: {
+  values: VehicleDraftValues;
+  update: <K extends keyof VehicleDraftValues>(key: K, value: VehicleDraftValues[K]) => void;
+}) {
+  return (
+    <FieldGroup>
+      <p className="text-sm text-muted">
+        Opcional — se o cliente já trouxer o veículo, cadastre agora. Pode editar ou adicionar mais veículos
+        depois, pela ficha do cliente.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Placa" htmlFor="vehiclePlate">
+          <input
+            id="vehiclePlate"
+            value={values.plate}
+            onChange={(e) => update("plate", e.target.value.toUpperCase())}
+            className={inputClass}
+            placeholder="ABC1D23"
+          />
+        </Field>
+        <Field label="Cor" htmlFor="vehicleColor">
+          <input
+            id="vehicleColor"
+            value={values.color}
+            onChange={(e) => update("color", e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Marca" htmlFor="vehicleBrand">
+          <input
+            id="vehicleBrand"
+            value={values.brand}
+            onChange={(e) => update("brand", e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Modelo" htmlFor="vehicleModel">
+          <input
+            id="vehicleModel"
+            value={values.model}
+            onChange={(e) => update("model", e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">Combustível</span>
+        <div className="flex flex-wrap gap-2">
+          {FUEL_TYPES.map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => update("fuelType", values.fuelType === f ? "" : f)}
+              className={`h-9 rounded-full border px-3 text-sm font-medium ${
+                values.fuelType === f ? "border-accent bg-accent/15 text-foreground" : "border-border text-muted"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Field label="Quilometragem" htmlFor="vehicleMileage">
+        <input
+          id="vehicleMileage"
+          inputMode="numeric"
+          value={values.mileage}
+          onChange={(e) => update("mileage", e.target.value)}
+          className={inputClass}
+        />
+      </Field>
     </FieldGroup>
   );
 }

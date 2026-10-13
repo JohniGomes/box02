@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCustomerService } from "@/lib/customers/service";
+import { getCustomerHistoryService, getCustomerService } from "@/lib/customers/service";
 import { listVehiclesByCustomerService } from "@/lib/vehicles/service";
-import { getCustomerHistoryService } from "@/lib/crm/service";
 import { formatDocument } from "@/lib/validation/document";
 import { formatPhone, whatsappLink } from "@/lib/validation/phone";
 import { formatPlate } from "@/lib/validation/plate";
