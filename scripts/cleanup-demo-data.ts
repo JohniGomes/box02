@@ -47,6 +47,20 @@ async function main() {
     await pool.query(`DELETE FROM work_order_closures WHERE "workOrderId" = ANY($1::text[])`, [workOrderIds]);
     await pool.query(`DELETE FROM work_order_items WHERE "workOrderId" = ANY($1::text[])`, [workOrderIds]);
     await pool.query(`DELETE FROM work_orders WHERE id = ANY($1::text[])`, [workOrderIds]);
+    await pool.query(`DELETE FROM appointments WHERE "customerId" = ANY($1::text[])`, [customerIds]);
+    await pool.query(
+      `DELETE FROM quote_items WHERE "quoteVersionId" IN (
+         SELECT id FROM quote_versions WHERE "quoteId" IN (
+           SELECT id FROM quotes WHERE "customerId" = ANY($1::text[])
+         )
+       )`,
+      [customerIds],
+    );
+    await pool.query(
+      `DELETE FROM quote_versions WHERE "quoteId" IN (SELECT id FROM quotes WHERE "customerId" = ANY($1::text[]))`,
+      [customerIds],
+    );
+    await pool.query(`DELETE FROM quotes WHERE "customerId" = ANY($1::text[])`, [customerIds]);
     await pool.query(`DELETE FROM vehicles WHERE "customerId" = ANY($1::text[])`, [customerIds]);
     await pool.query(`DELETE FROM customers WHERE id = ANY($1::text[])`, [customerIds]);
     console.log(`Removidas ${workOrderIds.length} OS (e dados relacionados) e ${customerIds.length} cliente(s) DEMO.`);

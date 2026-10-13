@@ -99,6 +99,7 @@ model User {
   expensesCreated               Expense[]
   workOrderPaymentRefunds       WorkOrderPaymentRefund[]
   bankReconciliations           BankReconciliation[]
+  appointmentsCreated            Appointment[]
 
   @@map("users")
 }
@@ -177,6 +178,7 @@ model Customer {
 
   vehicles Vehicle[]
   workOrders WorkOrder[]
+  appointments Appointment[]
 
   @@map("customers")
 }
@@ -228,6 +230,7 @@ model Vehicle {
 
   quotes Quote[]
   workOrders WorkOrder[]
+  appointments Appointment[]
 
   @@map("vehicles")
 }
@@ -1099,4 +1102,42 @@ model BankReconciliation {
   createdAt DateTime @default(now())
 
   @@map("bank_reconciliations")
+}
+
+enum AppointmentStatus {
+  AGENDADO
+  CANCELADO
+}
+
+/// Agenda mínima (decisão explícita de escopo): cliente + veículo
+/// opcional + data/hora + observação. Sem baias, sem detecção de
+/// conflito de horário, sem vínculo com serviço/catálogo — evolução
+/// futura se for pedida, não antecipada aqui. Cancelamento é um campo
+/// de status (nunca exclusão), mesmo padrão de histórico usado no
+/// resto do sistema.
+model Appointment {
+  id     String            @id @default(cuid())
+  status AppointmentStatus @default(AGENDADO)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  scheduledAt DateTime
+  description String?
+
+  createdByUserId String
+  createdByUser   User   @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scheduledAt])
+  @@index([customerId])
+  @@map("appointments")
 }

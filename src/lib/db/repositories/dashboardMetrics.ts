@@ -5,10 +5,16 @@ import { pool } from "../pool";
  * escalares) em vez de várias chamadas separadas — evita N round-trips
  * ao banco só para montar um resumo.
  *
- * "Mês" é sempre o mês corrente, calculado no próprio Postgres
- * (date_trunc('month', now())) para não depender do fuso horário do
- * processo Node.
+ * "Mês"/"hoje" são sempre calculados no próprio Postgres (date_trunc,
+ * CURRENT_DATE) para não depender do fuso horário do processo Node.
  */
+export interface SalesByMethod {
+  dinheiroCents: number;
+  pixCents: number;
+  cartaoCents: number;
+  outroCents: number;
+}
+
 export interface DashboardMetrics {
   totalCustomers: number;
   totalVehicles: number;
@@ -20,6 +26,11 @@ export interface DashboardMetrics {
   netResultCents: number;
   averageTicketCents: number;
   pendingExpensesCents: number;
+  todayRevenueCents: number;
+  todayExpensesCents: number;
+  salesByMethodThisMonth: SalesByMethod;
+  quotesThisMonthPending: number;
+  quotesThisMonthApproved: number;
 }
 
 interface DashboardMetricsRow {
@@ -33,6 +44,14 @@ interface DashboardMetricsRow {
   monthly_expenses_cents: string;
   pending_expenses_cents: string;
   paid_work_orders_this_month: string;
+  today_revenue_cents: string;
+  today_expenses_cents: string;
+  sales_dinheiro_cents: string;
+  sales_pix_cents: string;
+  sales_cartao_cents: string;
+  sales_outro_cents: string;
+  quotes_this_month_pending: string;
+  quotes_this_month_approved: string;
 }
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
@@ -63,7 +82,39 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       (SELECT COUNT(DISTINCT "workOrderId") FROM work_order_payments
         WHERE "receivedAt" >= date_trunc('month', now())
           AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
-      ) AS paid_work_orders_this_month
+      ) AS paid_work_orders_this_month,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
+        WHERE "receivedAt" >= CURRENT_DATE AND "receivedAt" < CURRENT_DATE + interval '1 day'
+      ) AS today_revenue_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
+        WHERE "paidAt" >= CURRENT_DATE AND "paidAt" < CURRENT_DATE + interval '1 day'
+      ) AS today_expenses_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
+        WHERE method = 'DINHEIRO' AND "receivedAt" >= date_trunc('month', now())
+          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+      ) AS sales_dinheiro_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
+        WHERE method = 'PIX' AND "receivedAt" >= date_trunc('month', now())
+          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+      ) AS sales_pix_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
+        WHERE method = 'CARTAO' AND "receivedAt" >= date_trunc('month', now())
+          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+      ) AS sales_cartao_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
+        WHERE method = 'OUTRO' AND "receivedAt" >= date_trunc('month', now())
+          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+      ) AS sales_outro_cents,
+      (SELECT COUNT(*) FROM quotes
+        WHERE status IN ('RASCUNHO', 'ENVIADO')
+          AND "createdAt" >= date_trunc('month', now())
+          AND "createdAt" < date_trunc('month', now()) + interval '1 month'
+      ) AS quotes_this_month_pending,
+      (SELECT COUNT(*) FROM quotes
+        WHERE status IN ('APROVADO', 'APROVADO_PARCIAL')
+          AND "createdAt" >= date_trunc('month', now())
+          AND "createdAt" < date_trunc('month', now()) + interval '1 month'
+      ) AS quotes_this_month_approved
   `);
 
   const row = result.rows[0];
@@ -82,5 +133,15 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     netResultCents: monthlyRevenueCents - monthlyExpensesCents,
     averageTicketCents: paidWorkOrdersThisMonth > 0 ? Math.round(monthlyRevenueCents / paidWorkOrdersThisMonth) : 0,
     pendingExpensesCents: Number(row.pending_expenses_cents),
+    todayRevenueCents: Number(row.today_revenue_cents),
+    todayExpensesCents: Number(row.today_expenses_cents),
+    salesByMethodThisMonth: {
+      dinheiroCents: Number(row.sales_dinheiro_cents),
+      pixCents: Number(row.sales_pix_cents),
+      cartaoCents: Number(row.sales_cartao_cents),
+      outroCents: Number(row.sales_outro_cents),
+    },
+    quotesThisMonthPending: Number(row.quotes_this_month_pending),
+    quotesThisMonthApproved: Number(row.quotes_this_month_approved),
   };
 }
