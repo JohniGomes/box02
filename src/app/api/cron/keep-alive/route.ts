@@ -32,7 +32,11 @@ export async function GET(request: Request) {
   const anonKey = process.env.SUPABASE_ANON_KEY;
   if (projectRef && anonKey) {
     try {
-      const res = await fetch(`https://${projectRef}.supabase.co/rest/v1/`, {
+      // A raiz "/rest/v1/" exige service_role key (expõe o schema
+      // inteiro); uma consulta real a uma tabela existente é o que
+      // funciona com a anon key — e é isso que precisa contar como
+      // "atividade" de qualquer forma.
+      const res = await fetch(`https://${projectRef}.supabase.co/rest/v1/users?select=id&limit=1`, {
         headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
       });
       restPing = { ok: res.ok, status: res.status };
