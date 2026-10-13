@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { auth } from "@/auth";
 import { getDashboardMetricsService } from "@/lib/dashboard/service";
 import { listAppointmentsWithNamesBetweenService } from "@/lib/appointments/service";
 import { formatBRL } from "@/lib/money";
@@ -22,9 +21,6 @@ function greeting(hour: number): string {
 }
 
 export default async function DashboardHomePage() {
-  const session = await auth();
-  const firstName = (session?.user?.name ?? "").split(" ")[0];
-
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -64,7 +60,7 @@ export default async function DashboardHomePage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">
-            Olá{firstName ? `, ${firstName}` : ""}, {greeting(now.getHours())}!
+            Olá, Team BOX 02, {greeting(now.getHours())}!
           </h1>
           <p className="text-sm text-muted">Hoje é {dateLabel}.</p>
         </div>
