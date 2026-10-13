@@ -1,0 +1,31 @@
+name: Supabase keep-alive
+
+# Pinga o banco (via /api/cron/keep-alive) para evitar que o Supabase
+# free tier pause o projeto por inatividade (pausa após 7 dias sem
+# nenhuma consulta). Roda duas vezes por dia — redundante de propósito
+# com o Vercel Cron (vercel.json): se um dos dois falhar silenciosamente,
+# o outro ainda garante a margem de 7 dias. Diferente do Vercel Cron no
+# plano Hobby (logs de só 1h), o histórico de execução aqui fica
+# visível na aba Actions por 90 dias, e uma falha gera e-mail automático
+# do GitHub para quem tem acesso ao repositório.
+on:
+  schedule:
+    - cron: "0 9 * * *"
+    - cron: "0 21 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping keep-alive endpoint
+        run: |
+          status=$(curl -s -o /tmp/body.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://box02.vercel.app/api/cron/keep-alive")
+          echo "HTTP status: $status"
+          cat /tmp/body.json
+          if [ "$status" != "200" ]; then
+            echo "::error::Keep-alive falhou (status $status) — Supabase pode estar pausado ou a rota com problema."
+            exit 1
+          fi
