@@ -81,7 +81,6 @@ export default async function CustomersPage({
                     href={whatsappLink(c.whatsapp)}
                     target="_blank"
                     rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
                     className="mt-1 inline-flex h-9 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted"
                   >
                     Abrir WhatsApp
