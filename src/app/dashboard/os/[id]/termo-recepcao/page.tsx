@@ -4,9 +4,14 @@ import { getWorkOrderService } from "@/lib/workOrders/service";
 import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
+import { findUserById } from "@/lib/db/repositories/users";
 import { formatPlate } from "@/lib/validation/plate";
+import { formatPhone } from "@/lib/validation/phone";
 import type { ReceptionChecklistSnapshot } from "@/lib/db/repositories/workOrders";
+import { PdfStyleHeader } from "@/components/PdfStyleHeader";
 import { PrintButton } from "@/components/PrintButton";
+import { DamagesEditor } from "../DamagesEditor";
+import { ReceptionAcceptForm } from "../ReceptionAcceptForm";
 
 export default async function TermoRecepcaoPage({
   params,
@@ -18,12 +23,13 @@ export default async function TermoRecepcaoPage({
   if (!data) notFound();
   const { workOrder } = data;
 
-  const [customer, vehicle] = await Promise.all([
+  const accepted = Boolean(workOrder.receptionAcceptedAt);
+
+  const [customer, vehicle, receivedBy] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
+    workOrder.receivedByUserId ? findUserById(workOrder.receivedByUserId) : Promise.resolve(null),
   ]);
-
-  const accepted = Boolean(workOrder.receptionAcceptedAt);
 
   // Documento congelado (depois do aceite): lê só dos snapshots, nunca
   // dos campos "vivos" da OS. Prévia dinâmica (antes do aceite): lê os
@@ -53,160 +59,154 @@ export default async function TermoRecepcaoPage({
 
   const complaint = accepted ? workOrder.receptionComplaintSnapshot : workOrder.customerComplaint;
   const damages = accepted ? workOrder.receptionDamagesSnapshot : workOrder.preExistingDamagesDescription;
+  const phone = customer?.whatsapp ?? customer?.phone ?? null;
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-5 print:gap-3">
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 print:gap-2">
       <div className="flex items-center justify-between gap-3 print:hidden">
         <Link href={`/dashboard/os/${workOrder.id}`} className="text-sm text-muted hover:underline">
           ← Voltar para a OS
         </Link>
-        <PrintButton />
+        <PrintButton label="Imprimir Termo" />
       </div>
 
-      <div className="print:hidden">
-        {accepted ? (
-          <div className="rounded-xl border border-success/30 bg-success/5 p-3 text-center text-sm font-medium text-success">
-            Documento congelado — representa o estado exato no momento do aceite.
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-accent/40 bg-accent/5 p-3 text-center text-sm font-medium text-accent">
-            Prévia dinâmica — Termo ainda pendente de aceite. O conteúdo abaixo reflete os dados
-            disponíveis agora e pode mudar até o aceite ser registrado.
-          </div>
-        )}
-      </div>
+      <PdfStyleHeader title="Termo de Recepção" subtitle="Ciência do cliente e autorização de diagnóstico" />
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h1 className="mb-1 text-lg font-semibold tracking-tight">Termo de Recepção</h1>
-        <p className="mb-4 text-xs text-muted">OS {workOrder.number}</p>
+      {accepted ? (
+        <div className="rounded-xl border border-success/30 bg-success/5 p-3 text-center text-sm font-medium text-success print:hidden">
+          Documento congelado — representa o estado exato no momento do aceite.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-accent/40 bg-accent/5 p-3 text-center text-sm font-medium text-accent print:hidden">
+          Prévia dinâmica — pendente de aceite. O conteúdo abaixo pode mudar até o aceite ser registrado.
+        </div>
+      )}
 
-        <dl className="flex flex-col gap-3 text-sm">
-          <div>
-            <dt className="text-xs text-muted">Cliente</dt>
-            <dd>{customer?.legalName ?? workOrder.customerNameSnapshot}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Veículo</dt>
-            <dd>
-              {vehicle ? `${vehicle.brand ?? ""} ${vehicle.model ?? ""}`.trim() || "—" : workOrder.vehicleDescriptionSnapshot ?? "—"}
-              {workOrder.vehiclePlateSnapshot ? ` · ${formatPlate(workOrder.vehiclePlateSnapshot)}` : ""}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Quilometragem na recepção</dt>
-            <dd>{workOrder.mileageAtEntry.toLocaleString("pt-BR")} km</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Data e hora da recepção</dt>
-            <dd>{new Date(workOrder.entryAt).toLocaleString("pt-BR")}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Queixa relatada</dt>
-            <dd className="whitespace-pre-wrap">{complaint ?? "Nenhuma queixa registrada."}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Avarias preexistentes declaradas</dt>
-            <dd className="whitespace-pre-wrap">{damages ?? "Nenhuma avaria declarada."}</dd>
-          </div>
-
-          <div>
-            <dt className="mb-1 text-xs text-muted">
-              Checklist de entrada {accepted ? "(estado no momento do aceite)" : "(estado atual)"}
-            </dt>
-            {checklistToShow ? (
-              <dd>
-                <p className="mb-1 text-xs font-medium">{checklistToShow.code} — {checklistToShow.name}</p>
-                <ul className="flex flex-col gap-1">
-                  {checklistToShow.items
-                    .slice()
-                    .sort((a, b) => a.sortOrder - b.sortOrder)
-                    .map((item, idx) => (
-                      <li key={idx} className="flex flex-col gap-0.5 text-sm">
-                        <span className="flex items-start gap-2">
-                          <span>
-                            {item.status === "OK" ? "OK" : item.status === "ATENCAO" ? "Atenção" : item.status === "NA" ? "N/A" : "☐"}
-                          </span>
-                          <span>
-                            {item.description}
-                            {item.required ? <span className="ml-1 text-[10px] text-danger">obrigatório</span> : null}
-                          </span>
-                        </span>
-                        {item.observacao ? (
-                          <span className="ml-6 text-xs text-muted">Obs.: {item.observacao}</span>
-                        ) : null}
-                      </li>
-                    ))}
-                </ul>
-              </dd>
-            ) : (
-              <dd className="text-muted">Checklist de entrada não foi utilizado nesta recepção.</dd>
-            )}
-          </div>
-        </dl>
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm">
+        <Field label="Nº da OS / PROV" value={workOrder.number} />
+        <Field label="Data / hora" value={new Date(workOrder.entryAt).toLocaleString("pt-BR")} />
+        <Field label="Placa" value={workOrder.vehiclePlateSnapshot ? formatPlate(workOrder.vehiclePlateSnapshot) : "—"} />
+        <Field label="Recebido por" value={receivedBy?.name ?? "—"} />
+        <Field label="Cliente" value={customer?.legalName ?? workOrder.customerNameSnapshot} />
+        <Field label="Telefone / WhatsApp" value={phone ? formatPhone(phone) : "—"} />
+        <Field
+          label="Veículo (marca / modelo)"
+          value={
+            vehicle
+              ? `${vehicle.brand ?? ""} ${vehicle.model ?? ""}`.trim() || "—"
+              : workOrder.vehicleDescriptionSnapshot ?? "—"
+          }
+        />
+        <Field label="Km (painel)" value={`${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km`} />
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="mb-2 text-sm font-semibold">Ciência do cliente</h2>
-        {accepted ? (
-          <ul className="flex flex-col gap-2 text-sm">
-            <li className="flex items-start gap-2">
-              <span>{workOrder.receptionAwareness1 ? "☑" : "☐"}</span>
-              <span>
-                Fui informado(a) de que o veículo pode ter desgastes ou problemas já existentes, que só
-                aparecem quando a oficina testa, desmonta ou liga o carro. Se isso acontecer, a oficina me avisa
-                e apresenta orçamento separado. Nada será feito sem minha autorização.
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span>{workOrder.receptionAwareness2 ? "☑" : "☐"}</span>
-              <span>
-                Fui informado(a) de que carro parado por muito tempo pode ter bateria fraca, combustível e
-                fluidos degradados e borrachas/mangueiras ressecadas, e que isso pode aparecer depois que o carro
-                volta a ser usado.
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span>{workOrder.receptionAwareness3 ? "☑" : "☐"}</span>
-              <span>Esta ciência não retira a responsabilidade da oficina pelo serviço que ela executar.</span>
-            </li>
+        <h2 className="mb-2 text-sm font-bold uppercase">Queixa relatada pelo cliente</h2>
+        <p className="whitespace-pre-wrap text-sm">{complaint ?? "Nenhuma queixa registrada."}</p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="mb-2 text-sm font-bold uppercase">Avarias preexistentes declaradas</h2>
+        <DamagesEditor workOrderId={workOrder.id} initialValue={damages} locked={accepted} />
+      </div>
+
+      {checklistToShow ? (
+        <div className="rounded-2xl border border-border bg-surface p-6">
+          <h2 className="mb-1 text-sm font-bold uppercase">
+            Checklist de entrada {accepted ? "(estado no momento do aceite)" : "(estado atual)"}
+          </h2>
+          <p className="mb-2 text-xs text-muted">{checklistToShow.code} — {checklistToShow.name}</p>
+          <ul className="flex flex-col gap-1">
+            {checklistToShow.items
+              .slice()
+              .sort((a, b) => a.sortOrder - b.sortOrder)
+              .map((item, idx) => (
+                <li key={idx} className="flex flex-col gap-0.5 text-sm">
+                  <span className="flex items-start gap-2">
+                    <span className="font-medium">
+                      {item.status === "OK"
+                        ? "OK"
+                        : item.status === "ATENCAO"
+                          ? "Atenção"
+                          : item.status === "NA"
+                            ? "N/A"
+                            : "☐"}
+                    </span>
+                    <span>
+                      {item.description}
+                      {item.required ? <span className="ml-1 text-[10px] text-danger">obrigatório</span> : null}
+                    </span>
+                  </span>
+                  {item.observacao ? <span className="ml-6 text-xs text-muted">Obs.: {item.observacao}</span> : null}
+                </li>
+              ))}
           </ul>
-        ) : (
-          <p className="text-sm text-muted">Será exibida aqui quando o aceite for registrado.</p>
-        )}
-      </div>
+          <Link
+            href={`/dashboard/os/${workOrder.id}/checklist-entrada`}
+            className="mt-3 inline-block text-xs font-medium text-accent print:hidden"
+          >
+            Abrir checklist de entrada →
+          </Link>
+        </div>
+      ) : null}
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <h2 className="mb-2 text-sm font-semibold">Aceite e autorização de diagnóstico</h2>
-        {accepted ? (
-          <div className="flex flex-col gap-2 text-sm">
-            <p>
-              Declaro estar ciente das informações de recepção acima, incluindo o estado aparente do
-              veículo e as avarias preexistentes declaradas, e autorizo a oficina a realizar o
-              diagnóstico do veículo.
-            </p>
-            <dl className="mt-2 flex flex-col gap-1 text-xs">
-              <div>
-                <dt className="inline text-muted">Aceito por: </dt>
-                <dd className="inline">{workOrder.receptionAcceptedName}</dd>
-              </div>
-              {workOrder.receptionAcceptedDocument ? (
-                <div>
-                  <dt className="inline text-muted">CPF: </dt>
-                  <dd className="inline">{workOrder.receptionAcceptedDocument}</dd>
-                </div>
-              ) : null}
-              <div>
-                <dt className="inline text-muted">Data/hora do aceite: </dt>
-                <dd className="inline">{new Date(workOrder.receptionAcceptedAt!).toLocaleString("pt-BR")}</dd>
-              </div>
-            </dl>
+      {!accepted ? (
+        <ReceptionAcceptForm workOrderId={workOrder.id} />
+      ) : (
+        <>
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <h2 className="mb-2 text-sm font-bold uppercase">Ciência do cliente</h2>
+            <ul className="flex flex-col gap-2 text-sm">
+              <li className="flex items-start gap-2">
+                <span>{workOrder.receptionAwareness1 ? "☑" : "☐"}</span>
+                <span>
+                  Fui informado(a) de que o veículo pode ter desgastes ou problemas já existentes, que só aparecem
+                  quando a oficina testa, desmonta ou liga o carro. Se isso acontecer, a oficina me avisa e
+                  apresenta orçamento separado. Nada será feito sem minha autorização.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>{workOrder.receptionAwareness2 ? "☑" : "☐"}</span>
+                <span>
+                  Fui informado(a) de que carro parado por muito tempo pode ter bateria fraca, combustível e
+                  fluidos degradados e borrachas/mangueiras ressecadas, e que isso pode aparecer depois que o
+                  carro volta a ser usado.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>{workOrder.receptionAwareness3 ? "☑" : "☐"}</span>
+                <span>Esta ciência não retira a responsabilidade da oficina pelo serviço que ela executar.</span>
+              </li>
+            </ul>
           </div>
-        ) : (
-          <p className="text-sm text-muted">
-            Aceite ainda não registrado. Registre o aceite na ficha da OS para congelar este Termo.
-          </p>
-        )}
-      </div>
+
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <h2 className="mb-2 text-sm font-bold uppercase">Aceite e autorização de diagnóstico</h2>
+            <p className="text-sm">
+              Declaro estar ciente das informações de recepção acima, incluindo o estado aparente do veículo e as
+              avarias preexistentes declaradas, e autorizo a oficina a realizar o diagnóstico do veículo.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm">
+              <Field label="Aceito por" value={workOrder.receptionAcceptedName ?? "—"} />
+              <Field label="CPF" value={workOrder.receptionAcceptedDocument ?? "—"} />
+              <Field
+                label="Data / hora"
+                value={workOrder.receptionAcceptedAt ? new Date(workOrder.receptionAcceptedAt).toLocaleString("pt-BR") : "—"}
+              />
+              <Field label="Recebido por" value={receivedBy?.name ?? "—"} />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-surface p-3">
+      <p className="text-[10px] font-semibold uppercase text-muted">{label}</p>
+      <p className="text-sm">{value}</p>
     </div>
   );
 }

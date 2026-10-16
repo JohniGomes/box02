@@ -193,17 +193,14 @@ export default async function WorkOrderDetailPage({
 
       <WorkOrderReceptionSection
         workOrderId={workOrder.id}
-        preExistingDamagesDescription={workOrder.preExistingDamagesDescription}
         receptionAcceptedAt={workOrder.receptionAcceptedAt ? workOrder.receptionAcceptedAt.toISOString() : null}
         receptionAcceptedName={workOrder.receptionAcceptedName}
-        canManage={isOpenForCancel}
       />
 
-      <WorkOrderChecklistPanel
-        workOrderId={workOrder.id}
-        type="ENTRADA"
-        initial={entradaChecklist}
-        canManage={isOpenForCancel}
+      <ChecklistSummaryCard
+        href={`/dashboard/os/${workOrder.id}/checklist-entrada`}
+        label="Checklist de entrada (CHK-001)"
+        checklist={entradaChecklist}
       />
 
       {workOrder.customerComplaint ? (
@@ -363,11 +360,10 @@ export default async function WorkOrderDetailPage({
         </p>
       ) : null}
 
-      <WorkOrderChecklistPanel
-        workOrderId={workOrder.id}
-        type="ENTREGA"
-        initial={entregaChecklist}
-        canManage={isOpenForCancel}
+      <ChecklistSummaryCard
+        href={`/dashboard/os/${workOrder.id}/checklist-entrega`}
+        label="Checklist de entrega (CHK-006)"
+        checklist={entregaChecklist}
       />
 
       <MethodStageHeader stage="ENTREGAMOS" />
@@ -446,5 +442,43 @@ export default async function WorkOrderDetailPage({
         {isOpenForCancel ? <CancelWorkOrderForm workOrderId={workOrder.id} /> : null}
       </div>
     </div>
+  );
+}
+
+/** Resumo compacto — o checklist de verdade (igual ao papel, com fotos
+ * no caso de entrada) abre em tela própria, não mais embutido aqui. */
+function ChecklistSummaryCard({
+  href,
+  label,
+  checklist,
+}: {
+  href: string;
+  label: string;
+  checklist: WorkOrderChecklistView | null;
+}) {
+  const pending = checklist ? checklist.items.filter((i) => i.required && !i.checked).length : 0;
+
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between rounded-xl border border-border bg-background p-3 hover:border-accent"
+    >
+      <span className="text-sm font-medium">{label}</span>
+      {!checklist ? (
+        <span className="text-xs text-accent">Abrir →</span>
+      ) : checklist.completedAt ? (
+        <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
+          Finalizado
+        </span>
+      ) : pending > 0 ? (
+        <span className="rounded-full bg-muted/20 px-2 py-0.5 text-[11px] font-semibold text-muted">
+          {pending} pendente(s)
+        </span>
+      ) : (
+        <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
+          Tudo marcado
+        </span>
+      )}
+    </Link>
   );
 }
