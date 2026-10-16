@@ -56,7 +56,13 @@ export async function updateReceptionInfoAction(
 
 export async function registerReceptionAcceptanceAction(
   workOrderId: string,
-  input: { receptionAcceptedName: string; receptionAcceptedDocument?: string },
+  input: {
+    receptionAcceptedName: string;
+    receptionAcceptedDocument?: string;
+    receptionAwareness1: boolean;
+    receptionAwareness2: boolean;
+    receptionAwareness3: boolean;
+  },
 ): Promise<ReceptionActionResult> {
   try {
     const userId = await requireUserId();

@@ -969,6 +969,8 @@ export async function registerWorkOrderReceptionAcceptanceService(
           required: i.required,
           sortOrder: i.sortOrder,
           checked: i.checked,
+          status: i.status,
+          observacao: i.observacao,
         })),
       };
     }
@@ -982,6 +984,9 @@ export async function registerWorkOrderReceptionAcceptanceService(
         receptionComplaintSnapshot: existing.customerComplaint,
         receptionDamagesSnapshot: existing.preExistingDamagesDescription,
         receptionChecklistSnapshot: checklistSnapshot,
+        receptionAwareness1: input.receptionAwareness1,
+        receptionAwareness2: input.receptionAwareness2,
+        receptionAwareness3: input.receptionAwareness3,
       },
       client,
     );

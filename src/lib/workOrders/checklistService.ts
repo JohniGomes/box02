@@ -8,10 +8,13 @@ import {
   listWorkOrderChecklistItems,
   listWorkOrderChecklistsByWorkOrder,
   setWorkOrderChecklistItemChecked,
+  setWorkOrderChecklistItemStatus,
   type WorkOrderChecklistItemRecord,
+  type WorkOrderChecklistItemStatus,
   type WorkOrderChecklistRecord,
   type WorkOrderChecklistType,
 } from "@/lib/db/repositories/workOrderChecklists";
+import { setChecklistItemStatusSchema } from "@/lib/validation/checklist";
 import { findWorkOrderById } from "@/lib/db/repositories/workOrders";
 import { findWorkOrderItemById } from "@/lib/db/repositories/workOrderItems";
 import { findActiveChecklistByType, findChecklistById, listChecklistItems } from "@/lib/db/repositories/checklists";
@@ -125,6 +128,38 @@ export async function checkWorkOrderChecklistItemService(
     entityType: "work_order_checklist",
     entityId: workOrderChecklistId,
     metadata: { itemId },
+  });
+
+  return updated;
+}
+
+/** Grava OK/Atenção/N/A + observação livre num item — substitui o
+ * antigo toggle de checkbox. `status: null` desfaz (volta a pendente). */
+export async function setWorkOrderChecklistItemStatusService(
+  actorUserId: string,
+  workOrderChecklistId: string,
+  itemId: string,
+  rawInput: unknown,
+): Promise<WorkOrderChecklistItemRecord> {
+  const input = setChecklistItemStatusSchema.parse(rawInput);
+
+  const item = await findWorkOrderChecklistItemById(itemId);
+  if (!item || item.workOrderChecklistId !== workOrderChecklistId) throw new WorkOrderChecklistItemNotFoundError();
+
+  const updated = await setWorkOrderChecklistItemStatus(
+    itemId,
+    input.status as WorkOrderChecklistItemStatus | null,
+    input.observacao ?? null,
+    input.status !== null ? actorUserId : null,
+  );
+  if (!updated) throw new WorkOrderChecklistItemNotFoundError();
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: input.status !== null ? "WORK_ORDER_CHECKLIST_ITEM_CHECKED" : "WORK_ORDER_CHECKLIST_ITEM_UNCHECKED",
+    entityType: "work_order_checklist",
+    entityId: workOrderChecklistId,
+    metadata: { itemId, status: input.status },
   });
 
   return updated;

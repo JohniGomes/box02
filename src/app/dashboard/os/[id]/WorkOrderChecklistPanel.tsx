@@ -3,16 +3,20 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  checkWorkOrderChecklistItemAction,
   completeWorkOrderChecklistAction,
+  setWorkOrderChecklistItemStatusAction,
   startWorkOrderChecklistAction,
 } from "../checklistActions";
+
+export type WorkOrderChecklistItemStatusValue = "OK" | "ATENCAO" | "NA" | null;
 
 export interface WorkOrderChecklistItemView {
   id: string;
   description: string;
   required: boolean;
   checked: boolean;
+  status: WorkOrderChecklistItemStatusValue;
+  observacao: string | null;
 }
 
 export interface WorkOrderChecklistView {
@@ -30,6 +34,12 @@ const TYPE_LABEL: Record<string, string> = {
   ENTREGA: "Checklist de entrega",
 };
 
+const STATUS_OPTIONS: { value: "OK" | "ATENCAO" | "NA"; label: string }[] = [
+  { value: "OK", label: "OK" },
+  { value: "ATENCAO", label: "Atenção" },
+  { value: "NA", label: "N/A" },
+];
+
 export function WorkOrderChecklistPanel({
   workOrderId,
   type,
@@ -46,6 +56,7 @@ export function WorkOrderChecklistPanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [observacaoDrafts, setObservacaoDrafts] = useState<Record<string, string>>({});
 
   function handleStart() {
     setError(null);
@@ -59,10 +70,25 @@ export function WorkOrderChecklistPanel({
     });
   }
 
-  function handleToggle(itemId: string, checked: boolean) {
+  function handleSetStatus(itemId: string, status: "OK" | "ATENCAO" | "NA", observacao: string | undefined) {
     if (!initial) return;
+    // Clicar de novo no status já selecionado desfaz (volta a pendente).
+    const item = initial.items.find((i) => i.id === itemId);
+    const nextStatus = item?.status === status ? null : status;
     startTransition(async () => {
-      await checkWorkOrderChecklistItemAction(workOrderId, initial.id, itemId, checked);
+      await setWorkOrderChecklistItemStatusAction(workOrderId, initial.id, itemId, nextStatus, observacao);
+      router.refresh();
+    });
+  }
+
+  function handleBlurObservacao(itemId: string) {
+    if (!initial) return;
+    const item = initial.items.find((i) => i.id === itemId);
+    if (!item?.status) return;
+    const draft = observacaoDrafts[itemId];
+    if (draft === undefined || draft === (item.observacao ?? "")) return;
+    startTransition(async () => {
+      await setWorkOrderChecklistItemStatusAction(workOrderId, initial.id, itemId, item.status, draft);
       router.refresh();
     });
   }
@@ -115,24 +141,49 @@ export function WorkOrderChecklistPanel({
         )}
       </div>
 
-      <ul className="flex flex-col gap-1.5">
-        {initial.items.map((item) => (
-          <li key={item.id}>
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={item.checked}
-                disabled={!canManage || isPending}
-                onChange={(e) => handleToggle(item.id, e.target.checked)}
-                className="mt-0.5"
-              />
-              <span className={item.checked ? "text-muted line-through" : ""}>
+      <ul className="flex flex-col gap-3">
+        {initial.items.map((item) => {
+          const canEdit = canManage && !initial.completedAt && !isPending;
+          return (
+            <li key={item.id} className="flex flex-col gap-1.5">
+              <span className="text-sm">
                 {item.description}
                 {item.required ? <span className="ml-1 text-[10px] text-danger">obrigatório</span> : null}
               </span>
-            </label>
-          </li>
-        ))}
+              <div className="flex flex-wrap gap-1.5">
+                {STATUS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => handleSetStatus(item.id, opt.value, observacaoDrafts[item.id] ?? item.observacao ?? undefined)}
+                    className={`h-8 rounded-lg border px-3 text-xs font-semibold disabled:opacity-60 ${
+                      item.status === opt.value
+                        ? opt.value === "OK"
+                          ? "border-success bg-success/15 text-success"
+                          : opt.value === "ATENCAO"
+                            ? "border-accent bg-accent/15 text-accent"
+                            : "border-muted bg-muted/20 text-muted"
+                        : "border-border text-muted"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {item.status ? (
+                <input
+                  value={observacaoDrafts[item.id] ?? item.observacao ?? ""}
+                  onChange={(e) => setObservacaoDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  onBlur={() => handleBlurObservacao(item.id)}
+                  disabled={!canEdit}
+                  placeholder="Observação (opcional)"
+                  className="h-9 rounded-lg border border-border bg-surface px-3 text-xs outline-none focus:border-accent disabled:opacity-60"
+                />
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
 
       {canManage && !initial.completedAt ? (

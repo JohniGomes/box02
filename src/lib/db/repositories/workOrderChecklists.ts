@@ -19,6 +19,8 @@ export interface WorkOrderChecklistRecord {
   completedByUserId: string | null;
 }
 
+export type WorkOrderChecklistItemStatus = "OK" | "ATENCAO" | "NA";
+
 export interface WorkOrderChecklistItemRecord {
   id: string;
   workOrderChecklistId: string;
@@ -28,6 +30,8 @@ export interface WorkOrderChecklistItemRecord {
   checked: boolean;
   checkedAt: Date | null;
   checkedByUserId: string | null;
+  status: WorkOrderChecklistItemStatus | null;
+  observacao: string | null;
 }
 
 const CHECKLIST_COLUMNS = `
@@ -36,7 +40,7 @@ const CHECKLIST_COLUMNS = `
 `;
 const ITEM_COLUMNS = `
   id, "workOrderChecklistId", description, required, "sortOrder",
-  checked, "checkedAt", "checkedByUserId"
+  checked, "checkedAt", "checkedByUserId", status, observacao
 `;
 
 /** Busca a instância já existente para (workOrderId, type) — ENTRADA/ENTREGA
@@ -137,6 +141,33 @@ export async function setWorkOrderChecklistItemChecked(
     WHERE id = $1
     RETURNING ${ITEM_COLUMNS}`,
     [id, checked, checkedByUserId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Substitui o antigo "marcar/desmarcar": grava status (OK/ATENCAO/NA)
+ * + observação livre num único lançamento. `checked` é derivado —
+ * status não-nulo conta como "resolvido" para a regra de obrigatório
+ * pendente, igual ao checkbox fazia antes. `status: null` desfaz (volta
+ * a pendente), mesmo efeito do antigo `checked: false`. */
+export async function setWorkOrderChecklistItemStatus(
+  id: string,
+  status: WorkOrderChecklistItemStatus | null,
+  observacao: string | null,
+  checkedByUserId: string | null,
+  db: Queryable = pool,
+): Promise<WorkOrderChecklistItemRecord | null> {
+  const resolved = status !== null;
+  const result = await db.query<WorkOrderChecklistItemRecord>(
+    `UPDATE work_order_checklist_items SET
+      status = $2,
+      observacao = $3,
+      checked = $4,
+      "checkedAt" = CASE WHEN $4 THEN NOW() ELSE NULL END,
+      "checkedByUserId" = CASE WHEN $4 THEN $5 ELSE NULL END
+    WHERE id = $1
+    RETURNING ${ITEM_COLUMNS}`,
+    [id, status, observacao, resolved, checkedByUserId],
   );
   return result.rows[0] ?? null;
 }

@@ -81,6 +81,9 @@ export const workOrderReceptionAcceptanceSchema = z
   .object({
     receptionAcceptedName: z.string().trim().min(2, "Informe o nome de quem está recebendo o veículo"),
     receptionAcceptedDocument: optionalTrimmed,
+    receptionAwareness1: z.boolean(),
+    receptionAwareness2: z.boolean(),
+    receptionAwareness3: z.boolean(),
   })
   .superRefine((data, ctx) => {
     if (data.receptionAcceptedDocument) {
@@ -88,6 +91,13 @@ export const workOrderReceptionAcceptanceSchema = z
       if (digits.length !== 11 || !isValidCpf(digits)) {
         ctx.addIssue({ code: "custom", message: "CPF inválido", path: ["receptionAcceptedDocument"] });
       }
+    }
+    if (!data.receptionAwareness1 || !data.receptionAwareness2 || !data.receptionAwareness3) {
+      ctx.addIssue({
+        code: "custom",
+        message: "O cliente precisa confirmar ciência dos 3 itens antes do aceite.",
+        path: ["receptionAwareness1"],
+      });
     }
   })
   .transform((data) => ({

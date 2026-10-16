@@ -53,6 +53,9 @@ export interface WorkOrderRecord {
   receptionComplaintSnapshot: string | null;
   receptionDamagesSnapshot: string | null;
   receptionChecklistSnapshot: ReceptionChecklistSnapshot | null;
+  receptionAwareness1: boolean;
+  receptionAwareness2: boolean;
+  receptionAwareness3: boolean;
   diagnosisExplanationNotes: string | null;
   createdByUserId: string;
   createdAt: Date;
@@ -70,6 +73,8 @@ export interface ReceptionChecklistSnapshot {
     required: boolean;
     sortOrder: number;
     checked: boolean;
+    status: "OK" | "ATENCAO" | "NA" | null;
+    observacao: string | null;
   }[];
 }
 
@@ -83,7 +88,9 @@ const COLUMNS = `
   "cancelReason", "deliveryAcceptedName", "deliveryAcceptedDocument", "deliveredByUserId",
   "preExistingDamagesDescription", "receptionAcceptedName", "receptionAcceptedDocument",
   "receptionAcceptedAt", "receivedByUserId", "receptionComplaintSnapshot",
-  "receptionDamagesSnapshot", "receptionChecklistSnapshot", "diagnosisExplanationNotes",
+  "receptionDamagesSnapshot", "receptionChecklistSnapshot",
+  "receptionAwareness1", "receptionAwareness2", "receptionAwareness3",
+  "diagnosisExplanationNotes",
   "createdByUserId", "createdAt", "updatedAt"
 `;
 
@@ -315,6 +322,9 @@ export async function registerWorkOrderReceptionAcceptance(
     receptionComplaintSnapshot: string | null;
     receptionDamagesSnapshot: string | null;
     receptionChecklistSnapshot: ReceptionChecklistSnapshot | null;
+    receptionAwareness1: boolean;
+    receptionAwareness2: boolean;
+    receptionAwareness3: boolean;
   },
   db: Queryable = pool,
 ): Promise<WorkOrderRecord | null> {
@@ -327,6 +337,9 @@ export async function registerWorkOrderReceptionAcceptance(
       "receptionComplaintSnapshot" = $5,
       "receptionDamagesSnapshot" = $6,
       "receptionChecklistSnapshot" = $7::jsonb,
+      "receptionAwareness1" = $8,
+      "receptionAwareness2" = $9,
+      "receptionAwareness3" = $10,
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
@@ -338,6 +351,9 @@ export async function registerWorkOrderReceptionAcceptance(
       input.receptionComplaintSnapshot,
       input.receptionDamagesSnapshot,
       input.receptionChecklistSnapshot ? JSON.stringify(input.receptionChecklistSnapshot) : null,
+      input.receptionAwareness1,
+      input.receptionAwareness2,
+      input.receptionAwareness3,
     ],
   );
   return result.rows[0] ?? null;

@@ -83,7 +83,14 @@ export default async function WorkOrderDetailPage({
       name: entry.checklist.name,
       startedAt: entry.checklist.startedAt.toISOString(),
       completedAt: entry.checklist.completedAt ? entry.checklist.completedAt.toISOString() : null,
-      items: entry.items.map((i) => ({ id: i.id, description: i.description, required: i.required, checked: i.checked })),
+      items: entry.items.map((i) => ({
+        id: i.id,
+        description: i.description,
+        required: i.required,
+        checked: i.checked,
+        status: i.status,
+        observacao: i.observacao,
+      })),
     };
   }
 

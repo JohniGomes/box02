@@ -580,6 +580,14 @@ model WorkOrder {
   receivedByUserId          String?
   receivedByUser            User?   @relation("WorkOrderReceivedBy", fields: [receivedByUserId], references: [id], onDelete: SetNull)
 
+  /// Ciência do cliente — as 3 cláusulas do Termo de Recepção (texto
+  /// validado por Paty, sócios e advogada). Precisam ser true antes do
+  /// aceite poder ser registrado. Default false: nunca um "sim"
+  /// retroativo para OS que não passaram por esta tela.
+  receptionAwareness1 Boolean @default(false)
+  receptionAwareness2 Boolean @default(false)
+  receptionAwareness3 Boolean @default(false)
+
   /// Congelados no exato momento do aceite — o Termo lê só daqui depois
   /// de aceito, nunca de customerComplaint/preExistingDamagesDescription
   /// "vivos".
@@ -993,6 +1001,14 @@ model WorkOrderChecklistItem {
   checkedAt       DateTime?
   checkedByUserId String?
   checkedByUser   User?     @relation("WorkOrderChecklistItemCheckedBy", fields: [checkedByUserId], references: [id], onDelete: SetNull)
+
+  /// OK | ATENCAO | NA — null enquanto não respondido. `checked` é
+  /// derivado disto (não-nulo = resolvido), mantido por compatibilidade
+  /// com a regra de "obrigatório pendente" já existente.
+  status      String?
+  /// Texto livre por item — mesma coluna "OBSERVAÇÃO" do formulário em
+  /// papel (CHK-001/CHK-006).
+  observacao  String?
 
   @@index([workOrderChecklistId])
   @@map("work_order_checklist_items")

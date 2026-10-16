@@ -44,6 +44,8 @@ export default async function TermoRecepcaoPage({
           required: i.required,
           sortOrder: i.sortOrder,
           checked: i.checked,
+          status: i.status,
+          observacao: i.observacao,
         })),
       };
     }
@@ -119,12 +121,19 @@ export default async function TermoRecepcaoPage({
                     .slice()
                     .sort((a, b) => a.sortOrder - b.sortOrder)
                     .map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm">
-                        <span>{item.checked ? "☑" : "☐"}</span>
-                        <span>
-                          {item.description}
-                          {item.required ? <span className="ml-1 text-[10px] text-danger">obrigatório</span> : null}
+                      <li key={idx} className="flex flex-col gap-0.5 text-sm">
+                        <span className="flex items-start gap-2">
+                          <span>
+                            {item.status === "OK" ? "OK" : item.status === "ATENCAO" ? "Atenção" : item.status === "NA" ? "N/A" : "☐"}
+                          </span>
+                          <span>
+                            {item.description}
+                            {item.required ? <span className="ml-1 text-[10px] text-danger">obrigatório</span> : null}
+                          </span>
                         </span>
+                        {item.observacao ? (
+                          <span className="ml-6 text-xs text-muted">Obs.: {item.observacao}</span>
+                        ) : null}
                       </li>
                     ))}
                 </ul>
@@ -134,6 +143,36 @@ export default async function TermoRecepcaoPage({
             )}
           </div>
         </dl>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <h2 className="mb-2 text-sm font-semibold">Ciência do cliente</h2>
+        {accepted ? (
+          <ul className="flex flex-col gap-2 text-sm">
+            <li className="flex items-start gap-2">
+              <span>{workOrder.receptionAwareness1 ? "☑" : "☐"}</span>
+              <span>
+                Fui informado(a) de que o veículo pode ter desgastes ou problemas já existentes, que só
+                aparecem quando a oficina testa, desmonta ou liga o carro. Se isso acontecer, a oficina me avisa
+                e apresenta orçamento separado. Nada será feito sem minha autorização.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span>{workOrder.receptionAwareness2 ? "☑" : "☐"}</span>
+              <span>
+                Fui informado(a) de que carro parado por muito tempo pode ter bateria fraca, combustível e
+                fluidos degradados e borrachas/mangueiras ressecadas, e que isso pode aparecer depois que o carro
+                volta a ser usado.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span>{workOrder.receptionAwareness3 ? "☑" : "☐"}</span>
+              <span>Esta ciência não retira a responsabilidade da oficina pelo serviço que ela executar.</span>
+            </li>
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">Será exibida aqui quando o aceite for registrado.</p>
+        )}
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">

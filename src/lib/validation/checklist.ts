@@ -39,3 +39,12 @@ export const checklistItemInputSchema = z.object({
 });
 
 export type ChecklistItemInput = z.infer<typeof checklistItemInputSchema>;
+
+/** Resposta de um item na execução (OS) — status null = desfaz, volta a
+ * pendente, mesmo efeito do antigo "desmarcar". */
+export const setChecklistItemStatusSchema = z.object({
+  status: z.enum(["OK", "ATENCAO", "NA"]).nullable(),
+  observacao: optionalTrimmed,
+});
+
+export type SetChecklistItemStatusInput = z.infer<typeof setChecklistItemStatusSchema>;

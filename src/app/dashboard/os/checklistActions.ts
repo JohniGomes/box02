@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
-  checkWorkOrderChecklistItemService,
   completeWorkOrderChecklistService,
+  setWorkOrderChecklistItemStatusService,
   startWorkOrderChecklistService,
 } from "@/lib/workOrders/checklistService";
 import {
@@ -55,15 +55,16 @@ export async function startWorkOrderChecklistAction(
   }
 }
 
-export async function checkWorkOrderChecklistItemAction(
+export async function setWorkOrderChecklistItemStatusAction(
   workOrderId: string,
   workOrderChecklistId: string,
   itemId: string,
-  checked: boolean,
+  status: "OK" | "ATENCAO" | "NA" | null,
+  observacao?: string,
 ): Promise<WorkOrderChecklistActionResult> {
   try {
     const userId = await requireUserId();
-    await checkWorkOrderChecklistItemService(userId, workOrderChecklistId, itemId, checked);
+    await setWorkOrderChecklistItemStatusService(userId, workOrderChecklistId, itemId, { status, observacao });
     revalidatePath(`/dashboard/os/${workOrderId}`);
     return { success: true, checklistId: workOrderChecklistId };
   } catch (err) {
