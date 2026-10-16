@@ -16,12 +16,23 @@ const optionalInt = z
   })
   .pipe(z.number().int().min(0).optional());
 
+const optionalPercent = z
+  .union([z.string(), z.number()])
+  .optional()
+  .transform((v) => {
+    if (v === undefined || v === "") return undefined;
+    const n = typeof v === "string" ? Number(v.replace(",", ".")) : v;
+    return Number.isFinite(n) ? n : undefined;
+  })
+  .pipe(z.number().min(0).optional());
+
 export const createPartSchema = z.object({
   name: z.string().trim().min(1, "Nome obrigatório"),
   sku: optionalTrimmed,
   unit: z.string().trim().min(1).default("un"),
   costReais: z.union([z.string(), z.number()]).optional(),
   minStock: optionalInt,
+  markupPercent: optionalPercent,
   notes: optionalTrimmed,
 });
 

@@ -12,11 +12,12 @@ export interface PartRecord {
   minStock: number | null;
   status: PartStatus;
   notes: string | null;
+  markupPercent: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const COLUMNS = `id, name, sku, unit, "costCents", "minStock", status, notes, "createdAt", "updatedAt"`;
+const COLUMNS = `id, name, sku, unit, "costCents", "minStock", status, notes, "markupPercent", "createdAt", "updatedAt"`;
 
 export interface CreatePartInput {
   name: string;
@@ -25,13 +26,14 @@ export interface CreatePartInput {
   costCents?: number | null;
   minStock?: number | null;
   notes?: string | null;
+  markupPercent?: number | null;
 }
 
 export async function createPart(input: CreatePartInput): Promise<PartRecord> {
   const id = createId();
   const result = await pool.query<PartRecord>(
-    `INSERT INTO parts (id, name, sku, unit, "costCents", "minStock", notes, "updatedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    `INSERT INTO parts (id, name, sku, unit, "costCents", "minStock", notes, "markupPercent", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
      RETURNING ${COLUMNS}`,
     [
       id,
@@ -41,6 +43,7 @@ export async function createPart(input: CreatePartInput): Promise<PartRecord> {
       input.costCents ?? null,
       input.minStock ?? null,
       input.notes ?? null,
+      input.markupPercent ?? null,
     ],
   );
   return result.rows[0];
@@ -57,6 +60,7 @@ export async function updatePart(id: string, input: UpdatePartInput): Promise<Pa
       "costCents" = CASE WHEN $6::boolean THEN $7 ELSE "costCents" END,
       "minStock" = CASE WHEN $8::boolean THEN $9 ELSE "minStock" END,
       notes = CASE WHEN $10::boolean THEN $11 ELSE notes END,
+      "markupPercent" = CASE WHEN $12::boolean THEN $13 ELSE "markupPercent" END,
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
@@ -72,6 +76,8 @@ export async function updatePart(id: string, input: UpdatePartInput): Promise<Pa
       input.minStock ?? null,
       "notes" in input,
       input.notes ?? null,
+      "markupPercent" in input,
+      input.markupPercent ?? null,
     ],
   );
   return result.rows[0] ?? null;
@@ -105,7 +111,7 @@ export async function listPartsWithStock(query?: string): Promise<PartWithStock[
   const result = await pool.query<PartWithStock>(
     `SELECT
        p.id, p.name, p.sku, p.unit, p."costCents", p."minStock", p.status, p.notes,
-       p."createdAt", p."updatedAt",
+       p."markupPercent", p."createdAt", p."updatedAt",
        COALESCE(SUM(CASE WHEN sm.type = 'ENTRADA' THEN sm.quantity ELSE -sm.quantity END), 0)::int as "currentStock"
      FROM parts p
      LEFT JOIN stock_movements sm ON sm."partId" = p.id

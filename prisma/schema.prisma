@@ -1162,6 +1162,12 @@ model Part {
   status PartStatus @default(ATIVO)
   notes  String?
 
+  /// Percentual de lucro desejado específico da peça (opcional). Quando
+  /// não preenchido, o preço de venda sugerido cai para o markup padrão
+  /// da oficina (mesma config. de Serviços). Preço de venda nunca é
+  /// armazenado — sempre derivado: custo × (1 + markup/100).
+  markupPercent Float?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -33,6 +33,15 @@ export function formatBRL(cents: number): string {
 }
 
 /**
+ * Preço de venda a partir do custo + markup desejado.
+ * Ex.: custo 10000 (R$100), markup 20 (20%) -> 12000 (R$120).
+ * Mesma fórmula já usada em Serviços (Ciclo H): custo × (1 + markup/100).
+ */
+export function calculateSalePriceCents(costCents: number, markupPercent: number): number {
+  return Math.round(costCents * (1 + markupPercent / 100));
+}
+
+/**
  * Total de uma linha: quantidade (pode ter casas decimais, ex.: 1,5 hora de
  * mão de obra) × preço unitário em centavos, arredondado ao centavo mais
  * próximo — nunca trunca silenciosamente.

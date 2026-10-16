@@ -16,7 +16,8 @@ import {
   type StockMovementRecord,
 } from "@/lib/db/repositories/stockMovements";
 import { createPartSchema, createStockMovementSchema, updatePartSchema } from "@/lib/validation/part";
-import { reaisToCents } from "@/lib/money";
+import { calculateSalePriceCents, reaisToCents } from "@/lib/money";
+import { getDefaultMarkupPercent } from "@/lib/settings/service";
 import { DuplicatePartSkuError, InsufficientStockError, PartNotFoundError } from "./errors";
 
 export async function createPartService(rawInput: unknown): Promise<PartRecord> {
@@ -33,6 +34,7 @@ export async function createPartService(rawInput: unknown): Promise<PartRecord> 
     unit: input.unit,
     costCents: input.costReais !== undefined && input.costReais !== "" ? reaisToCents(input.costReais) : null,
     minStock: input.minStock ?? null,
+    markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
   });
 }
@@ -53,6 +55,7 @@ export async function updatePartService(partId: string, rawInput: unknown): Prom
     unit: input.unit,
     costCents: input.costReais !== undefined && input.costReais !== "" ? reaisToCents(input.costReais) : null,
     minStock: input.minStock ?? null,
+    markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
   });
   if (!updated) throw new PartNotFoundError(partId);
@@ -79,6 +82,40 @@ export async function listStockMovementsByPartService(partId: string): Promise<S
 
 export async function getPartCurrentStockService(partId: string): Promise<number> {
   return getPartCurrentStock(partId);
+}
+
+export interface SuggestedSalePrice {
+  cents: number;
+  markupPercent: number;
+  /** Se o markup usado foi o específico da peça ou o padrão da oficina. */
+  source: "peça" | "padrão da oficina";
+}
+
+/** Preço de venda sugerido = custo × (1 + markup/100). Markup: o da
+ * peça, se cadastrado; senão o markup padrão da oficina (Configurações
+ * → Precificação). Sem custo cadastrado ou sem nenhum markup
+ * disponível -> null (nunca inventa um percentual). Nunca armazenado —
+ * sempre recalculado na leitura. */
+export async function getPartSuggestedSalePriceService(partId: string): Promise<SuggestedSalePrice | null> {
+  const part = await findPartById(partId);
+  if (!part || part.costCents === null) return null;
+
+  if (part.markupPercent !== null) {
+    return {
+      cents: calculateSalePriceCents(part.costCents, part.markupPercent),
+      markupPercent: part.markupPercent,
+      source: "peça",
+    };
+  }
+
+  const defaultMarkup = await getDefaultMarkupPercent();
+  if (defaultMarkup === null) return null;
+
+  return {
+    cents: calculateSalePriceCents(part.costCents, defaultMarkup),
+    markupPercent: defaultMarkup,
+    source: "padrão da oficina",
+  };
 }
 
 /** SAIDA nunca deixa o saldo negativo — valida contra o estoque atual

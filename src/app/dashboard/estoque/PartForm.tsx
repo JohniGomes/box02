@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPartAction, updatePartAction, type InventoryActionResult } from "./actions";
 import type { PartRecord } from "@/lib/db/repositories/parts";
-import { centsToReais } from "@/lib/money";
+import { calculateSalePriceCents, centsToReais, formatBRL, reaisToCents } from "@/lib/money";
 
 export interface PartFormValues {
   name: string;
@@ -12,6 +12,7 @@ export interface PartFormValues {
   unit: string;
   costReais: string;
   minStock: string;
+  markupPercent: string;
   notes: string;
 }
 
@@ -22,6 +23,7 @@ export function partRecordToFormValues(part: PartRecord): PartFormValues {
     unit: part.unit,
     costReais: part.costCents !== null ? centsToReais(part.costCents) : "",
     minStock: part.minStock !== null ? String(part.minStock) : "",
+    markupPercent: part.markupPercent !== null ? String(part.markupPercent) : "",
     notes: part.notes ?? "",
   };
 }
@@ -40,7 +42,7 @@ export function PartForm({
 }) {
   const router = useRouter();
   const [values, setValues] = useState<PartFormValues>(
-    initialValues ?? { name: "", sku: "", unit: "un", costReais: "", minStock: "", notes: "" },
+    initialValues ?? { name: "", sku: "", unit: "un", costReais: "", minStock: "", markupPercent: "", notes: "" },
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -49,6 +51,13 @@ export function PartForm({
   function update<K extends keyof PartFormValues>(key: K, value: PartFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
+
+  const costCents = values.costReais.trim() !== "" ? reaisToCents(values.costReais) : null;
+  const markup = values.markupPercent.trim() !== "" ? Number(values.markupPercent.replace(",", ".")) : null;
+  const suggestedPriceCents =
+    costCents !== null && markup !== null && Number.isFinite(markup)
+      ? calculateSalePriceCents(costCents, markup)
+      : null;
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -61,6 +70,7 @@ export function PartForm({
       unit: values.unit || "un",
       costReais: values.costReais,
       minStock: values.minStock,
+      markupPercent: values.markupPercent,
       notes: values.notes,
     };
 
@@ -131,6 +141,27 @@ export function PartForm({
           />
         </Field>
       </div>
+
+      <Field label="Markup — lucro desejado, % (opcional)" htmlFor="markupPercent">
+        <input
+          id="markupPercent"
+          inputMode="decimal"
+          value={values.markupPercent}
+          onChange={(e) => update("markupPercent", e.target.value)}
+          className={inputClass}
+          placeholder="Ex.: 20"
+        />
+        <p className="text-xs text-muted">
+          Sem preencher, usa o markup padrão configurado em Configurações → Precificação.
+        </p>
+      </Field>
+
+      {suggestedPriceCents !== null ? (
+        <div className="rounded-xl bg-success/10 p-4">
+          <p className="text-xs text-muted">Preço de venda sugerido</p>
+          <p className="text-xl font-semibold text-success">{formatBRL(suggestedPriceCents)}</p>
+        </div>
+      ) : null}
 
       <Field label="Observações (opcional)" htmlFor="notes">
         <textarea

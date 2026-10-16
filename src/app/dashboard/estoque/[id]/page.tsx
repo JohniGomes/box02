@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPartCurrentStockService, getPartService, listStockMovementsByPartService } from "@/lib/inventory/service";
+import {
+  getPartCurrentStockService,
+  getPartService,
+  getPartSuggestedSalePriceService,
+  listStockMovementsByPartService,
+} from "@/lib/inventory/service";
 import { formatBRL } from "@/lib/money";
 import { StockMovementForm } from "../StockMovementForm";
 import { PartStatusToggle } from "./PartStatusToggle";
@@ -14,9 +19,10 @@ export default async function PartDetailPage({
   const part = await getPartService(id);
   if (!part) notFound();
 
-  const [currentStock, movements] = await Promise.all([
+  const [currentStock, movements, suggestedPrice] = await Promise.all([
     getPartCurrentStockService(id),
     listStockMovementsByPartService(id),
+    getPartSuggestedSalePriceService(id),
   ]);
 
   const low = part.minStock !== null && currentStock <= part.minStock;
@@ -55,6 +61,20 @@ export default async function PartDetailPage({
             <p className="mt-1 text-xl font-semibold">{part.costCents !== null ? formatBRL(part.costCents) : "—"}</p>
           </div>
         </div>
+
+        {suggestedPrice ? (
+          <div className="mt-3 rounded-xl bg-success/10 p-3">
+            <p className="text-xs text-muted">
+              Preço de venda sugerido · markup {suggestedPrice.markupPercent}% ({suggestedPrice.source})
+            </p>
+            <p className="mt-1 text-xl font-semibold text-success">{formatBRL(suggestedPrice.cents)}</p>
+          </div>
+        ) : part.costCents !== null ? (
+          <p className="mt-3 text-xs text-muted">
+            Sem preço de venda sugerido — cadastre um markup nesta peça ou configure o markup padrão em
+            Configurações → Precificação.
+          </p>
+        ) : null}
 
         {part.notes ? <p className="mt-3 text-sm text-muted">{part.notes}</p> : null}
       </div>
