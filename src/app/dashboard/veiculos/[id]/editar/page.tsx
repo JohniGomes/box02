@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { getCustomerService } from "@/lib/customers/service";
 import { formatPlate } from "@/lib/validation/plate";
-import { VehicleForm, vehicleRecordToFormValues } from "../../VehicleForm";
+import { VehicleForm } from "../../VehicleForm";
+import { vehicleRecordToFormValues } from "../../vehicleFormValues";
 
 export default async function EditVehiclePage({
   params,

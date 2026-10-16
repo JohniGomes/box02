@@ -3,30 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPartAction, updatePartAction, type InventoryActionResult } from "./actions";
-import type { PartRecord } from "@/lib/db/repositories/parts";
-import { calculateSalePriceCents, centsToReais, formatBRL, reaisToCents } from "@/lib/money";
-
-export interface PartFormValues {
-  name: string;
-  sku: string;
-  unit: string;
-  costReais: string;
-  minStock: string;
-  markupPercent: string;
-  notes: string;
-}
-
-export function partRecordToFormValues(part: PartRecord): PartFormValues {
-  return {
-    name: part.name,
-    sku: part.sku ?? "",
-    unit: part.unit,
-    costReais: part.costCents !== null ? centsToReais(part.costCents) : "",
-    minStock: part.minStock !== null ? String(part.minStock) : "",
-    markupPercent: part.markupPercent !== null ? String(part.markupPercent) : "",
-    notes: part.notes ?? "",
-  };
-}
+import { calculateSalePriceCents, formatBRL, reaisToCents } from "@/lib/money";
+import type { PartFormValues } from "./partFormValues";
 
 const inputClass =
   "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";

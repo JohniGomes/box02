@@ -4,33 +4,10 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerAction, updateCustomerAction, type ActionResult } from "./actions";
 import { createVehicleAction } from "../veiculos/actions";
-import type { CustomerRecord } from "@/lib/db/repositories/customers";
-import { formatDocument } from "@/lib/validation/document";
-import { formatPhone } from "@/lib/validation/phone";
+import { emptyCustomerFormValues, type CustomerFormValues, type CustomerType } from "./customerFormValues";
 import { lookupCep } from "@/lib/validation/cep";
 
 const FUEL_TYPES = ["Flex", "Gasolina", "Etanol", "Diesel", "GNV", "Elétrico", "Híbrido"];
-
-type CustomerType = "PF" | "PJ";
-
-export interface CustomerFormValues {
-  type: CustomerType;
-  legalName: string;
-  tradeName: string;
-  contactName: string;
-  document: string;
-  phone: string;
-  whatsapp: string;
-  email: string;
-  addressStreet: string;
-  addressNumber: string;
-  addressComplement: string;
-  addressNeighborhood: string;
-  addressCity: string;
-  addressState: string;
-  addressZipCode: string;
-  notes: string;
-}
 
 export interface VehicleDraftValues {
   plate: string;
@@ -43,48 +20,6 @@ export interface VehicleDraftValues {
 
 function emptyVehicleDraft(): VehicleDraftValues {
   return { plate: "", brand: "", model: "", color: "", fuelType: "", mileage: "" };
-}
-
-function emptyValues(type: CustomerType): CustomerFormValues {
-  return {
-    type,
-    legalName: "",
-    tradeName: "",
-    contactName: "",
-    document: "",
-    phone: "",
-    whatsapp: "",
-    email: "",
-    addressStreet: "",
-    addressNumber: "",
-    addressComplement: "",
-    addressNeighborhood: "",
-    addressCity: "",
-    addressState: "",
-    addressZipCode: "",
-    notes: "",
-  };
-}
-
-export function customerRecordToFormValues(customer: CustomerRecord): CustomerFormValues {
-  return {
-    type: customer.type,
-    legalName: customer.legalName,
-    tradeName: customer.tradeName ?? "",
-    contactName: customer.contactName ?? "",
-    document: customer.document ? formatDocument(customer.document) : "",
-    phone: customer.phone ? formatPhone(customer.phone) : "",
-    whatsapp: customer.whatsapp ? formatPhone(customer.whatsapp) : "",
-    email: customer.email ?? "",
-    addressStreet: customer.addressStreet ?? "",
-    addressNumber: customer.addressNumber ?? "",
-    addressComplement: customer.addressComplement ?? "",
-    addressNeighborhood: customer.addressNeighborhood ?? "",
-    addressCity: customer.addressCity ?? "",
-    addressState: customer.addressState ?? "",
-    addressZipCode: customer.addressZipCode ?? "",
-    notes: customer.notes ?? "",
-  };
 }
 
 const STEPS_CREATE = [
@@ -115,7 +50,7 @@ export function CustomerForm({
   const STEPS = mode === "create" ? STEPS_CREATE : STEPS_EDIT;
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<CustomerFormValues>(
-    initialValues ?? emptyValues("PF"),
+    initialValues ?? emptyCustomerFormValues("PF"),
   );
   const [vehicleDraft, setVehicleDraft] = useState<VehicleDraftValues>(emptyVehicleDraft());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});

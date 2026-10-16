@@ -4,66 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createVehicleAction, updateVehicleAction, type ActionResult } from "./actions";
 import { CustomerPicker } from "./CustomerPicker";
-import type { VehicleRecord } from "@/lib/db/repositories/vehicles";
-import { formatPlate } from "@/lib/validation/plate";
-
-export interface VehicleFormValues {
-  customerId: string;
-  customerLabel: string;
-  plate: string;
-  brand: string;
-  model: string;
-  version: string;
-  yearManufacture: string;
-  yearModel: string;
-  color: string;
-  fuelType: string;
-  mileage: string;
-  chassis: string;
-  renavam: string;
-  notes: string;
-}
-
-function emptyValues(preset?: { customerId?: string; customerLabel?: string }): VehicleFormValues {
-  return {
-    customerId: preset?.customerId ?? "",
-    customerLabel: preset?.customerLabel ?? "",
-    plate: "",
-    brand: "",
-    model: "",
-    version: "",
-    yearManufacture: "",
-    yearModel: "",
-    color: "",
-    fuelType: "",
-    mileage: "",
-    chassis: "",
-    renavam: "",
-    notes: "",
-  };
-}
-
-export function vehicleRecordToFormValues(
-  vehicle: VehicleRecord,
-  customerLabel: string,
-): VehicleFormValues {
-  return {
-    customerId: vehicle.customerId,
-    customerLabel,
-    plate: vehicle.plate ? formatPlate(vehicle.plate) : "",
-    brand: vehicle.brand ?? "",
-    model: vehicle.model ?? "",
-    version: vehicle.version ?? "",
-    yearManufacture: vehicle.yearManufacture ? String(vehicle.yearManufacture) : "",
-    yearModel: vehicle.yearModel ? String(vehicle.yearModel) : "",
-    color: vehicle.color ?? "",
-    fuelType: vehicle.fuelType ?? "",
-    mileage: vehicle.mileage !== null ? String(vehicle.mileage) : "",
-    chassis: vehicle.chassis ?? "",
-    renavam: vehicle.renavam ?? "",
-    notes: vehicle.notes ?? "",
-  };
-}
+import { emptyVehicleFormValues, type VehicleFormValues } from "./vehicleFormValues";
 
 const STEPS = [
   { key: "cliente", label: "Cliente" },
@@ -90,7 +31,7 @@ export function VehicleForm({
   const router = useRouter();
   const [step, setStep] = useState(fixedCustomer ? 1 : 0);
   const [values, setValues] = useState<VehicleFormValues>(
-    initialValues ?? emptyValues(fixedCustomer ? { customerId: fixedCustomer.id, customerLabel: fixedCustomer.label } : undefined),
+    initialValues ?? emptyVehicleFormValues(fixedCustomer ? { customerId: fixedCustomer.id, customerLabel: fixedCustomer.label } : undefined),
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomerService } from "@/lib/customers/service";
-import { CustomerForm, customerRecordToFormValues } from "../../CustomerForm";
+import { CustomerForm } from "../../CustomerForm";
+import { customerRecordToFormValues } from "../../customerFormValues";
 
 export default async function EditCustomerPage({
   params,

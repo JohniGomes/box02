@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPartService } from "@/lib/inventory/service";
-import { PartForm, partRecordToFormValues } from "../../PartForm";
+import { PartForm } from "../../PartForm";
+import { partRecordToFormValues } from "../../partFormValues";
 
 export default async function EditPartPage({
   params,
