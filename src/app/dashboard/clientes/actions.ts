@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
   createCustomerService,
+  deleteCustomerService,
   inactivateCustomerService,
   reactivateCustomerService,
   updateCustomerService,
 } from "@/lib/customers/service";
-import { DuplicateCustomerDocumentError } from "@/lib/customers/errors";
+import { CustomerNotDeletableError, DuplicateCustomerDocumentError } from "@/lib/customers/errors";
 import { ZodError } from "zod";
 
 export interface ActionResult {
@@ -94,5 +95,19 @@ export async function reactivateCustomerAction(customerId: string): Promise<Acti
     return { success: true, customerId };
   } catch {
     return { success: false, error: "Não foi possível reativar o cliente." };
+  }
+}
+
+export async function deleteCustomerAction(customerId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await deleteCustomerService(userId, customerId);
+    revalidatePath("/dashboard/clientes");
+    return { success: true, customerId };
+  } catch (err) {
+    if (err instanceof CustomerNotDeletableError) {
+      return { success: false, error: err.message };
+    }
+    return { success: false, error: "Não foi possível excluir o cliente." };
   }
 }

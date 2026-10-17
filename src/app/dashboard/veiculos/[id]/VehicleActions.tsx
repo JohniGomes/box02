@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  deleteVehicleAction,
   inactivateVehicleAction,
   reactivateVehicleAction,
   transferVehicleAction,
@@ -21,6 +22,21 @@ export function VehicleStatusActions({
   const [isPending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  function handleDelete() {
+    setDeleteError(null);
+    startTransition(async () => {
+      const result = await deleteVehicleAction(vehicleId);
+      if (!result.success) {
+        setDeleteError(result.error ?? "Falha ao excluir.");
+        return;
+      }
+      router.push("/dashboard/veiculos");
+      router.refresh();
+    });
+  }
 
   function handleInactivate() {
     setError(null);
@@ -47,9 +63,9 @@ export function VehicleStatusActions({
     });
   }
 
-  if (status === "INATIVO") {
-    return (
-      <div className="flex flex-col gap-2">
+  return (
+    <div className="flex flex-col gap-3">
+      {status === "INATIVO" ? (
         <button
           onClick={handleReactivate}
           disabled={isPending}
@@ -57,45 +73,69 @@ export function VehicleStatusActions({
         >
           {isPending ? "Reativando…" : "Reativar veículo"}
         </button>
-        {error ? <p className="text-xs text-danger">{error}</p> : null}
-      </div>
-    );
-  }
-
-  if (confirming) {
-    return (
-      <div className="flex flex-col gap-2 rounded-xl border border-danger/30 bg-danger/5 p-4">
-        <p className="text-sm">
-          Inativar este veículo? O histórico não será apagado — ele só deixa de aparecer nas
-          buscas padrão.
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={handleInactivate}
-            disabled={isPending}
-            className="h-10 flex-1 rounded-lg bg-danger text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {isPending ? "Inativando…" : "Confirmar"}
-          </button>
-          <button
-            onClick={() => setConfirming(false)}
-            className="h-10 flex-1 rounded-lg border border-border text-sm font-medium"
-          >
-            Cancelar
-          </button>
+      ) : confirming ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-danger/30 bg-danger/5 p-4">
+          <p className="text-sm">
+            Inativar este veículo? O histórico não será apagado — ele só deixa de aparecer nas buscas padrão.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleInactivate}
+              disabled={isPending}
+              className="h-10 flex-1 rounded-lg bg-danger text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {isPending ? "Inativando…" : "Confirmar"}
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="h-10 flex-1 rounded-lg border border-border text-sm font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
-        {error ? <p className="text-xs text-danger">{error}</p> : null}
-      </div>
-    );
-  }
+      ) : (
+        <button
+          onClick={() => setConfirming(true)}
+          className="h-11 rounded-xl border border-danger/40 px-4 text-sm font-medium text-danger"
+        >
+          Inativar veículo
+        </button>
+      )}
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
 
-  return (
-    <button
-      onClick={() => setConfirming(true)}
-      className="h-11 rounded-xl border border-danger/40 px-4 text-sm font-medium text-danger"
-    >
-      Inativar veículo
-    </button>
+      {confirmingDelete ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-danger/30 bg-danger/5 p-4">
+          <p className="text-sm">
+            Excluir este veículo <strong>apaga o cadastro de verdade</strong>, sem volta. Só funciona se não
+            houver orçamento, OS ou agendamento vinculado — nesses casos, use "Inativar".
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDelete}
+              disabled={isPending}
+              className="h-10 flex-1 rounded-lg bg-danger text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {isPending ? "Excluindo…" : "Excluir definitivamente"}
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="h-10 flex-1 rounded-lg border border-border text-sm font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+          {deleteError ? <p className="text-xs text-danger">{deleteError}</p> : null}
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirmingDelete(true)}
+          className="h-11 rounded-xl border border-dashed border-danger/40 px-4 text-xs font-medium text-danger"
+        >
+          Excluir veículo definitivamente
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -7,11 +7,13 @@ import {
   cancelQuoteVersionService,
   createNewQuoteVersionService,
   createQuoteService,
+  deleteQuoteService,
   sendQuoteVersionService,
   updateQuoteVersionService,
 } from "@/lib/quotes/service";
 import {
   InvalidQuoteTransitionError,
+  QuoteNotDeletableError,
   QuoteNotFoundError,
   QuoteVersionNotEditableError,
   VehicleNotOwnedByCustomerError,
@@ -53,11 +55,23 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
     err instanceof VehicleNotOwnedByCustomerError ||
     err instanceof QuoteNotFoundError ||
     err instanceof QuoteVersionNotEditableError ||
-    err instanceof InvalidQuoteTransitionError
+    err instanceof InvalidQuoteTransitionError ||
+    err instanceof QuoteNotDeletableError
   ) {
     return { success: false, error: err.message };
   }
   return { success: false, error: fallback };
+}
+
+export async function deleteQuoteAction(quoteId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await deleteQuoteService(userId, quoteId);
+    revalidatePath("/dashboard/orcamentos");
+    return { success: true, quoteId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível excluir o orçamento.");
+  }
 }
 
 export async function createQuoteAction(input: unknown): Promise<ActionResult> {

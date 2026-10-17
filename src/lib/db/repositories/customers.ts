@@ -154,6 +154,15 @@ export async function setCustomerStatus(
   return result.rows[0] ?? null;
 }
 
+/** Exclusão real (não é o "inativar" de setCustomerStatus). Só chega
+ * aqui depois do service confirmar que não há nada vinculado — mas o
+ * banco também protege via FK RESTRICT (vehicles/quotes/work_orders/
+ * appointments), então um erro 23503 pode escapar e precisa ser
+ * tratado por quem chama. */
+export async function deleteCustomer(id: string): Promise<void> {
+  await pool.query(`DELETE FROM customers WHERE id = $1`, [id]);
+}
+
 export async function findCustomerById(id: string): Promise<CustomerRecord | null> {
   const result = await pool.query<CustomerRecord>(
     `SELECT ${CUSTOMER_COLUMNS} FROM customers WHERE id = $1 LIMIT 1`,

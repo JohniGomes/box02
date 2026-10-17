@@ -1,5 +1,6 @@
 import {
   createCustomer,
+  deleteCustomer,
   findCustomerByDocument,
   findCustomerById,
   searchCustomers,
@@ -15,7 +16,8 @@ import {
   normalizeCustomerInput,
   type CustomerInput,
 } from "@/lib/validation/customer";
-import { CustomerNotFoundError, DuplicateCustomerDocumentError } from "./errors";
+import { isForeignKeyViolation } from "@/lib/db/pgErrors";
+import { CustomerNotDeletableError, CustomerNotFoundError, DuplicateCustomerDocumentError } from "./errors";
 
 /**
  * `actorUserId`: quem está realizando a ação, para o registro de auditoria.
@@ -183,6 +185,29 @@ export async function getCustomerHistoryService(customerId: string): Promise<Cus
     totalWorkOrders: workOrders.length,
     totalSpentCents,
   };
+}
+
+/** Exclusão real — distinta de setCustomerStatus (inativar, reversível).
+ * Bloqueada pelo banco (FK RESTRICT) se houver veículo, orçamento, OS ou
+ * agendamento vinculado; aqui só traduzimos esse erro pra mensagem
+ * amigável, sem checar tabela por tabela antecipadamente. */
+export async function deleteCustomerService(actorUserId: string, customerId: string): Promise<void> {
+  const existing = await findCustomerById(customerId);
+  if (!existing) throw new CustomerNotFoundError(customerId);
+
+  try {
+    await deleteCustomer(customerId);
+  } catch (err) {
+    if (isForeignKeyViolation(err)) throw new CustomerNotDeletableError();
+    throw err;
+  }
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "CUSTOMER_DELETED",
+    entityType: "customer",
+    entityId: customerId,
+  });
 }
 
 export type { CustomerInput };

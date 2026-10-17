@@ -59,13 +59,13 @@ export const METHOD_STAGES: MethodStage[] = [
 ];
 
 export const METHOD_STAGE_LABEL: Record<MethodStage, string> = {
-  IDENTIFICAMOS: "Identificamos",
-  DIAGNOSTICAMOS: "Diagnosticamos",
-  REGISTRAMOS: "Registramos",
-  EXPLICAMOS: "Explicamos",
-  ORCAMOS: "Orçamos",
-  EXECUTAMOS: "Executamos",
-  ENTREGAMOS: "Entregamos",
+  IDENTIFICAMOS: "Identificação",
+  DIAGNOSTICAMOS: "Diagnóstico",
+  REGISTRAMOS: "Registro",
+  EXPLICAMOS: "Explicação",
+  ORCAMOS: "Orçamento",
+  EXECUTAMOS: "Execução",
+  ENTREGAMOS: "Entrega",
 };
 
 export function workOrderStatusToActiveMethodStage(status: WorkOrderStatus): MethodStage | null {

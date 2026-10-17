@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { auth } from "@/auth";
 import {
   createVehicleService,
+  deleteVehicleService,
   inactivateVehicleService,
   reactivateVehicleService,
   transferVehicleService,
@@ -13,6 +14,7 @@ import {
 import {
   DuplicateVehiclePlateError,
   VehicleCustomerNotFoundError,
+  VehicleNotDeletableError,
 } from "@/lib/vehicles/errors";
 import { searchCustomersService } from "@/lib/customers/service";
 import { formatDocument } from "@/lib/validation/document";
@@ -81,6 +83,20 @@ export async function updateVehicleAction(
       return { success: false, error: err.message, fieldErrors: { plate: err.message } };
     }
     return { success: false, error: "Não foi possível salvar as alterações." };
+  }
+}
+
+export async function deleteVehicleAction(vehicleId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await deleteVehicleService(userId, vehicleId);
+    revalidatePath("/dashboard/veiculos");
+    return { success: true, vehicleId };
+  } catch (err) {
+    if (err instanceof VehicleNotDeletableError) {
+      return { success: false, error: err.message };
+    }
+    return { success: false, error: "Não foi possível excluir o veículo." };
   }
 }
 

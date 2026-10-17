@@ -59,6 +59,29 @@ export async function updateQuoteStatusAndVersion(
   ]);
 }
 
+/** Exclusão real — versões/itens cascateiam (ON DELETE CASCADE). Quem
+ * chama precisa já ter confirmado que nenhuma OS foi gerada a partir
+ * de uma versão deste orçamento (essa FK é SET NULL, não bloqueia
+ * sozinha — ver checkQuoteHasWorkOrder). */
+export async function deleteQuote(id: string, db: Queryable = pool): Promise<void> {
+  await db.query(`DELETE FROM quotes WHERE id = $1`, [id]);
+}
+
+/** Existe pelo menos uma OS criada a partir de alguma versão deste
+ * orçamento? work_orders.sourceQuoteVersionId é ON DELETE SET NULL,
+ * então o banco sozinho deixaria apagar e silenciosamente desvincular
+ * a OS do orçamento de origem — checagem explícita evita isso. */
+export async function quoteHasWorkOrder(quoteId: string, db: Queryable = pool): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM work_orders wo
+     JOIN quote_versions qv ON qv.id = wo."sourceQuoteVersionId"
+     WHERE qv."quoteId" = $1
+     LIMIT 1`,
+    [quoteId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function findQuoteById(id: string, db: Queryable = pool): Promise<QuoteRecord | null> {
   const result = await db.query<QuoteRecord>(`SELECT ${COLUMNS} FROM quotes WHERE id = $1 LIMIT 1`, [id]);
   return result.rows[0] ?? null;

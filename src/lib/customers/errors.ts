@@ -11,3 +11,12 @@ export class CustomerNotFoundError extends Error {
     this.name = "CustomerNotFoundError";
   }
 }
+
+export class CustomerNotDeletableError extends Error {
+  constructor() {
+    super(
+      "Este cliente não pode ser excluído — já tem veículo, orçamento, OS ou agendamento vinculado. Use \"Inativar\" em vez de excluir.",
+    );
+    this.name = "CustomerNotDeletableError";
+  }
+}

@@ -78,7 +78,7 @@ export function WorkOrderEvidenceSection({
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-5">
-      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">Registramos — Evidências</h2>
+      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">Registro — Evidências</h2>
       <p className="mb-3 text-[11px] text-muted">
         Fotos de entrada e avarias, vinculadas a esta OS.
         {locked ? " O aceite de recepção já foi registrado — evidências existentes não podem mais ser excluídas." : ""}

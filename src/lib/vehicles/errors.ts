@@ -18,3 +18,12 @@ export class VehicleCustomerNotFoundError extends Error {
     this.name = "VehicleCustomerNotFoundError";
   }
 }
+
+export class VehicleNotDeletableError extends Error {
+  constructor() {
+    super(
+      "Este veículo não pode ser excluído — já tem orçamento, OS ou agendamento vinculado. Use \"Inativar\" em vez de excluir.",
+    );
+    this.name = "VehicleNotDeletableError";
+  }
+}

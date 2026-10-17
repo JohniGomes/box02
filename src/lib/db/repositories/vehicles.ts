@@ -141,6 +141,13 @@ export async function setVehicleCustomer(
   return result.rows[0] ?? null;
 }
 
+/** Exclusão real — protegida por FK RESTRICT (quotes/work_orders/
+ * appointments) no banco; o service verifica antes e também trata um
+ * eventual 23503 que escape. */
+export async function deleteVehicle(id: string): Promise<void> {
+  await pool.query(`DELETE FROM vehicles WHERE id = $1`, [id]);
+}
+
 export async function findVehicleById(id: string): Promise<VehicleRecord | null> {
   const result = await pool.query<VehicleRecord>(
     `SELECT ${VEHICLE_COLUMNS} FROM vehicles WHERE id = $1 LIMIT 1`,

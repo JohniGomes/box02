@@ -34,7 +34,7 @@ export function WorkOrderExplanationSection({
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-5">
-      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">Explicamos</h2>
+      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">Explicação</h2>
       <p className="mb-3 text-[11px] text-muted">
         Como o diagnóstico foi explicado ao cliente, em linguagem simples.
       </p>

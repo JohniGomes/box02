@@ -1,12 +1,15 @@
 import { withTransaction } from "@/lib/db/transaction";
 import {
   createQuote,
+  deleteQuote,
   findQuoteById,
+  quoteHasWorkOrder,
   searchQuotes,
   updateQuoteStatusAndVersion,
   type QuoteRecord,
   type SearchQuotesFilters,
 } from "@/lib/db/repositories/quotes";
+import { isForeignKeyViolation } from "@/lib/db/pgErrors";
 import {
   createQuoteVersion,
   findQuoteVersionById,
@@ -50,6 +53,7 @@ import {
   QuoteAccessTokenNotFoundError,
   QuoteAlreadyDecidedError,
   QuoteItemsIncompleteDecisionError,
+  QuoteNotDeletableError,
   QuoteNotFoundError,
   QuoteVersionNotEditableError,
   QuoteVersionNotFoundError,
@@ -675,4 +679,32 @@ export async function submitPublicQuoteDecisionService(
   });
 
   return result;
+}
+
+/** Exclusão real — distinta de cancelar (que mantém histórico). Bloqueada
+ * se já existir OS criada a partir deste orçamento (checagem explícita:
+ * a FK de sourceQuoteVersionId é SET NULL, não RESTRICT, então o banco
+ * sozinho deixaria passar e silenciosamente desvincularia a OS). Versões
+ * e itens cascateiam automaticamente. */
+export async function deleteQuoteService(actorUserId: string, quoteId: string): Promise<void> {
+  const quote = await findQuoteById(quoteId);
+  if (!quote) throw new QuoteNotFoundError(quoteId);
+
+  if (await quoteHasWorkOrder(quoteId)) {
+    throw new QuoteNotDeletableError();
+  }
+
+  try {
+    await deleteQuote(quoteId);
+  } catch (err) {
+    if (isForeignKeyViolation(err)) throw new QuoteNotDeletableError();
+    throw err;
+  }
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "QUOTE_DELETED",
+    entityType: "quote",
+    entityId: quoteId,
+  });
 }

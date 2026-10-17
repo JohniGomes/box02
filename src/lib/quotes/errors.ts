@@ -19,6 +19,13 @@ export class QuoteVersionNotFoundError extends Error {
   }
 }
 
+export class QuoteNotDeletableError extends Error {
+  constructor() {
+    super("Este orçamento não pode ser excluído — já foi convertido em OS. Use \"Cancelar\" em vez de excluir.");
+    this.name = "QuoteNotDeletableError";
+  }
+}
+
 /** Tentativa de editar itens/valores de uma versão que não está em RASCUNHO. */
 export class QuoteVersionNotEditableError extends Error {
   constructor() {

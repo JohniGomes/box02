@@ -1,5 +1,6 @@
 import {
   createVehicle,
+  deleteVehicle,
   findVehicleByPlate,
   findVehicleById,
   listVehiclesByCustomer,
@@ -10,6 +11,7 @@ import {
   type SearchVehiclesFilters,
   type VehicleRecord,
 } from "@/lib/db/repositories/vehicles";
+import { isForeignKeyViolation } from "@/lib/db/pgErrors";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import {
@@ -20,6 +22,7 @@ import {
 import {
   DuplicateVehiclePlateError,
   VehicleCustomerNotFoundError,
+  VehicleNotDeletableError,
   VehicleNotFoundError,
 } from "./errors";
 
@@ -205,6 +208,28 @@ export async function bumpVehicleMileageIfHigherService(
   });
 
   return { updated: true, vehicle: updated };
+}
+
+/** Exclusão real — distinta de setVehicleStatus (inativar, reversível).
+ * Bloqueada pelo banco (FK RESTRICT) se houver orçamento, OS ou
+ * agendamento vinculado. */
+export async function deleteVehicleService(actorUserId: string, vehicleId: string): Promise<void> {
+  const existing = await findVehicleById(vehicleId);
+  if (!existing) throw new VehicleNotFoundError(vehicleId);
+
+  try {
+    await deleteVehicle(vehicleId);
+  } catch (err) {
+    if (isForeignKeyViolation(err)) throw new VehicleNotDeletableError();
+    throw err;
+  }
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "VEHICLE_DELETED",
+    entityType: "vehicle",
+    entityId: vehicleId,
+  });
 }
 
 export type { VehicleInput };

@@ -6,7 +6,7 @@ import { getVehicleService } from "@/lib/vehicles/service";
 import { formatBRL } from "@/lib/money";
 import { formatPlate } from "@/lib/validation/plate";
 import { QUOTE_STATUS_CLASS, QUOTE_STATUS_LABEL } from "../statusLabels";
-import { CancelQuoteButton, NewVersionButton, SendQuoteButton } from "./QuoteActions";
+import { CancelQuoteButton, DeleteQuoteButton, NewVersionButton, SendQuoteButton } from "./QuoteActions";
 import { ConvertQuoteToWorkOrderForm } from "./ConvertQuoteToWorkOrderForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { PrintButton } from "@/components/PrintButton";
@@ -214,6 +214,7 @@ export default async function QuoteDetailPage({
         {isApprovedForConversion ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
         {canCreateNewVersion ? <NewVersionButton quoteId={quote.id} /> : null}
         {canCancel ? <CancelQuoteButton quoteId={quote.id} /> : null}
+        <DeleteQuoteButton quoteId={quote.id} />
       </div>
     </div>
   );
