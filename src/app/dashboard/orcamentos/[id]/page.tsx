@@ -116,6 +116,7 @@ export default async function QuoteDetailPage({
                 <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
               </div>
               <p className="text-sm">{item.description}</p>
+              {item.notes ? <p className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
               <p className="text-xs text-muted">
                 {Number(item.quantity)} × {formatBRL(item.unitPriceCents)}
               </p>

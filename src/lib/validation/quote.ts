@@ -21,6 +21,14 @@ export const quoteItemInputSchema = z.object({
   /// usado para preencher description/unitPriceReais no momento da
   /// criação (preço sugerido = custo + markup); nunca revalidado depois.
   partId: z.string().trim().optional(),
+  /// Observações livres do item (ex.: discriminar o que foi feito na mão
+  /// de obra). Vazio vira undefined.
+  notes: z
+    .string()
+    .trim()
+    .max(2000, "Observações do item aceitam até 2000 caracteres")
+    .optional()
+    .transform((v) => (v ? v : undefined)),
   /// Ciclo C1 — obrigatório. NECESSARIO/RECOMENDADO exigem decisão do
   /// cliente e entram no total; INFORMATIVO nunca exige decisão, nunca
   /// entra no total cobrável (mesmo com valor estimado preenchido).

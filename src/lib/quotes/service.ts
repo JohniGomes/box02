@@ -199,6 +199,7 @@ export async function createQuoteService(
         serviceId: item.serviceId ?? null,
         partId: item.partId ?? null,
         category: item.category,
+        notes: item.notes ?? null,
       })),
       client,
     );
@@ -263,6 +264,7 @@ export async function updateQuoteVersionService(
         serviceId: item.serviceId ?? null,
         partId: item.partId ?? null,
         category: item.category,
+        notes: item.notes ?? null,
       })),
       client,
     );
@@ -387,6 +389,7 @@ export async function createNewQuoteVersionService(
         serviceId: item.serviceId,
         partId: item.partId,
         category: item.category,
+        notes: item.notes,
       })),
       client,
     );
