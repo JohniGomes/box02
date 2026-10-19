@@ -1,5 +1,8 @@
+import type { Pool, PoolClient } from "pg";
 import { createId } from "@paralleldrive/cuid2";
 import { pool } from "../pool";
+
+type Queryable = Pool | PoolClient;
 
 export type StockMovementType = "ENTRADA" | "SAIDA";
 
@@ -17,15 +20,18 @@ const COLUMNS = `id, "partId", type, quantity, reason, "createdByUserId", "creat
 
 /** Write-once (sem update/delete) — corrigir um lançamento errado é
  * lançar o movimento inverso, mesmo padrão de WorkOrderPayment. */
-export async function createStockMovement(input: {
-  partId: string;
-  type: StockMovementType;
-  quantity: number;
-  reason?: string | null;
-  createdByUserId: string;
-}): Promise<StockMovementRecord> {
+export async function createStockMovement(
+  input: {
+    partId: string;
+    type: StockMovementType;
+    quantity: number;
+    reason?: string | null;
+    createdByUserId: string;
+  },
+  db: Queryable = pool,
+): Promise<StockMovementRecord> {
   const id = createId();
-  const result = await pool.query<StockMovementRecord>(
+  const result = await db.query<StockMovementRecord>(
     `INSERT INTO stock_movements (id, "partId", type, quantity, reason, "createdByUserId")
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${COLUMNS}`,

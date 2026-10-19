@@ -58,6 +58,10 @@ import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findVehicleById } from "@/lib/db/repositories/vehicles";
 import { bumpVehicleMileageIfHigherService } from "@/lib/vehicles/service";
 import { assertServiceIsActive } from "@/lib/services/service";
+import { assertPartIsActive } from "@/lib/inventory/service";
+import { findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
+import { createStockMovement } from "@/lib/db/repositories/stockMovements";
+import { InsufficientStockError } from "@/lib/inventory/errors";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { generateWorkOrderNumber } from "./numbering";
 import { computeAdditionalItemExpiresAt, generateAdditionalItemAccessToken } from "./additionalItemToken";
@@ -219,6 +223,7 @@ export async function createWorkOrderFromQuoteService(
             // serviço tenha sido editado/inativado depois (seção 5 do
             // Ciclo B).
             serviceId: qi.serviceId,
+            partId: qi.partId,
           })),
           client,
         )
@@ -259,6 +264,7 @@ export async function createWorkOrderWithoutQuoteService(
   const number = await generateWorkOrderNumber();
 
   await assertServiceIdsActive(input.items.map((i) => i.serviceId));
+  await assertPartIdsActive(input.items.map((i) => i.partId));
 
   const preparedItems = input.items.map((item) => {
     const unitPriceCents = reaisToCents(item.unitPriceReais);
@@ -269,6 +275,7 @@ export async function createWorkOrderWithoutQuoteService(
       unitPriceCents,
       totalCents: lineTotalCents(item.quantity, unitPriceCents),
       serviceId: item.serviceId ?? null,
+      partId: item.partId ?? null,
     };
   });
 
@@ -454,6 +461,33 @@ export async function setWorkOrderItemStatusService(
       client,
     );
     if (!updated) throw new WorkOrderItemNotFoundError(itemId);
+
+    // Baixa automática de estoque: só quando o item (de peça, vinculado a
+    // uma peça do estoque) é marcado EXECUTADO — nunca antes (planejado
+    // pode ser cancelado sem nunca ter saído do estoque de verdade).
+    // Trava a linha da PEÇA (não só do item) para impedir que duas
+    // execuções concorrentes da mesma peça leiam o mesmo saldo "antigo" e
+    // ambas passem na checagem de estoque suficiente.
+    if (status === "EXECUTADO" && item.partId) {
+      const part = await findPartByIdForUpdate(item.partId, client);
+      if (part) {
+        const quantity = Math.max(1, Math.round(Number(item.quantity)));
+        const currentStock = await getPartCurrentStock(item.partId, client);
+        if (quantity > currentStock) {
+          throw new InsufficientStockError(currentStock, quantity);
+        }
+        await createStockMovement(
+          {
+            partId: item.partId,
+            type: "SAIDA",
+            quantity,
+            reason: `Baixa automática — OS ${workOrder.number}, item "${item.description}"`,
+            createdByUserId: executedByUserId ?? actorUserId,
+          },
+          client,
+        );
+      }
+    }
 
     await recordAuditLog({
       userId: actorUserId,
@@ -1042,6 +1076,14 @@ async function assertServiceIdsActive(serviceIds: (string | undefined)[]): Promi
   }
 }
 
+/** Mesmo princípio de `assertServiceIdsActive`, para partId. */
+async function assertPartIdsActive(partIds: (string | undefined)[]): Promise<void> {
+  const uniqueIds = [...new Set(partIds.filter((id): id is string => Boolean(id)))];
+  for (const id of uniqueIds) {
+    await assertPartIsActive(id);
+  }
+}
+
 function assertWorkOrderOpenForAdditional(workOrder: WorkOrderRecord) {
   if (workOrder.status === "ENTREGUE" || workOrder.status === "CANCELADA") {
     throw new InvalidWorkOrderItemTransitionError(
@@ -1064,6 +1106,7 @@ export async function createAdditionalItemService(
 
   const input = createAdditionalItemSchema.parse(rawInput);
   if (input.serviceId) await assertServiceIsActive(input.serviceId);
+  if (input.partId) await assertPartIsActive(input.partId);
   const unitPriceCents = reaisToCents(input.unitPriceReais);
   const totalCents = lineTotalCents(input.quantity, unitPriceCents);
 
@@ -1078,6 +1121,7 @@ export async function createAdditionalItemService(
       origin: "ADICIONAL_DURANTE_EXECUCAO",
       createdByUserId: actorUserId,
       serviceId: input.serviceId ?? null,
+      partId: input.partId ?? null,
     },
   ]);
 

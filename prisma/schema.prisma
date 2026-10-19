@@ -397,9 +397,14 @@ model QuoteItem {
   serviceId String?
   service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
+  /// Ciclo H — mesmo princípio do serviceId acima, para peça do estoque.
+  partId String?
+  part   Part?   @relation(fields: [partId], references: [id], onDelete: SetNull)
+
   workOrderItems WorkOrderItem[]
 
   @@index([serviceId])
+  @@index([partId])
   @@map("quote_items")
 }
 
@@ -690,6 +695,14 @@ model WorkOrderItem {
   serviceId String?
   service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
+  /// Ciclo H — mesmo princípio do serviceId acima, para peça do estoque.
+  /// Quando o item é marcado EXECUTADO, uma SAIDA é lançada automaticamente
+  /// em stock_movements para esta peça (ver workOrders/service.ts) — nunca
+  /// antes disso (um item PLANEJADO pode ser cancelado sem nunca ter saído
+  /// do estoque de verdade).
+  partId String?
+  part   Part?   @relation(fields: [partId], references: [id], onDelete: SetNull)
+
   cancelReason String?
 
   createdAt DateTime @default(now())
@@ -698,6 +711,7 @@ model WorkOrderItem {
   checklists WorkOrderChecklist[]
 
   @@index([serviceId])
+  @@index([partId])
   @@map("work_order_items")
 }
 
@@ -1189,6 +1203,8 @@ model Part {
   updatedAt DateTime @updatedAt
 
   movements StockMovement[]
+  quoteItems     QuoteItem[]
+  workOrderItems WorkOrderItem[]
 
   @@index([name])
   @@map("parts")

@@ -28,6 +28,7 @@ import {
 } from "@/lib/workOrders/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
+import { InsufficientStockError, PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 
 export interface ActionResult {
@@ -66,7 +67,10 @@ function friendlyError(err: unknown, fallback: string): ActionResult {
     err instanceof AdditionalItemNotAuthorizedError ||
     err instanceof AdditionalItemAlreadyDecidedError ||
     err instanceof AdditionalItemNotEligibleError ||
-    err instanceof InvalidExecutorUserError
+    err instanceof InvalidExecutorUserError ||
+    err instanceof InsufficientStockError ||
+    err instanceof PartNotActiveError ||
+    err instanceof PartNotFoundError
   ) {
     return { success: false, error: err.message };
   }

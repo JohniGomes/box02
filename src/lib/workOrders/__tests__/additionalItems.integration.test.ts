@@ -106,7 +106,7 @@ describe("criação de item adicional", () => {
 
   it("rejeita criar adicional numa OS já fechada/cancelada", async () => {
     const { workOrder } = await newWorkOrder();
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_EXECUCAO");
     await cancelWorkOrderService(actorUserId, workOrder.id, { reason: "Teste" });
 
@@ -591,7 +591,7 @@ describe("correção de concorrência — FOR UPDATE em setWorkOrderItemStatusSe
 describe("fechamento da OS com adicional aprovado mas não executado (Cenário 8)", () => {
   it("bloqueia fechamento enquanto o adicional aprovado não for decidido (executado/cancelado)", async () => {
     const { workOrder, items } = await newWorkOrder();
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_EXECUCAO");
     await setWorkOrderItemStatusService(actorUserId, workOrder.id, items[0].id, "EXECUTADO");
 

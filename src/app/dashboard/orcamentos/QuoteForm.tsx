@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
+import { PartPickerButton } from "@/components/PartPickerButton";
 import {
   createQuoteAction,
   listCustomerVehiclesAction,
@@ -25,6 +26,7 @@ interface ItemDraft {
   quantity: string;
   unitPriceReais: string;
   serviceId?: string;
+  partId?: string;
   category: ItemCategory;
 }
 
@@ -154,6 +156,7 @@ export function QuoteForm({
           quantity: i.quantity,
           unitPriceReais: i.unitPriceReais || "0",
           serviceId: i.serviceId,
+          partId: i.partId,
           category: i.category,
         })),
       discount: discountType ? { type: discountType, value: discountValue } : undefined,
@@ -382,15 +385,30 @@ function QuoteItemsEditor({
             ) : null}
           </div>
 
-          <ServicePickerButton
-            onSelect={(service) =>
-              onUpdate(item.key, {
-                serviceId: service.id,
-                description: service.label,
-                unitPriceReais: service.suggestedPriceReais ?? "",
-              })
-            }
-          />
+          <div className="flex flex-wrap gap-2">
+            <ServicePickerButton
+              onSelect={(service) =>
+                onUpdate(item.key, {
+                  type: "SERVICO",
+                  serviceId: service.id,
+                  partId: undefined,
+                  description: service.label,
+                  unitPriceReais: service.suggestedPriceReais ?? "",
+                })
+              }
+            />
+            <PartPickerButton
+              onSelect={(part) =>
+                onUpdate(item.key, {
+                  type: "PECA",
+                  partId: part.id,
+                  serviceId: undefined,
+                  description: part.label,
+                  unitPriceReais: part.suggestedPriceReais ?? "",
+                })
+              }
+            />
+          </div>
 
           <div className="flex gap-2">
             {(Object.keys(ITEM_TYPE_LABEL) as ItemType[]).map((t) => (

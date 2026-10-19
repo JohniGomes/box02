@@ -6,11 +6,14 @@ import { auth } from "@/auth";
 import {
   createPartService,
   createStockMovementService,
+  getPartSuggestedSalePriceService,
+  listPartsWithStockService,
   setPartStatusService,
   updatePartService,
 } from "@/lib/inventory/service";
 import { DuplicatePartSkuError, InsufficientStockError, PartNotFoundError } from "@/lib/inventory/errors";
-import type { PartStatus } from "@/lib/db/repositories/parts";
+import { centsToReais } from "@/lib/money";
+import type { PartStatus, PartWithStock } from "@/lib/db/repositories/parts";
 
 export interface InventoryActionResult {
   success: boolean;
@@ -76,6 +79,37 @@ export async function setPartStatusAction(partId: string, status: PartStatus): P
   } catch (err) {
     return friendlyError(err, "Não foi possível alterar o status.");
   }
+}
+
+/** Ciclo H — seletor de peça reutilizável (orçamento/OS/adicional), mesmo
+ * padrão de `ServicePickerOption`: só peças ATIVAS, com o preço de venda
+ * sugerido (custo + markup) já calculado para pré-preencher o form —
+ * nunca grava nada sozinho, a validação real acontece no servidor. */
+export interface PartPickerOption {
+  id: string;
+  label: string;
+  unit: string;
+  currentStock: number;
+  suggestedPriceReais: string | null;
+  suggestedPriceSource: "peça" | "padrão da oficina" | null;
+}
+
+async function toPickerOption(p: PartWithStock): Promise<PartPickerOption> {
+  const suggested = await getPartSuggestedSalePriceService(p.id);
+  return {
+    id: p.id,
+    label: p.sku ? `${p.name} (${p.sku})` : p.name,
+    unit: p.unit,
+    currentStock: p.currentStock,
+    suggestedPriceReais: suggested ? centsToReais(suggested.cents) : null,
+    suggestedPriceSource: suggested ? suggested.source : null,
+  };
+}
+
+export async function searchActivePartsForPickerAction(query: string): Promise<PartPickerOption[]> {
+  await requireUserId();
+  const parts = await listPartsWithStockService(query);
+  return Promise.all(parts.filter((p) => p.status === "ATIVO").map(toPickerOption));
 }
 
 export async function createStockMovementAction(partId: string, input: unknown): Promise<InventoryActionResult> {

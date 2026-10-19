@@ -21,11 +21,12 @@ export interface QuoteItemRecord {
   catalogItemType: string | null;
   catalogItemId: string | null;
   serviceId: string | null;
+  partId: string | null;
 }
 
 const COLUMNS = `
   id, "quoteVersionId", type, description, quantity, "unitPriceCents", "totalCents",
-  "clientDecision", category, "catalogItemType", "catalogItemId", "serviceId"
+  "clientDecision", category, "catalogItemType", "catalogItemId", "serviceId", "partId"
 `;
 
 export interface CreateQuoteItemInput {
@@ -39,6 +40,7 @@ export interface CreateQuoteItemInput {
   catalogItemType?: string | null;
   catalogItemId?: string | null;
   serviceId?: string | null;
+  partId?: string | null;
 }
 
 export async function insertQuoteItems(
@@ -51,8 +53,8 @@ export async function insertQuoteItems(
     const result = await db.query<QuoteItemRecord>(
       `INSERT INTO quote_items (
         id, "quoteVersionId", type, description, quantity, "unitPriceCents", "totalCents",
-        category, "catalogItemType", "catalogItemId", "serviceId"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        category, "catalogItemType", "catalogItemId", "serviceId", "partId"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING ${COLUMNS}`,
       [
         id,
@@ -66,6 +68,7 @@ export async function insertQuoteItems(
         item.catalogItemType ?? null,
         item.catalogItemId ?? null,
         item.serviceId ?? null,
+        item.partId ?? null,
       ],
     );
     inserted.push(result.rows[0]);
