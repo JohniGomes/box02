@@ -84,6 +84,7 @@ export default async function PublicQuotePage({
                 id: i.id,
                 type: i.type,
                 description: i.description,
+                notes: i.notes,
                 totalCents: i.totalCents,
                 category: i.category,
               }))}
@@ -144,6 +145,7 @@ export default async function PublicQuotePage({
                   <div>
                     <p className="text-xs text-muted">{ITEM_TYPE_LABEL[item.type]}</p>
                     <p>{item.description}</p>
+                    {item.notes ? <p className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">{formatBRL(item.totalCents)}</p>

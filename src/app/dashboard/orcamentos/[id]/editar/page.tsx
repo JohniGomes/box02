@@ -49,6 +49,7 @@ export default async function EditQuotePage({
       unitPriceReais: centsToReais(item.unitPriceCents),
       serviceId: item.serviceId ?? undefined,
       category: item.category,
+      notes: item.notes ?? undefined,
     })),
     discountType: version.discountType ?? "",
     discountValue:

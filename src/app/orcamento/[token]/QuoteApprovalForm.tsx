@@ -11,6 +11,7 @@ interface ItemForApproval {
   id: string;
   type: "SERVICO" | "PECA" | "MAO_DE_OBRA";
   description: string;
+  notes?: string | null;
   totalCents: number;
   category: ItemCategory;
 }
@@ -148,6 +149,7 @@ export function QuoteApprovalForm({ token, items }: { token: string; items: Item
                   ) : null}
                 </div>
                 <p className="mt-1 text-sm">{item.description}</p>
+                {item.notes ? <p className="mt-1 whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
               </li>
             ))}
           </ul>
@@ -275,6 +277,7 @@ function ItemSection({
               <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
             </div>
             <p className="mt-1 text-sm">{item.description}</p>
+            {item.notes ? <p className="mt-1 whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"

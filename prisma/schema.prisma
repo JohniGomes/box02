@@ -401,6 +401,10 @@ model QuoteItem {
   partId String?
   part   Part?   @relation(fields: [partId], references: [id], onDelete: SetNull)
 
+  /// Observações livres do item (usado em Mão de obra para discriminar o
+  /// que foi feito). Congelado junto com o item na versão do orçamento.
+  notes String?
+
   workOrderItems WorkOrderItem[]
 
   @@index([serviceId])

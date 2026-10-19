@@ -28,6 +28,7 @@ interface ItemDraft {
   serviceId?: string;
   partId?: string;
   category: ItemCategory;
+  notes?: string;
 }
 
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
@@ -158,6 +159,9 @@ export function QuoteForm({
           serviceId: i.serviceId,
           partId: i.partId,
           category: i.category,
+          // Observações só valem para Mão de obra; texto deixado em outro
+          // tipo (ao trocar de aba) não deve ir junto.
+          notes: i.type === "MAO_DE_OBRA" ? i.notes : undefined,
         })),
       discount: discountType ? { type: discountType, value: discountValue } : undefined,
       surcharge: surchargeType ? { type: surchargeType, value: surchargeValue } : undefined,
@@ -460,6 +464,20 @@ function QuoteItemsEditor({
             placeholder="Descrição (ex.: Troca de pastilha de freio dianteira)"
             className={inputClass}
           />
+
+          {item.type === "MAO_DE_OBRA" ? (
+            <div>
+              <label className="text-xs text-muted">Observações (o que foi feito)</label>
+              <textarea
+                value={item.notes ?? ""}
+                onChange={(e) => onUpdate(item.key, { notes: e.target.value })}
+                rows={3}
+                maxLength={2000}
+                placeholder="Discrimine o serviço realizado (ex.: desmontagem do eixo, troca de rolamentos, regulagem…)"
+                className="mt-1 w-full rounded-xl border border-border bg-background px-4 py-3 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+              />
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
