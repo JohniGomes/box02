@@ -18,3 +18,13 @@ export class InsufficientStockError extends Error {
     this.name = "InsufficientStockError";
   }
 }
+
+/** Mesma regra crítica de `ServiceNotActiveError`: o servidor SEMPRE
+ * valida que o partId informado corresponde a uma peça ATIVA — nunca
+ * confia que a interface só ofereceu peças ativas para seleção. */
+export class PartNotActiveError extends Error {
+  constructor() {
+    super("A peça selecionada não está mais ativa. Escolha outra ou digite um item personalizado.");
+    this.name = "PartNotActiveError";
+  }
+}

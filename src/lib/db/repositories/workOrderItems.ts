@@ -37,6 +37,7 @@ export interface WorkOrderItemRecord {
   catalogItemType: string | null;
   catalogItemId: string | null;
   serviceId: string | null;
+  partId: string | null;
   cancelReason: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -47,7 +48,7 @@ const COLUMNS = `
   origin, "sourceQuoteItemId", status, "executedAt", "executedByUserId",
   "clientAuthorizedBy", "clientAuthorizedAt", "authorizationChannel", "authorizationNotes", "authorizationIpAddress",
   "clientDecision", "createdByUserId", "accessToken", "accessTokenExpiresAt", "accessTokenRevokedAt",
-  "supersedesItemId", "catalogItemType", "catalogItemId", "serviceId", "cancelReason", "createdAt", "updatedAt"
+  "supersedesItemId", "catalogItemType", "catalogItemId", "serviceId", "partId", "cancelReason", "createdAt", "updatedAt"
 `;
 
 export interface InsertWorkOrderItemInput {
@@ -62,6 +63,7 @@ export interface InsertWorkOrderItemInput {
   catalogItemType?: string | null;
   catalogItemId?: string | null;
   serviceId?: string | null;
+  partId?: string | null;
   createdByUserId?: string | null;
   supersedesItemId?: string | null;
 }
@@ -76,9 +78,9 @@ export async function insertWorkOrderItems(
     const result = await db.query<WorkOrderItemRecord>(
       `INSERT INTO work_order_items (
         id, "workOrderId", type, description, quantity, "unitPriceCents", "totalCents",
-        origin, "sourceQuoteItemId", status, "catalogItemType", "catalogItemId", "serviceId",
+        origin, "sourceQuoteItemId", status, "catalogItemType", "catalogItemId", "serviceId", "partId",
         "createdByUserId", "supersedesItemId", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PLANEJADO', $10, $11, $12, $13, $14, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PLANEJADO', $10, $11, $12, $13, $14, $15, NOW())
       RETURNING ${COLUMNS}`,
       [
         id,
@@ -93,6 +95,7 @@ export async function insertWorkOrderItems(
         item.catalogItemType ?? null,
         item.catalogItemId ?? null,
         item.serviceId ?? null,
+        item.partId ?? null,
         item.createdByUserId ?? null,
         item.supersedesItemId ?? null,
       ],

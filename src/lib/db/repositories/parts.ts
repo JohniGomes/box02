@@ -1,5 +1,8 @@
+import type { Pool, PoolClient } from "pg";
 import { createId } from "@paralleldrive/cuid2";
 import { pool } from "../pool";
+
+type Queryable = Pool | PoolClient;
 
 export type PartStatus = "ATIVO" | "INATIVO";
 
@@ -123,11 +126,20 @@ export async function listPartsWithStock(query?: string): Promise<PartWithStock[
   return result.rows;
 }
 
-export async function getPartCurrentStock(partId: string): Promise<number> {
-  const result = await pool.query<{ total: string | null }>(
+export async function getPartCurrentStock(partId: string, db: Queryable = pool): Promise<number> {
+  const result = await db.query<{ total: string | null }>(
     `SELECT COALESCE(SUM(CASE WHEN type = 'ENTRADA' THEN quantity ELSE -quantity END), 0) as total
      FROM stock_movements WHERE "partId" = $1`,
     [partId],
   );
   return Number(result.rows[0]?.total ?? 0);
+}
+
+/** Mesma trava de `lockWorkOrderItemById` — usada quando a baixa de
+ * estoque precisa acontecer na MESMA transação que outra escrita (ex.:
+ * marcar item de OS como EXECUTADO), evitando duas baixas concorrentes
+ * lerem o mesmo saldo "antigo" e ambas passarem na checagem. */
+export async function findPartByIdForUpdate(id: string, client: PoolClient): Promise<PartRecord | null> {
+  const result = await client.query<PartRecord>(`SELECT ${COLUMNS} FROM parts WHERE id = $1 FOR UPDATE`, [id]);
+  return result.rows[0] ?? null;
 }

@@ -340,7 +340,7 @@ describe("máquina de estados da OS", () => {
 
   it("permite transições válidas: ABERTA -> EM_EXECUCAO -> TESTE_FINAL -> PRONTA", async () => {
     const { workOrder } = await newOS();
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_EXECUCAO");
     await setWorkOrderStatusService(actorUserId, workOrder.id, "TESTE_FINAL");
     const final = await setWorkOrderStatusService(actorUserId, workOrder.id, "PRONTA");
@@ -349,7 +349,7 @@ describe("máquina de estados da OS", () => {
 
   it("permite o caminho com diagnóstico e aguardando peça", async () => {
     const { workOrder } = await newOS();
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_DIAGNOSTICO");
     await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_EXECUCAO");
     const waiting = await setWorkOrderStatusService(actorUserId, workOrder.id, "AGUARDANDO_PECA");
@@ -375,14 +375,14 @@ describe("máquina de estados da OS", () => {
 
   it("grava startedAt ao entrar em EM_EXECUCAO pela primeira vez", async () => {
     const { workOrder } = await newOS();
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     const updated = await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_EXECUCAO");
     expect(updated.startedAt).not.toBeNull();
   });
 
   it("grava auditoria em toda mudança de status", async () => {
     const { workOrder } = await newOS();
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, workOrder.id, "EM_EXECUCAO");
     const logs = await pool.query(
       `SELECT action FROM audit_logs WHERE "entityId" = $1 AND action = 'WORK_ORDER_STATUS_CHANGED'`,
@@ -539,7 +539,7 @@ describe("fechamento da OS", () => {
         { type: "PECA", description: "Peça cancelada", quantity: 1, unitPriceReais: "999,00" },
       ],
     });
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, created.workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, created.workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, created.workOrder.id, "EM_EXECUCAO");
     await setWorkOrderStatusService(actorUserId, created.workOrder.id, "TESTE_FINAL");
     await setWorkOrderStatusService(actorUserId, created.workOrder.id, "PRONTA");
@@ -668,7 +668,7 @@ describe("bloqueios de segurança no servidor (não só na UI)", () => {
       mileageAtEntry: 41000,
       items: [{ type: "SERVICO", description: "Item", quantity: 1, unitPriceReais: "100,00" }],
     });
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, created.workOrder.id, { receptionAcceptedName: "Aceite Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, created.workOrder.id, { receptionAcceptedName: "Aceite Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     await setWorkOrderStatusService(actorUserId, created.workOrder.id, "EM_EXECUCAO");
     await setWorkOrderItemStatusService(actorUserId, created.workOrder.id, created.items[0].id, "EXECUTADO");
     await setWorkOrderStatusService(actorUserId, created.workOrder.id, "TESTE_FINAL");

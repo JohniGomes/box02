@@ -18,6 +18,7 @@ import {
   QuoteVersionNotEditableError,
   VehicleNotOwnedByCustomerError,
 } from "@/lib/quotes/errors";
+import { PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
 import { listVehiclesByCustomerService } from "@/lib/vehicles/service";
 import { searchCustomersService } from "@/lib/customers/service";
 import { formatPlate } from "@/lib/validation/plate";
@@ -56,7 +57,9 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
     err instanceof QuoteNotFoundError ||
     err instanceof QuoteVersionNotEditableError ||
     err instanceof InvalidQuoteTransitionError ||
-    err instanceof QuoteNotDeletableError
+    err instanceof QuoteNotDeletableError ||
+    err instanceof PartNotActiveError ||
+    err instanceof PartNotFoundError
   ) {
     return { success: false, error: err.message };
   }

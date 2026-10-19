@@ -11,6 +11,7 @@ import {
 } from "../actions";
 import { formatBRL } from "@/lib/money";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
+import { PartPickerButton } from "@/components/PartPickerButton";
 import { WorkOrderItemExecutorInfo, type ActiveUserOption } from "./WorkOrderActions";
 
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
@@ -98,6 +99,7 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
   const [quantity, setQuantity] = useState("1");
   const [unitPriceReais, setUnitPriceReais] = useState("");
   const [serviceId, setServiceId] = useState<string | undefined>(undefined);
+  const [partId, setPartId] = useState<string | undefined>(undefined);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +115,7 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
         quantity,
         unitPriceReais,
         serviceId,
+        partId,
       });
       if (!result.success) {
         setError(result.error ?? "Falha ao registrar.");
@@ -125,13 +128,26 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3">
-      <ServicePickerButton
-        onSelect={(service) => {
-          setServiceId(service.id);
-          setDescription(service.label);
-          setUnitPriceReais(service.suggestedPriceReais ?? "");
-        }}
-      />
+      <div className="flex flex-wrap gap-2">
+        <ServicePickerButton
+          onSelect={(service) => {
+            setType("SERVICO");
+            setServiceId(service.id);
+            setPartId(undefined);
+            setDescription(service.label);
+            setUnitPriceReais(service.suggestedPriceReais ?? "");
+          }}
+        />
+        <PartPickerButton
+          onSelect={(part) => {
+            setType("PECA");
+            setPartId(part.id);
+            setServiceId(undefined);
+            setDescription(part.label);
+            setUnitPriceReais(part.suggestedPriceReais ?? "");
+          }}
+        />
+      </div>
       <div className="flex gap-2">
         {(Object.keys(ITEM_TYPE_LABEL) as ItemType[]).map((t) => (
           <button

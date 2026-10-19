@@ -18,7 +18,7 @@ import {
 import { createPartSchema, createStockMovementSchema, updatePartSchema } from "@/lib/validation/part";
 import { calculateSalePriceCents, reaisToCents } from "@/lib/money";
 import { getDefaultMarkupPercent } from "@/lib/settings/service";
-import { DuplicatePartSkuError, InsufficientStockError, PartNotFoundError } from "./errors";
+import { DuplicatePartSkuError, InsufficientStockError, PartNotActiveError, PartNotFoundError } from "./errors";
 
 export async function createPartService(rawInput: unknown): Promise<PartRecord> {
   const input = createPartSchema.parse(rawInput);
@@ -70,6 +70,20 @@ export async function setPartStatusService(partId: string, status: PartStatus): 
 
 export async function getPartService(partId: string): Promise<PartRecord | null> {
   return findPartById(partId);
+}
+
+/**
+ * Regra crítica, mesmo princípio de `assertServiceIsActive` (Ciclo B):
+ * se um item de orçamento/OS/adicional referencia um `partId`, essa peça
+ * precisa existir e estar ATIVA no momento da criação do item — SEMPRE
+ * validado no servidor, nunca confia que a interface só ofereceu peças
+ * ativas no seletor.
+ */
+export async function assertPartIsActive(partId: string): Promise<PartRecord> {
+  const part = await findPartById(partId);
+  if (!part) throw new PartNotFoundError(partId);
+  if (part.status !== "ATIVO") throw new PartNotActiveError();
+  return part;
 }
 
 export async function listPartsWithStockService(query?: string): Promise<PartWithStock[]> {

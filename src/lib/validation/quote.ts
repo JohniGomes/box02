@@ -17,6 +17,10 @@ export const quoteItemInputSchema = z.object({
   /// preencher description/unitPriceReais no momento da criação; nunca
   /// mais lido depois disso (o item congelado é sempre a fonte).
   serviceId: z.string().trim().optional(),
+  /// Ciclo H — mesma lógica do serviceId, mas para peça do estoque: só
+  /// usado para preencher description/unitPriceReais no momento da
+  /// criação (preço sugerido = custo + markup); nunca revalidado depois.
+  partId: z.string().trim().optional(),
   /// Ciclo C1 — obrigatório. NECESSARIO/RECOMENDADO exigem decisão do
   /// cliente e entram no total; INFORMATIVO nunca exige decisão, nunca
   /// entra no total cobrável (mesmo com valor estimado preenchido).

@@ -44,6 +44,7 @@ import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { generateQuoteNumber } from "./numbering";
 import { generateQuoteAccessToken } from "./token";
 import { assertServiceIsActive } from "@/lib/services/service";
+import { assertPartIsActive } from "@/lib/inventory/service";
 import { getQuoteDefaultValidityDays } from "@/lib/settings/service";
 import { computeQuoteTotals, lineTotalCents, reaisToCents } from "@/lib/money";
 import { quoteInputSchema, type QuoteInput } from "@/lib/validation/quote";
@@ -103,6 +104,14 @@ async function assertServiceIdsActive(serviceIds: (string | undefined)[]): Promi
   }
 }
 
+/** Mesmo princípio de `assertServiceIdsActive`, para partId. */
+async function assertPartIdsActive(partIds: (string | undefined)[]): Promise<void> {
+  const uniqueIds = [...new Set(partIds.filter((id): id is string => Boolean(id)))];
+  for (const id of uniqueIds) {
+    await assertPartIsActive(id);
+  }
+}
+
 async function resolveValidUntil(validUntilIso?: string): Promise<Date> {
   if (validUntilIso) {
     const d = new Date(validUntilIso);
@@ -146,6 +155,7 @@ export async function createQuoteService(
 
   const items = preparedItems(input.items);
   await assertServiceIdsActive(items.map((i) => i.serviceId));
+  await assertPartIdsActive(items.map((i) => i.partId));
   const totals = computeQuoteTotals({
     items: itemsForTotals(items),
     discountType: input.discount?.type ?? null,
@@ -187,6 +197,7 @@ export async function createQuoteService(
         unitPriceCents: item.unitPriceCents,
         totalCents: item.totalCents,
         serviceId: item.serviceId ?? null,
+        partId: item.partId ?? null,
         category: item.category,
       })),
       client,
@@ -229,6 +240,7 @@ export async function updateQuoteVersionService(
 
   const items = preparedItems(input.items);
   await assertServiceIdsActive(items.map((i) => i.serviceId));
+  await assertPartIdsActive(items.map((i) => i.partId));
   const totals = computeQuoteTotals({
     items: itemsForTotals(items),
     discountType: input.discount?.type ?? null,
@@ -249,6 +261,7 @@ export async function updateQuoteVersionService(
         unitPriceCents: item.unitPriceCents,
         totalCents: item.totalCents,
         serviceId: item.serviceId ?? null,
+        partId: item.partId ?? null,
         category: item.category,
       })),
       client,
@@ -371,6 +384,8 @@ export async function createNewQuoteVersionService(
         totalCents: item.totalCents,
         catalogItemType: item.catalogItemType,
         catalogItemId: item.catalogItemId,
+        serviceId: item.serviceId,
+        partId: item.partId,
         category: item.category,
       })),
       client,

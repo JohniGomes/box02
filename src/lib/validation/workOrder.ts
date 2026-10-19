@@ -13,6 +13,7 @@ export const workOrderItemInputSchema = z.object({
   quantity: z.union([z.string(), z.number()]).transform((v) => Number(v)).pipe(z.number().positive()),
   unitPriceReais: z.union([z.string(), z.number()]),
   serviceId: z.string().trim().optional(),
+  partId: z.string().trim().optional(),
 });
 
 /** Check-in — usado tanto na criação a partir de orçamento quanto sem orçamento. */
@@ -138,6 +139,7 @@ export const createAdditionalItemSchema = z.object({
   quantity: z.union([z.string(), z.number()]).transform((v) => Number(v)).pipe(z.number().positive()),
   unitPriceReais: z.union([z.string(), z.number()]),
   serviceId: z.string().trim().optional(),
+  partId: z.string().trim().optional(),
 });
 export type CreateAdditionalItemInput = z.infer<typeof createAdditionalItemSchema>;
 

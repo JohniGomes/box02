@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
+import { PartPickerButton } from "@/components/PartPickerButton";
 import { createWorkOrderWithoutQuoteAction } from "./actions";
 import { searchCustomersForPickerAction } from "../veiculos/actions";
 import { listCustomerVehiclesAction, type VehicleOption } from "../orcamentos/actions";
@@ -23,6 +24,7 @@ interface DraftItem {
   quantity: string;
   unitPriceReais: string;
   serviceId?: string;
+  partId?: string;
 }
 
 function emptyItem(): DraftItem {
@@ -77,6 +79,7 @@ export function NewWorkOrderWithoutQuoteForm() {
           quantity: i.quantity,
           unitPriceReais: i.unitPriceReais,
           serviceId: i.serviceId,
+          partId: i.partId,
         })),
     });
 
@@ -194,15 +197,30 @@ export function NewWorkOrderWithoutQuoteForm() {
                 Remover
               </button>
             </div>
-            <ServicePickerButton
-              onSelect={(service) =>
-                updateItem(item.key, {
-                  serviceId: service.id,
-                  description: service.label,
-                  unitPriceReais: service.suggestedPriceReais ?? "",
-                })
-              }
-            />
+            <div className="flex flex-wrap gap-2">
+              <ServicePickerButton
+                onSelect={(service) =>
+                  updateItem(item.key, {
+                    type: "SERVICO",
+                    serviceId: service.id,
+                    partId: undefined,
+                    description: service.label,
+                    unitPriceReais: service.suggestedPriceReais ?? "",
+                  })
+                }
+              />
+              <PartPickerButton
+                onSelect={(part) =>
+                  updateItem(item.key, {
+                    type: "PECA",
+                    partId: part.id,
+                    serviceId: undefined,
+                    description: part.label,
+                    unitPriceReais: part.suggestedPriceReais ?? "",
+                  })
+                }
+              />
+            </div>
             <input
               value={item.description}
               onChange={(e) => updateItem(item.key, { description: e.target.value })}
