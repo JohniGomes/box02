@@ -101,6 +101,7 @@ model User {
   bankReconciliations           BankReconciliation[]
   appointmentsCreated            Appointment[]
   stockMovementsCreated          StockMovement[]
+  serviceRequestsAttended        ServiceRequest[]
 
   @@map("users")
 }
@@ -1218,4 +1219,34 @@ model StockMovement {
   @@index([partId])
   @@index([createdAt])
   @@map("stock_movements")
+}
+
+enum ServiceRequestStatus {
+  PENDENTE
+  ATENDIDA
+  DESCARTADA
+}
+
+/// Solicitação pública de serviço — o cliente preenche sozinho num
+/// formulário sem login (/solicitar). Não cria Customer/Vehicle/WorkOrder
+/// automaticamente: fica pendente até Carlos/Matheus olharem em
+/// /dashboard/solicitacoes e decidirem (evita duplicar cadastro de
+/// cliente que já existe).
+model ServiceRequest {
+  id                 String               @id @default(cuid())
+  customerName       String
+  customerPhone      String
+  vehicleDescription String?
+  description        String
+  status             ServiceRequestStatus @default(PENDENTE)
+
+  attendedByUserId String?
+  attendedByUser   User?     @relation(fields: [attendedByUserId], references: [id], onDelete: SetNull)
+  attendedAt       DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("service_requests")
 }

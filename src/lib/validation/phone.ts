@@ -32,3 +32,9 @@ export function whatsappLink(digitsOnly: string): string {
   const withCountryCode = d.startsWith("55") ? d : `55${d}`;
   return `https://wa.me/${withCountryCode}`;
 }
+
+/** Mesmo link, mas já com uma mensagem pré-escrita no campo de texto —
+ * quem abre só confere e aperta enviar, não precisa digitar nada. */
+export function whatsappLinkWithMessage(digitsOnly: string, message: string): string {
+  return `${whatsappLink(digitsOnly)}?text=${encodeURIComponent(message)}`;
+}

@@ -78,6 +78,9 @@ describe("informações de recepção (avarias) — livres antes do aceite", () 
     const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
     await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
 
     await expect(
@@ -94,6 +97,9 @@ describe("aceite de recepção — write-once", () => {
     const accepted = await registerWorkOrderReceptionAcceptanceService(secondUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
       receptionAcceptedDocument: "52998224725",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
 
     expect(accepted.receivedByUserId).toBe(secondUserId);
@@ -116,11 +122,17 @@ describe("aceite de recepção — write-once", () => {
     const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
     await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Primeiro Aceite",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
 
     await expect(
       registerWorkOrderReceptionAcceptanceService(secondUserId, os.workOrder.id, {
         receptionAcceptedName: "Segundo Aceite (não deveria substituir)",
+        receptionAwareness1: true,
+        receptionAwareness2: true,
+        receptionAwareness3: true,
       }),
     ).rejects.toThrow(WorkOrderReceptionAlreadyAcceptedError);
 
@@ -143,6 +155,9 @@ describe("congelamento (DEC-7) — queixa e avarias", () => {
 
     const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
     expect(accepted.receptionComplaintSnapshot).toBe("Barulho no motor");
     expect(accepted.receptionDamagesSnapshot).toBe("Amassado no paralama");
@@ -166,6 +181,9 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
 
     const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
 
     expect(accepted.receptionChecklistSnapshot).not.toBeNull();
@@ -187,6 +205,9 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
 
     const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
     expect(accepted.receptionChecklistSnapshot!.items[0].checked).toBe(false);
 
@@ -202,6 +223,9 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
     const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
     const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
     });
     expect(accepted.receptionChecklistSnapshot).toBeNull();
   });
@@ -229,7 +253,12 @@ describe("GATE — transição para EM_EXECUCAO exige aceite (DEC-1)", () => {
 
   it("permite EM_EXECUCAO depois de registrar o aceite", async () => {
     const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
+      receptionAcceptedName: "Cliente Teste",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
+    });
     const updated = await setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_EXECUCAO");
     expect(updated.status).toBe("EM_EXECUCAO");
   });
