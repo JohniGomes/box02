@@ -57,7 +57,12 @@ afterAll(async () => {
 });
 
 async function moveToPronta(workOrderId: string) {
-  await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrderId, { receptionAcceptedName: "Aceite Teste" });
+  await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrderId, {
+    receptionAcceptedName: "Aceite Teste",
+    receptionAwareness1: true,
+    receptionAwareness2: true,
+    receptionAwareness3: true,
+  });
   await setWorkOrderStatusService(actorUserId, workOrderId, "EM_EXECUCAO");
   await setWorkOrderStatusService(actorUserId, workOrderId, "TESTE_FINAL");
   await setWorkOrderStatusService(actorUserId, workOrderId, "PRONTA");
