@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPartAction, updatePartAction, type InventoryActionResult } from "./actions";
-import { calculateSalePriceCents, formatBRL, reaisToCents } from "@/lib/money";
+import { calculateSalePriceCents, centsToReais, formatBRL, markupPercentForPrice, reaisToCents } from "@/lib/money";
 import type { PartFormValues } from "./partFormValues";
 
 const inputClass =
@@ -36,6 +36,54 @@ export function PartForm({
     costCents !== null && markup !== null && Number.isFinite(markup)
       ? calculateSalePriceCents(costCents, markup)
       : null;
+
+  // Preço de venda digitado: é só outra forma de informar o markup. O que é
+  // gravado continua sendo o percentual (o preço nunca é armazenado).
+  const [priceReais, setPriceReais] = useState(() =>
+    suggestedPriceCents !== null ? centsToReais(suggestedPriceCents) : "",
+  );
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  function handlePriceChange(text: string) {
+    setPriceReais(text);
+    setPriceError(null);
+    if (text.trim() === "") {
+      update("markupPercent", "");
+      return;
+    }
+    if (costCents === null || costCents <= 0) {
+      setPriceError("Informe o custo unitário primeiro para calcular o %.");
+      return;
+    }
+    const priceCents = reaisToCents(text);
+    const percent = markupPercentForPrice(costCents, priceCents);
+    if (percent === null || percent < 0) {
+      setPriceError("O preço de venda está abaixo do custo.");
+      return;
+    }
+    update("markupPercent", String(percent));
+  }
+
+  function handleMarkupChange(text: string) {
+    update("markupPercent", text);
+    setPriceError(null);
+    const m = text.trim() !== "" ? Number(text.replace(",", ".")) : null;
+    if (costCents !== null && m !== null && Number.isFinite(m)) {
+      setPriceReais(centsToReais(calculateSalePriceCents(costCents, m)));
+    } else if (text.trim() === "") {
+      setPriceReais("");
+    }
+  }
+
+  function handleCostChange(text: string) {
+    update("costReais", text);
+    setPriceError(null);
+    // Mantém o markup e recalcula o preço sugerido quando o custo muda.
+    const c = text.trim() !== "" ? reaisToCents(text) : null;
+    if (c !== null && markup !== null && Number.isFinite(markup)) {
+      setPriceReais(centsToReais(calculateSalePriceCents(c, markup)));
+    }
+  }
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -104,7 +152,7 @@ export function PartForm({
             id="costReais"
             inputMode="decimal"
             value={values.costReais}
-            onChange={(e) => update("costReais", e.target.value)}
+            onChange={(e) => handleCostChange(e.target.value)}
             className={inputClass}
             placeholder="0,00"
           />
@@ -120,24 +168,45 @@ export function PartForm({
         </Field>
       </div>
 
-      <Field label="Markup — lucro desejado, % (opcional)" htmlFor="markupPercent">
-        <input
-          id="markupPercent"
-          inputMode="decimal"
-          value={values.markupPercent}
-          onChange={(e) => update("markupPercent", e.target.value)}
-          className={inputClass}
-          placeholder="Ex.: 20"
-        />
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">Preço de venda — informe por valor OU por %</span>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Vendo por (R$)" htmlFor="priceReais">
+            <input
+              id="priceReais"
+              inputMode="decimal"
+              value={priceReais}
+              onChange={(e) => handlePriceChange(e.target.value)}
+              className={inputClass}
+              placeholder="Ex.: 520,00"
+            />
+          </Field>
+          <Field label="Markup — lucro, % (opcional)" htmlFor="markupPercent">
+            <input
+              id="markupPercent"
+              inputMode="decimal"
+              value={values.markupPercent}
+              onChange={(e) => handleMarkupChange(e.target.value)}
+              className={inputClass}
+              placeholder="Ex.: 30"
+            />
+          </Field>
+        </div>
+        {priceError ? <p className="text-xs text-danger">{priceError}</p> : null}
         <p className="text-xs text-muted">
-          Sem preencher, usa o markup padrão configurado em Configurações → Precificação.
+          Preencha um e o outro é calculado na hora. Sem preencher nenhum, usa o markup padrão configurado em
+          Configurações → Precificação.
         </p>
-      </Field>
+      </div>
 
-      {suggestedPriceCents !== null ? (
+      {suggestedPriceCents !== null && costCents !== null && costCents > 0 ? (
         <div className="rounded-xl bg-success/10 p-4">
           <p className="text-xs text-muted">Preço de venda sugerido</p>
           <p className="text-xl font-semibold text-success">{formatBRL(suggestedPriceCents)}</p>
+          <p className="mt-1 text-xs text-muted">
+            Custo {formatBRL(costCents)} · lucro {formatBRL(suggestedPriceCents - costCents)} (
+            {String(markup).replace(".", ",")}%)
+          </p>
         </div>
       ) : null}
 

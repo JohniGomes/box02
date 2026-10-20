@@ -42,6 +42,24 @@ export function calculateSalePriceCents(costCents: number, markupPercent: number
 }
 
 /**
+ * Caminho inverso de `calculateSalePriceCents`: dado o custo e o preço de
+ * venda que se quer praticar, devolve o markup (%) que reproduz EXATAMENTE
+ * esse preço. Usa o menor número de casas decimais que fecha o centavo, para
+ * o percentual ficar legível (ex.: 30, 33.33) sem mudar o preço digitado.
+ * Ex.: custo 40000, preço 52000 -> 30. Sem custo válido -> null.
+ */
+export function markupPercentForPrice(costCents: number, priceCents: number): number | null {
+  if (!Number.isFinite(costCents) || costCents <= 0) return null;
+  if (!Number.isFinite(priceCents) || priceCents < 0) return null;
+  const exact = (priceCents / costCents - 1) * 100;
+  for (let decimals = 2; decimals <= 8; decimals++) {
+    const candidate = Number(exact.toFixed(decimals));
+    if (calculateSalePriceCents(costCents, candidate) === priceCents) return candidate;
+  }
+  return Number(exact.toFixed(8));
+}
+
+/**
  * Total de uma linha: quantidade (pode ter casas decimais, ex.: 1,5 hora de
  * mão de obra) × preço unitário em centavos, arredondado ao centavo mais
  * próximo — nunca trunca silenciosamente.
