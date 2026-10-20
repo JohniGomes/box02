@@ -13,6 +13,7 @@ import { formatBRL } from "@/lib/money";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
+import { defaultExecutorOptionId } from "@/lib/executors/value";
 import { WorkOrderItemExecutorInfo, type ActiveUserOption } from "./WorkOrderActions";
 
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
@@ -31,6 +32,7 @@ export interface AdditionalItemView {
   customerPhone: string | null;
   /** Ciclo L */
   executedByUserId: string | null;
+  executedByName?: string | null;
 }
 
 const DECISION_LABEL: Record<string, string> = { PENDENTE: "Aguardando decisão", APROVADO: "Aprovado", RECUSADO: "Recusado" };
@@ -261,6 +263,7 @@ function AdditionalItemCard({
           workOrderId={workOrderId}
           itemId={item.id}
           executedByUserId={item.executedByUserId}
+          executedByName={item.executedByName}
           users={users}
           canManage={canManage}
         />
@@ -515,14 +518,14 @@ function ExecuteOrCancelButtons({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [executorId, setExecutorId] = useState(currentUserId);
+  const [executorId, setExecutorId] = useState(defaultExecutorOptionId(users, currentUserId));
   const [error, setError] = useState<string | null>(null);
 
   function markExecuted() {
     setError(null);
     startTransition(async () => {
       const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "EXECUTADO", {
-        executedByUserId: executorId,
+        executedBy: executorId,
       });
       if (!result.success) {
         setError(result.error ?? "Falha.");

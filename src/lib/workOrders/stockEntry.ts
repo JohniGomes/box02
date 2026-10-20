@@ -5,6 +5,7 @@ import { findPartById, getPartCurrentStock, updatePart } from "@/lib/db/reposito
 import { createStockMovement } from "@/lib/db/repositories/stockMovements";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { centsToReais, reaisToCents } from "@/lib/money";
+import { parseExecutorValue } from "@/lib/executors/value";
 import { setWorkOrderItemStatusService } from "./service";
 import {
   InvalidWorkOrderItemTransitionError,
@@ -63,7 +64,8 @@ export async function getItemStockEntryDefaultsService(
 }
 
 const entryInputSchema = z.object({
-  executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
+  /** Valor do seletor de executor (executor da lista ou usuário). */
+  executedBy: z.string().trim().min(1, "Selecione quem executou"),
   entryQuantity: z
     .union([z.string(), z.number()])
     .transform((v) => (typeof v === "string" ? Number(v.replace(",", ".")) : v))
@@ -112,7 +114,11 @@ export async function executeItemWithStockEntryService(
     metadata: { workOrderId, partId: part.id, entryQuantity: input.entryQuantity, costUpdated },
   });
 
-  return setWorkOrderItemStatusService(actorUserId, workOrderId, itemId, "EXECUTADO", {
-    executedByUserId: input.executedByUserId,
-  });
+  return setWorkOrderItemStatusService(
+    actorUserId,
+    workOrderId,
+    itemId,
+    "EXECUTADO",
+    parseExecutorValue(input.executedBy),
+  );
 }

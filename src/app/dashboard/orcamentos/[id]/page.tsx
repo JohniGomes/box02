@@ -13,7 +13,7 @@ import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { computeQuoteTotals, formatBRL } from "@/lib/money";
 import { auth } from "@/auth";
-import { listActiveUsers } from "@/lib/db/repositories/users";
+import { listExecutorOptionsService } from "@/lib/executors/service";
 import { RegisterCompletedServiceForm } from "./RegisterCompletedServiceForm";
 import { formatPlate } from "@/lib/validation/plate";
 import { QUOTE_STATUS_CLASS, QUOTE_STATUS_LABEL } from "../statusLabels";
@@ -79,7 +79,7 @@ export default async function QuoteDetailPage({
     surchargeValue: version.surchargeValue,
   });
   const [executors, session] = canRegisterCompleted
-    ? await Promise.all([listActiveUsers(), auth()])
+    ? await Promise.all([listExecutorOptionsService(), auth()])
     : [[], null];
 
   return (

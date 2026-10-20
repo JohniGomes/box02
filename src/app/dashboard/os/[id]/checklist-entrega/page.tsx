@@ -26,8 +26,14 @@ export default async function ChecklistEntregaPage({
   const executorIds = Array.from(
     new Set(items.map((i) => i.executedByUserId).filter((v): v is string => Boolean(v))),
   );
-  const executors = await Promise.all(executorIds.map((uid) => findUserById(uid)));
-  const executorNames = executors.filter(Boolean).map((u) => u!.name);
+  const executorUsers = await Promise.all(executorIds.map((uid) => findUserById(uid)));
+  // Nomes da lista de executores (copiados no item) + nomes de usuários (itens antigos).
+  const executorNames = Array.from(
+    new Set([
+      ...items.map((i) => i.executedByName).filter((v): v is string => Boolean(v)),
+      ...executorUsers.filter(Boolean).map((u) => u!.name),
+    ]),
+  );
 
   const pendingRequired = entrega ? entrega.items.filter((i) => i.required && !i.checked).length : 0;
   const locked = Boolean(entrega?.checklist.completedAt);

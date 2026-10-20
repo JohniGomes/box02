@@ -6,6 +6,8 @@ import { findQuoteVersionByNumber } from "@/lib/db/repositories/quoteVersions";
 import { listQuoteItemsByVersion } from "@/lib/db/repositories/quoteItems";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findUserById } from "@/lib/db/repositories/users";
+import { findExecutorById } from "@/lib/db/repositories/executors";
+import { parseExecutorValue } from "@/lib/executors/value";
 import { findPartById, getPartCurrentStock } from "@/lib/db/repositories/parts";
 import { findWorkOrderById, setWorkOrderStatus, type WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 import { workOrderCheckInSchema } from "@/lib/validation/workOrder";
@@ -44,7 +46,8 @@ export const registerCompletedServiceSchema = z.object({
   /** Opcional — serviço antigo muitas vezes não tem o km anotado. */
   mileageAtEntry: workOrderCheckInSchema.shape.mileageAtEntry,
   customerComplaint: optionalText,
-  executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
+  /** Valor do seletor de executor (executor da lista ou usuário). */
+  executedBy: z.string().trim().min(1, "Selecione quem executou"),
   deliveryAcceptedName: z.string().trim().min(2, "Informe quem retirou o veículo"),
   payments: z
     .array(
@@ -119,8 +122,16 @@ export async function registerCompletedServiceFromQuoteService(
   let version = await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber);
   if (!version) throw new QuoteNotFoundError(quoteId);
 
-  const executor = await findUserById(input.executedByUserId);
-  if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
+  // Quem executou: nome da lista de executores OU usuário ativo (validado antes
+  // de criar qualquer coisa).
+  const executorChoice = parseExecutorValue(input.executedBy);
+  if (executorChoice.executorId) {
+    const executor = await findExecutorById(executorChoice.executorId);
+    if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
+  } else {
+    const executor = await findUserById(executorChoice.executedByUserId ?? "");
+    if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
+  }
 
   // Se a OS deste orçamento já foi criada (ex.: pelo botão "Criar OS a partir
   // deste orçamento"), continua dela em vez de criar outra. Procura em
@@ -272,9 +283,7 @@ export async function registerCompletedServiceFromQuoteService(
     step = "execução dos itens";
     const woItems = await listWorkOrderItemsByWorkOrder(workOrder.id);
     for (const item of woItems.filter((i) => i.status === "PLANEJADO")) {
-      await setWorkOrderItemStatusService(actorUserId, workOrder.id, item.id, "EXECUTADO", {
-        executedByUserId: input.executedByUserId,
-      });
+      await setWorkOrderItemStatusService(actorUserId, workOrder.id, item.id, "EXECUTADO", executorChoice);
     }
 
     step = "entrega da OS";

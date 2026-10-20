@@ -30,6 +30,7 @@ import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { InsufficientStockError, PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
+import { parseExecutorValue } from "@/lib/executors/value";
 import {
   executeItemWithStockEntryService,
   getItemStockEntryDefaultsService,
@@ -136,15 +137,16 @@ export async function setWorkOrderItemStatusAction(
   workOrderId: string,
   itemId: string,
   status: "EXECUTADO" | "CANCELADO",
-  extra?: { cancelReason?: string; executedByUserId?: string },
+  /** `executedBy` = valor escolhido no seletor (executor da lista ou usuário). */
+  extra?: { cancelReason?: string; executedBy?: string },
 ): Promise<ActionResult> {
   try {
     const userId = await requireUserId();
     const rawInput =
       status === "CANCELADO"
         ? { reason: extra?.cancelReason }
-        : extra?.executedByUserId
-          ? { executedByUserId: extra.executedByUserId }
+        : extra?.executedBy
+          ? parseExecutorValue(extra.executedBy)
           : undefined;
     await setWorkOrderItemStatusService(userId, workOrderId, itemId, status, rawInput);
     revalidatePath(`/dashboard/os/${workOrderId}`);
@@ -161,11 +163,11 @@ export async function setWorkOrderItemStatusAction(
 export async function correctWorkOrderItemExecutorAction(
   workOrderId: string,
   itemId: string,
-  executedByUserId: string,
+  executedBy: string,
 ): Promise<ActionResult> {
   try {
     const userId = await requireUserId();
-    await correctWorkOrderItemExecutorService(userId, workOrderId, itemId, { executedByUserId });
+    await correctWorkOrderItemExecutorService(userId, workOrderId, itemId, parseExecutorValue(executedBy));
     revalidatePath(`/dashboard/os/${workOrderId}`);
     return { success: true, workOrderId };
   } catch (err) {
@@ -216,7 +218,7 @@ export async function getItemStockEntryDefaultsAction(
 export async function executeItemWithStockEntryAction(
   workOrderId: string,
   itemId: string,
-  input: { executedByUserId: string; entryQuantity: string; unitCostReais?: string },
+  input: { executedBy: string; entryQuantity: string; unitCostReais?: string },
 ): Promise<ActionResult> {
   try {
     const userId = await requireUserId();

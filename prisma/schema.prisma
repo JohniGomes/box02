@@ -707,6 +707,10 @@ model WorkOrderItem {
   partId String?
   part   Part?   @relation(fields: [partId], references: [id], onDelete: SetNull)
 
+  /// Nome de quem executou, quando escolhido na lista de executores
+  /// (executors). Itens antigos usam executedByUserId.
+  executedByName String?
+
   cancelReason String?
 
   createdAt DateTime @default(now())
@@ -1181,6 +1185,17 @@ model Appointment {
 enum PartStatus {
   ATIVO
   INATIVO
+}
+
+/// Lista simples de quem executa os serviços (sem login). O nome escolhido é
+/// copiado para work_order_items.executedByName.
+model Executor {
+  id        String   @id @default(cuid())
+  name      String
+  status    String   @default("ATIVO") // ATIVO | INATIVO
+  createdAt DateTime @default(now())
+
+  @@map("executors")
 }
 
 /// Catálogo de peças/insumos — decisão explícita (ver migração 0021):

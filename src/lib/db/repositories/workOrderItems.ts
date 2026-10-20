@@ -23,6 +23,8 @@ export interface WorkOrderItemRecord {
   status: WorkOrderItemStatus;
   executedAt: Date | null;
   executedByUserId: string | null;
+  /** Nome de quem executou, quando escolhido na lista de executores. */
+  executedByName: string | null;
   clientAuthorizedBy: string | null;
   clientAuthorizedAt: Date | null;
   authorizationChannel: WorkOrderAuthorizationChannel | null;
@@ -45,7 +47,7 @@ export interface WorkOrderItemRecord {
 
 const COLUMNS = `
   id, "workOrderId", type, description, quantity, "unitPriceCents", "totalCents",
-  origin, "sourceQuoteItemId", status, "executedAt", "executedByUserId",
+  origin, "sourceQuoteItemId", status, "executedAt", "executedByUserId", "executedByName",
   "clientAuthorizedBy", "clientAuthorizedAt", "authorizationChannel", "authorizationNotes", "authorizationIpAddress",
   "clientDecision", "createdByUserId", "accessToken", "accessTokenExpiresAt", "accessTokenRevokedAt",
   "supersedesItemId", "catalogItemType", "catalogItemId", "serviceId", "partId", "cancelReason", "createdAt", "updatedAt"
@@ -156,19 +158,35 @@ export async function findWorkOrderItemByAccessToken(
 export async function setWorkOrderItemStatus(
   id: string,
   status: WorkOrderItemStatus,
-  extra: { executedAt?: Date; executedByUserId?: string; cancelReason?: string } = {},
+  extra: {
+    executedAt?: Date;
+    executedByUserId?: string;
+    /** `undefined` = não mexe; `null` = limpa; texto = grava o nome do executor. */
+    executedByName?: string | null;
+    cancelReason?: string;
+  } = {},
   db: Queryable = pool,
 ): Promise<WorkOrderItemRecord | null> {
+  const touchName = extra.executedByName !== undefined;
   const result = await db.query<WorkOrderItemRecord>(
     `UPDATE work_order_items SET
       status = $2,
       "executedAt" = COALESCE($3, "executedAt"),
       "executedByUserId" = COALESCE($4, "executedByUserId"),
+      "executedByName" = CASE WHEN $6::boolean THEN $7 ELSE "executedByName" END,
       "cancelReason" = COALESCE($5, "cancelReason"),
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
-    [id, status, extra.executedAt ?? null, extra.executedByUserId ?? null, extra.cancelReason ?? null],
+    [
+      id,
+      status,
+      extra.executedAt ?? null,
+      extra.executedByUserId ?? null,
+      extra.cancelReason ?? null,
+      touchName,
+      extra.executedByName ?? null,
+    ],
   );
   return result.rows[0] ?? null;
 }

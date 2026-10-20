@@ -113,7 +113,8 @@ import { findWorkOrderChecklist, listWorkOrderChecklistItems } from "@/lib/db/re
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
 import { findUserById } from "@/lib/db/repositories/users";
-import { isReceptionRequiredForExecution } from "@/lib/settings/service";
+import { findExecutorById } from "@/lib/db/repositories/executors";
+import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
 
 /** Máquina de estados da OS — qualquer par fora daqui é rejeitado. */
 const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
@@ -428,6 +429,7 @@ export async function setWorkOrderItemStatusService(
 
   let cancelReason: string | undefined;
   let executedByUserId: string | undefined;
+  let executedByName: string | null | undefined;
   if (status === "CANCELADO") {
     cancelReason = cancelWorkOrderItemSchema.parse(rawInput).reason;
   }
@@ -435,13 +437,12 @@ export async function setWorkOrderItemStatusService(
     // Ciclo L: executor é sempre explícito. Quando a chamada não informa
     // rawInput (ex.: chamadas programáticas/testes existentes), assume o
     // próprio ator por compatibilidade — mas a UI sempre envia o valor
-    // escolhido no seletor, nunca deixa implícito.
+    // escolhido no seletor, nunca deixa implícito. O executor pode ser um
+    // usuário ou um nome da lista de executores (sem login).
     const parsed = rawInput !== undefined ? executeWorkOrderItemSchema.parse(rawInput) : null;
-    executedByUserId = parsed?.executedByUserId ?? actorUserId;
-    const executor = await findUserById(executedByUserId);
-    if (!executor || executor.status !== "ATIVO") {
-      throw new InvalidExecutorUserError();
-    }
+    const resolved = await resolveExecutorInput(parsed ?? { executedByUserId: actorUserId });
+    executedByUserId = resolved.executedByUserId;
+    executedByName = resolved.executedByName;
   }
 
   // Correção de concorrência (Sub-etapa 2, risco já identificado na
@@ -469,6 +470,7 @@ export async function setWorkOrderItemStatusService(
       {
         executedAt: status === "EXECUTADO" ? new Date() : undefined,
         executedByUserId,
+        executedByName,
         cancelReason,
       },
       client,
@@ -507,11 +509,27 @@ export async function setWorkOrderItemStatusService(
       action: "WORK_ORDER_ITEM_STATUS_CHANGED",
       entityType: "work_order_item",
       entityId: itemId,
-      metadata: { workOrderId, to: status, cancelReason, executedByUserId },
+      metadata: { workOrderId, to: status, cancelReason, executedByUserId, executedByName },
     });
 
     return updated;
   });
+}
+
+/** Resolve "quem executou": um usuário ativo OU um nome da lista de
+ * executores (ativo). Sempre validado no servidor. */
+async function resolveExecutorInput(input: {
+  executedByUserId?: string;
+  executorId?: string;
+}): Promise<{ executedByUserId?: string; executedByName: string | null }> {
+  if (input.executorId) {
+    const executor = await findExecutorById(input.executorId);
+    if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
+    return { executedByName: executor.name };
+  }
+  const user = await findUserById(input.executedByUserId ?? "");
+  if (!user || user.status !== "ATIVO") throw new InvalidExecutorUserError();
+  return { executedByUserId: user.id, executedByName: null };
 }
 
 /** Ciclo L — corrige quem executou um item já EXECUTADO (campo editável,
@@ -524,7 +542,7 @@ export async function correctWorkOrderItemExecutorService(
   itemId: string,
   rawInput: unknown,
 ): Promise<WorkOrderItemRecord> {
-  const { executedByUserId: newExecutedByUserId } = correctWorkOrderItemExecutorSchema.parse(rawInput);
+  const parsedInput = correctWorkOrderItemExecutorSchema.parse(rawInput);
 
   const workOrder = await findWorkOrderById(workOrderId);
   if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
@@ -534,10 +552,8 @@ export async function correctWorkOrderItemExecutorService(
     );
   }
 
-  const executor = await findUserById(newExecutedByUserId);
-  if (!executor || executor.status !== "ATIVO") {
-    throw new InvalidExecutorUserError();
-  }
+  const resolved = await resolveExecutorInput(parsedInput);
+  const newExecutedByUserId = resolved.executedByUserId;
 
   return withTransaction(async (client) => {
     const item = await lockWorkOrderItemById(itemId, client);
@@ -549,10 +565,11 @@ export async function correctWorkOrderItemExecutorService(
     }
 
     const previousExecutedByUserId = item.executedByUserId;
+    const previousExecutedByName = item.executedByName;
     const updated = await setWorkOrderItemStatus(
       itemId,
       "EXECUTADO",
-      { executedByUserId: newExecutedByUserId },
+      { executedByUserId: newExecutedByUserId, executedByName: resolved.executedByName },
       client,
     );
     if (!updated) throw new WorkOrderItemNotFoundError(itemId);
@@ -562,7 +579,11 @@ export async function correctWorkOrderItemExecutorService(
       action: "WORK_ORDER_ITEM_EXECUTOR_CORRECTED",
       entityType: "work_order_item",
       entityId: itemId,
-      metadata: { workOrderId, from: previousExecutedByUserId, to: newExecutedByUserId },
+      metadata: {
+        workOrderId,
+        from: previousExecutedByName ?? previousExecutedByUserId,
+        to: resolved.executedByName ?? newExecutedByUserId,
+      },
     });
 
     return updated;
@@ -596,12 +617,18 @@ export async function closeWorkOrderService(
     // Ausência de instância (checklist não configurado ou nunca iniciado
     // nesta OS) NUNCA bloqueia — só o item pendente numa instância que
     // de fato existe.
+    // A trava pode ser desligada em Configurações → Regras (padrão: ligada).
+    // Desligada, a OS é entregue e a pendência fica visível no Início e na auditoria.
+    let deliveryChecklistPending = 0;
     const entregaChecklist = await findWorkOrderChecklist({ workOrderId, type: "ENTREGA" }, client);
     if (entregaChecklist) {
       const entregaItems = await listWorkOrderChecklistItems(entregaChecklist.id, client);
       const pending = entregaItems.filter((i) => i.required && !i.checked);
       if (pending.length > 0) {
-        throw new WorkOrderDeliveryChecklistPendingError(pending.map((i) => i.description));
+        if (await isDeliveryChecklistRequired()) {
+          throw new WorkOrderDeliveryChecklistPendingError(pending.map((i) => i.description));
+        }
+        deliveryChecklistPending = pending.length;
       }
     }
 
@@ -638,7 +665,10 @@ export async function closeWorkOrderService(
       action: "WORK_ORDER_CLOSED",
       entityType: "work_order",
       entityId: workOrderId,
-      metadata: { totalCents: totals.totalCents },
+      metadata: {
+        totalCents: totals.totalCents,
+        ...(deliveryChecklistPending > 0 ? { deliveryChecklistPending } : {}),
+      },
     });
 
     return updated;
