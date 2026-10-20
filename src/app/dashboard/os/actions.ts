@@ -11,6 +11,7 @@ import {
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
   openWorkOrderReturnService,
+  reactivateWorkOrderService,
   authorizeAdditionalItemDirectlyService,
   adjustAdditionalItemService,
   generateAdditionalItemLinkService,
@@ -26,6 +27,7 @@ import {
   InvalidWorkOrderTransitionError,
   QuoteNotApprovedError,
   WorkOrderReturnNotDeliveredError,
+  WorkOrderNotCancelledError,
   WorkOrderHasPendingItemsError,
 } from "@/lib/workOrders/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
@@ -78,6 +80,7 @@ function friendlyError(err: unknown, fallback: string): ActionResult {
   if (
     err instanceof QuoteNotApprovedError ||
     err instanceof WorkOrderReturnNotDeliveredError ||
+    err instanceof WorkOrderNotCancelledError ||
     err instanceof InvalidWorkOrderTransitionError ||
     err instanceof InvalidWorkOrderItemTransitionError ||
     err instanceof WorkOrderHasPendingItemsError ||
@@ -212,6 +215,19 @@ export async function cancelWorkOrderAction(workOrderId: string, reason: string)
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível cancelar a OS.");
+  }
+}
+
+export async function reactivateWorkOrderAction(workOrderId: string, reason: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await reactivateWorkOrderService(userId, workOrderId, { reason });
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/os");
+    revalidatePath("/dashboard");
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível reativar a OS.");
   }
 }
 

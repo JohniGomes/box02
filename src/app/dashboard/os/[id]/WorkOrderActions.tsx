@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   cancelWorkOrderAction,
+  reactivateWorkOrderAction,
   closeWorkOrderAction,
   correctWorkOrderItemExecutorAction,
   executeItemWithStockEntryAction,
@@ -523,6 +524,60 @@ export function CancelWorkOrderForm({ workOrderId }: { workOrderId: string }) {
           className="h-10 flex-1 rounded-lg bg-danger text-sm font-semibold text-white disabled:opacity-50"
         >
           Confirmar
+        </button>
+        <button onClick={() => setOpen(false)} className="h-10 flex-1 rounded-lg border border-border text-sm">
+          Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Desfaz um cancelamento feito por engano (volta ao status anterior). */
+export function ReactivateWorkOrderForm({ workOrderId }: { workOrderId: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleReactivate() {
+    setError(null);
+    startTransition(async () => {
+      const result = await reactivateWorkOrderAction(workOrderId, reason);
+      if (!result.success) {
+        setError(result.error ?? "Falha ao reativar.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="h-11 rounded-xl border border-border text-sm font-medium">
+        Reativar OS (cancelada por engano)
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4">
+      <p className="text-xs text-muted">A OS volta para o status em que estava antes de ser cancelada.</p>
+      <input
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Motivo da reativação"
+        className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
+      />
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      <div className="flex gap-2">
+        <button
+          onClick={handleReactivate}
+          disabled={isPending || reason.trim().length < 3}
+          className="h-10 flex-1 rounded-lg bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
+        >
+          {isPending ? "Reativando…" : "Confirmar"}
         </button>
         <button onClick={() => setOpen(false)} className="h-10 flex-1 rounded-lg border border-border text-sm">
           Voltar

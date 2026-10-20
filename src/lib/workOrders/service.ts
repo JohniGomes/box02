@@ -4,6 +4,7 @@ import {
   createWorkOrder,
   findWorkOrderById,
   listReturnsOfWorkOrder,
+  reactivateCancelledWorkOrder,
   lockWorkOrderById,
   registerWorkOrderReceptionAcceptance,
   searchWorkOrders,
@@ -73,6 +74,7 @@ import {
   authorizeAdditionalItemDirectlySchema,
   cancelWorkOrderItemSchema,
   cancelWorkOrderSchema,
+  reactivateWorkOrderSchema,
   correctWorkOrderItemExecutorSchema,
   createAdditionalItemSchema,
   createWorkOrderEvidenceMetadataSchema,
@@ -111,10 +113,12 @@ import {
   WorkOrderReceptionAlreadyAcceptedError,
   WorkOrderReceptionNotAcceptedError,
   WorkOrderReturnNotDeliveredError,
+  WorkOrderNotCancelledError,
 } from "./errors";
 import { findWorkOrderChecklist, listWorkOrderChecklistItems } from "@/lib/db/repositories/workOrderChecklists";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
+import { findLastStatusChangeTarget } from "@/lib/db/repositories/auditLog";
 import { findUserById } from "@/lib/db/repositories/users";
 import { findExecutorById } from "@/lib/db/repositories/executors";
 import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
@@ -462,9 +466,52 @@ export async function cancelWorkOrderService(
     action: "WORK_ORDER_CANCELLED",
     entityType: "work_order",
     entityId: workOrderId,
-    metadata: { reason: input.reason },
+    metadata: { reason: input.reason, previousStatus: existing.status },
   });
 
+  return updated;
+}
+
+const REACTIVATABLE_STATUSES: WorkOrderStatus[] = [
+  "ABERTA",
+  "EM_DIAGNOSTICO",
+  "EM_EXECUCAO",
+  "AGUARDANDO_PECA",
+  "TESTE_FINAL",
+  "PRONTA",
+];
+
+/**
+ * Desfaz um cancelamento feito por engano. A OS volta para o status em que
+ * estava antes de ser cancelada (guardado no cancelamento; para cancelamentos
+ * antigos, o último status do histórico; sem nada disso, "Aberta"). Exige
+ * motivo e fica registrado quem reativou e o motivo do cancelamento anterior.
+ */
+export async function reactivateWorkOrderService(
+  actorUserId: string,
+  workOrderId: string,
+  rawInput: unknown,
+): Promise<WorkOrderRecord> {
+  const input = reactivateWorkOrderSchema.parse(rawInput);
+  const existing = await findWorkOrderById(workOrderId);
+  if (!existing) throw new WorkOrderNotFoundError(workOrderId);
+  if (existing.status !== "CANCELADA") throw new WorkOrderNotCancelledError();
+
+  const lastStatus = await findLastStatusChangeTarget(workOrderId);
+  const previous = (
+    lastStatus && (REACTIVATABLE_STATUSES as string[]).includes(lastStatus) ? lastStatus : "ABERTA"
+  ) as WorkOrderStatus;
+
+  const updated = await reactivateCancelledWorkOrder(workOrderId, previous);
+  if (!updated) throw new WorkOrderNotCancelledError();
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_REACTIVATED",
+    entityType: "work_order",
+    entityId: workOrderId,
+    metadata: { reason: input.reason, restoredStatus: previous, previousCancelReason: existing.cancelReason },
+  });
   return updated;
 }
 

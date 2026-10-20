@@ -115,6 +115,10 @@ export const cancelWorkOrderSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo do cancelamento"),
 });
 
+export const reactivateWorkOrderSchema = z.object({
+  reason: z.string().trim().min(3, "Informe o motivo da reativação"),
+});
+
 export const cancelWorkOrderItemSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo do cancelamento"),
 });
