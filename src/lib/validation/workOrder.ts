@@ -234,6 +234,21 @@ export const registerWorkOrderPaymentSchema = z.object({
 });
 export type RegisterWorkOrderPaymentInput = z.infer<typeof registerWorkOrderPaymentSchema>;
 
+/** Vários recebimentos de uma vez (ex.: parte no Pix, parte no cartão). */
+export const registerWorkOrderPaymentsSchema = z.object({
+  payments: z
+    .array(
+      z.object({
+        amountReais: z.union([z.string(), z.number()]),
+        method: z.enum(["DINHEIRO", "PIX", "CARTAO", "OUTRO"], { message: "Selecione a forma de pagamento" }),
+      }),
+    )
+    .min(1, "Informe pelo menos um pagamento"),
+  notes: optionalTrimmed,
+  receivedOn: registerWorkOrderPaymentSchema.shape.receivedOn,
+});
+export type RegisterWorkOrderPaymentsInput = z.infer<typeof registerWorkOrderPaymentsSchema>;
+
 // ============================================================
 // Ciclo M — Estorno de recebimento (DEC-I6 revisitada)
 // ============================================================

@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatBRL } from "@/lib/money";
-import { refundWorkOrderPaymentAction, registerWorkOrderPaymentAction } from "../paymentActions";
+import { formatBRL, reaisToCents } from "@/lib/money";
+import { refundWorkOrderPaymentAction, registerWorkOrderPaymentsAction } from "../paymentActions";
 
 const METHOD_LABEL: Record<string, string> = {
   DINHEIRO: "Dinheiro",
@@ -67,8 +67,8 @@ export function WorkOrderPaymentsSection({
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
-  const [amountReais, setAmountReais] = useState("");
-  const [method, setMethod] = useState("DINHEIRO");
+  // Uma ou mais formas de pagamento no mesmo lançamento (ex.: Pix + cartão).
+  const [rows, setRows] = useState([{ key: "p1", method: "DINHEIRO", amount: "" }]);
   const [notes, setNotes] = useState("");
   // Data do recebimento: padrão hoje (horário de Brasília); pode ser um dia
   // anterior para lançar um pagamento que já aconteceu.
@@ -77,12 +77,16 @@ export function WorkOrderPaymentsSection({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const enteredCents = rows.reduce((sum, r) => sum + reaisToCents(r.amount || "0"), 0);
+  const leftCents = summary.remainingCents - enteredCents;
+
   function handleRegister() {
     setError(null);
     startTransition(async () => {
-      const result = await registerWorkOrderPaymentAction(workOrderId, {
-        amountReais,
-        method,
+      const result = await registerWorkOrderPaymentsAction(workOrderId, {
+        payments: rows
+          .filter((r) => reaisToCents(r.amount || "0") > 0)
+          .map((r) => ({ amountReais: r.amount, method: r.method })),
         notes: notes || undefined,
         // Só envia quando é um dia anterior; hoje continua sendo "agora".
         receivedOn: receivedOn && receivedOn !== today ? receivedOn : undefined,
@@ -91,7 +95,7 @@ export function WorkOrderPaymentsSection({
         setError(result.error ?? "Falha ao registrar recebimento.");
         return;
       }
-      setAmountReais("");
+      setRows([{ key: "p1", method: "DINHEIRO", amount: "" }]);
       setNotes("");
       setReceivedOn(today);
       setShowForm(false);
@@ -176,18 +180,76 @@ export function WorkOrderPaymentsSection({
           </button>
         ) : (
           <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3">
-            <input
-              value={amountReais}
-              onChange={(e) => setAmountReais(e.target.value)}
-              inputMode="decimal"
-              placeholder={`Valor — saldo restante ${formatBRL(summary.remainingCents)}`}
-              className={inputClass}
-            />
-            <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputClass}>
-              {Object.entries(METHOD_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
+            {rows.map((row) => (
+              <div key={row.key} className="flex gap-2">
+                <select
+                  value={row.method}
+                  onChange={(e) =>
+                    setRows((prev) => prev.map((r) => (r.key === row.key ? { ...r, method: e.target.value } : r)))
+                  }
+                  className={`${inputClass} w-36`}
+                >
+                  {Object.entries(METHOD_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <input
+                  value={row.amount}
+                  onChange={(e) =>
+                    setRows((prev) => prev.map((r) => (r.key === row.key ? { ...r, amount: e.target.value } : r)))
+                  }
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  className={`${inputClass} min-w-0 flex-1`}
+                />
+                {rows.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                    className="px-2 text-xs font-medium text-danger"
+                  >
+                    Remover
+                  </button>
+                ) : null}
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setRows((prev) => [
+                    ...prev,
+                    {
+                      key: `p${prev.length + 1}-${Date.now()}`,
+                      method: "PIX",
+                      amount: leftCents > 0 ? (leftCents / 100).toFixed(2).replace(".", ",") : "",
+                    },
+                  ])
+                }
+                className="h-10 flex-1 rounded-xl border border-dashed border-border text-sm font-medium text-muted"
+              >
+                + Outra forma de pagamento
+              </button>
+              {enteredCents === 0 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setRows((prev) =>
+                      prev.map((r, idx) =>
+                        idx === 0 ? { ...r, amount: (summary.remainingCents / 100).toFixed(2).replace(".", ",") } : r,
+                      ),
+                    )
+                  }
+                  className="h-10 rounded-xl border border-border px-3 text-sm font-medium"
+                >
+                  Pagar o saldo todo
+                </button>
+              ) : null}
+            </div>
+            <p className={`text-xs ${leftCents < 0 ? "text-danger" : "text-muted"}`}>
+              Saldo da OS {formatBRL(summary.remainingCents)} · Lançando {formatBRL(enteredCents)} ·{" "}
+              {leftCents < 0 ? `Passou ${formatBRL(-leftCents)}` : `Ficará ${formatBRL(leftCents)} em aberto`}
+            </p>
             <label className="text-xs text-muted" htmlFor="receivedOn">
               Data do recebimento
             </label>
@@ -209,7 +271,7 @@ export function WorkOrderPaymentsSection({
             <div className="flex gap-2">
               <button
                 onClick={handleRegister}
-                disabled={isPending || !amountReais.trim()}
+                disabled={isPending || enteredCents <= 0 || leftCents < 0}
                 className="h-11 flex-1 rounded-xl bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
               >
                 {isPending ? "Registrando…" : "Confirmar"}
