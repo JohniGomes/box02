@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getActiveQuoteLinkService, getQuoteApprovalService, getQuoteService } from "@/lib/quotes/service";
+import {
+  getActiveQuoteLinkService,
+  getQuoteApprovalService,
+  getQuoteService,
+  getRestorableVersion,
+  listQuoteWorkOrdersService,
+} from "@/lib/quotes/service";
+import { WORK_ORDER_STATUS_LABEL } from "../../os/statusLabels";
+import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { computeQuoteTotals, formatBRL } from "@/lib/money";
@@ -9,7 +17,14 @@ import { listActiveUsers } from "@/lib/db/repositories/users";
 import { RegisterCompletedServiceForm } from "./RegisterCompletedServiceForm";
 import { formatPlate } from "@/lib/validation/plate";
 import { QUOTE_STATUS_CLASS, QUOTE_STATUS_LABEL } from "../statusLabels";
-import { CancelQuoteButton, DeleteQuoteButton, NewVersionButton, SendQuoteButton } from "./QuoteActions";
+import {
+  CancelQuoteButton,
+  DeleteQuoteButton,
+  DiscardVersionButton,
+  NewVersionButton,
+  RestoreVersionButton,
+  SendQuoteButton,
+} from "./QuoteActions";
 import { ConvertQuoteToWorkOrderForm } from "./ConvertQuoteToWorkOrderForm";
 import { RegisterApprovalForm } from "./RegisterApprovalForm";
 import { CopyLinkButton } from "./CopyLinkButton";
@@ -31,12 +46,16 @@ export default async function QuoteDetailPage({
   if (!data) notFound();
 
   const { quote, version, items, allVersions } = data;
-  const [customer, vehicle, activeLink, approval] = await Promise.all([
+  const [customer, vehicle, activeLink, approval, workOrders] = await Promise.all([
     getCustomerService(quote.customerId),
     getVehicleService(quote.vehicleId),
     getActiveQuoteLinkService(version.id),
     getQuoteApprovalService(version.id),
+    listQuoteWorkOrdersService(quote.id),
   ]);
+
+  // Versão anterior que ainda vale (para "voltar" ao descartar/restaurar).
+  const restorable = getRestorableVersion(allVersions, version.versionNumber);
 
   const isDraft = version.status === "RASCUNHO";
   const isSent = version.status === "ENVIADO";
@@ -102,6 +121,30 @@ export default async function QuoteDetailPage({
           {version.sentAt ? ` · enviado em ${new Date(version.sentAt).toLocaleDateString("pt-BR")}` : ""}
         </p>
       </div>
+
+      {workOrders.length > 0 ? (
+        <section className="rounded-2xl border border-border bg-surface p-5 print:hidden">
+          <h2 className="mb-3 text-sm font-semibold">{workOrders.length === 1 ? "OS gerada" : "OS geradas"}</h2>
+          <ul className="flex flex-col gap-2">
+            {workOrders.map((w) => (
+              <li key={w.id}>
+                <Link
+                  href={`/dashboard/os/${w.id}`}
+                  className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3 text-sm hover:border-accent"
+                >
+                  <span>
+                    <span className="font-mono font-medium">{w.number}</span>{" "}
+                    <span className="text-xs text-muted">
+                      · da versão {w.versionNumber} · {WORK_ORDER_STATUS_LABEL[w.status as WorkOrderStatus] ?? w.status}
+                    </span>
+                  </span>
+                  <span className="text-xs text-accent">Abrir OS →</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="mb-3 text-sm font-semibold">Cliente e veículo</h2>
@@ -261,7 +304,28 @@ export default async function QuoteDetailPage({
             currentUserId={session?.user?.id ?? ""}
           />
         ) : null}
-        {canCreateNewVersion ? <NewVersionButton quoteId={quote.id} /> : null}
+        {version.status === "CANCELADO" && restorable ? (
+          <RestoreVersionButton
+            quoteId={quote.id}
+            previousVersionNumber={restorable.versionNumber}
+            previousStatusLabel={QUOTE_STATUS_LABEL[restorable.status]}
+          />
+        ) : null}
+        {canCreateNewVersion && version.status !== "CANCELADO" ? (
+          <NewVersionButton
+            quoteId={quote.id}
+            currentVersionNumber={version.versionNumber}
+            workOrderNumbers={workOrders.map((w) => w.number)}
+          />
+        ) : null}
+        {(isDraft || isSent) && restorable ? (
+          <DiscardVersionButton
+            quoteId={quote.id}
+            currentVersionNumber={version.versionNumber}
+            previousVersionNumber={restorable.versionNumber}
+            previousStatusLabel={QUOTE_STATUS_LABEL[restorable.status]}
+          />
+        ) : null}
         {canCancel ? <CancelQuoteButton quoteId={quote.id} /> : null}
         <DeleteQuoteButton quoteId={quote.id} />
       </div>

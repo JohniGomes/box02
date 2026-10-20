@@ -124,20 +124,23 @@ export async function registerCompletedServiceFromQuoteService(
   if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
 
   // Se a OS deste orçamento já foi criada (ex.: pelo botão "Criar OS a partir
-  // deste orçamento"), continua dela em vez de criar outra.
+  // deste orçamento"), continua dela em vez de criar outra. Procura em
+  // QUALQUER versão do orçamento — a OS fica presa à versão de onde nasceu,
+  // mesmo que hoje exista uma versão mais nova. OS cancelada é ignorada.
   const existingRow = (
-    await pool.query(`SELECT id FROM work_orders WHERE "sourceQuoteVersionId" = $1 ORDER BY "createdAt" LIMIT 1`, [
-      version.id,
-    ])
+    await pool.query(
+      `SELECT w.id FROM work_orders w
+       JOIN quote_versions v ON v.id = w."sourceQuoteVersionId"
+       WHERE v."quoteId" = $1 AND w.status <> 'CANCELADA'
+       ORDER BY w."createdAt" ASC LIMIT 1`,
+      [quoteId],
+    )
   ).rows[0];
   const existing = existingRow ? await findWorkOrderById(existingRow.id) : null;
   if (existing?.status === "ENTREGUE") {
     throw new RetroactiveServiceError(
       `A OS ${existing.number} já foi entregue. Para lançar o pagamento, use a seção Recebimentos da própria OS.`,
     );
-  }
-  if (existing?.status === "CANCELADA") {
-    throw new RetroactiveServiceError(`A OS ${existing.number} deste orçamento está cancelada.`);
   }
 
   const paymentsCents = input.payments.map((p) => ({ ...p, cents: reaisToCents(p.amountReais) }));
@@ -284,7 +287,8 @@ export async function registerCompletedServiceFromQuoteService(
     }
 
     step = "ajuste das datas";
-    await backdateWorkOrder(workOrder.id, version.id, serviceDate);
+    // A decisão a ajustar é a da versão de onde a OS nasceu (pode não ser a vigente).
+    await backdateWorkOrder(workOrder.id, workOrder.sourceQuoteVersionId ?? version.id, serviceDate);
   } catch (err) {
     throw new RetroactiveServiceIncompleteError(workOrder.id, workOrder.number, step, err);
   }

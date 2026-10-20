@@ -1,8 +1,10 @@
+import type { PoolClient } from "pg";
 import { withTransaction } from "@/lib/db/transaction";
 import {
   createQuote,
   deleteQuote,
   findQuoteById,
+  listWorkOrdersByQuote,
   quoteHasWorkOrder,
   searchQuotes,
   updateQuoteStatusAndVersion,
@@ -448,6 +450,122 @@ export async function cancelQuoteVersionService(
   });
 
   return updated as QuoteVersionRecord;
+}
+
+/** Versão anterior que ainda vale: a mais recente, antes da vigente, que não
+ * foi cancelada. É para onde se "volta" ao descartar uma versão nova. */
+function findRestorableVersion(
+  allVersions: QuoteVersionRecord[],
+  currentVersionNumber: number,
+): QuoteVersionRecord | null {
+  return (
+    allVersions
+      .filter((v) => v.versionNumber < currentVersionNumber && v.status !== "CANCELADO")
+      .sort((a, b) => b.versionNumber - a.versionNumber)[0] ?? null
+  );
+}
+
+export function getRestorableVersion(allVersions: QuoteVersionRecord[], currentVersionNumber: number) {
+  return findRestorableVersion(allVersions, currentVersionNumber);
+}
+
+/** Torna `target` a versão vigente do orçamento. Se ela estava aguardando o
+ * cliente (ENVIADO) mas o link foi revogado quando a versão nova foi criada,
+ * gera um link novo para ela poder ser decidida de novo. */
+async function makeVersionCurrent(
+  quoteId: string,
+  target: QuoteVersionRecord,
+  client: PoolClient,
+): Promise<void> {
+  await updateQuoteStatusAndVersion(quoteId, target.status, target.versionNumber, client);
+  if (target.status === "ENVIADO") {
+    const active = await findActiveLinkForVersion(target.id, client);
+    if (!active) {
+      await createQuoteAccessLink(
+        { quoteVersionId: target.id, token: generateQuoteAccessToken(), expiresAt: target.validUntil },
+        client,
+      );
+    }
+  }
+}
+
+/**
+ * Descarta a versão vigente (rascunho ou enviada) e VOLTA para a versão
+ * anterior, que continua exatamente como estava (ex.: aprovada). Diferente
+ * de "cancelar orçamento", que encerra o orçamento inteiro.
+ */
+export async function discardQuoteVersionService(
+  actorUserId: string,
+  quoteId: string,
+): Promise<QuoteVersionRecord> {
+  const quote = await findQuoteById(quoteId);
+  if (!quote) throw new QuoteNotFoundError(quoteId);
+
+  const current = await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber);
+  if (!current) throw new QuoteVersionNotFoundError(quoteId);
+  if (current.status !== "RASCUNHO" && current.status !== "ENVIADO") {
+    throw new InvalidQuoteTransitionError("Só dá para descartar uma versão em rascunho ou aguardando o cliente.");
+  }
+
+  const previous = findRestorableVersion(await listQuoteVersionsByQuote(quoteId), current.versionNumber);
+  if (!previous) {
+    throw new InvalidQuoteTransitionError("Não há versão anterior para voltar. Use \"Cancelar orçamento\".");
+  }
+
+  await withTransaction(async (client) => {
+    await setQuoteVersionStatus(current.id, "CANCELADO", undefined, client);
+    await revokeActiveLinksForVersion(current.id, client);
+    await makeVersionCurrent(quoteId, previous, client);
+  });
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "QUOTE_VERSION_DISCARDED",
+    entityType: "quote_version",
+    entityId: current.id,
+    metadata: { discardedVersion: current.versionNumber, backToVersion: previous.versionNumber },
+  });
+
+  return previous;
+}
+
+/**
+ * Para um orçamento cuja versão vigente foi CANCELADA (por engano ou não):
+ * volta para a versão anterior que ainda vale, sem apagar nada.
+ */
+export async function restorePreviousQuoteVersionService(
+  actorUserId: string,
+  quoteId: string,
+): Promise<QuoteVersionRecord> {
+  const quote = await findQuoteById(quoteId);
+  if (!quote) throw new QuoteNotFoundError(quoteId);
+
+  const current = await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber);
+  if (!current) throw new QuoteVersionNotFoundError(quoteId);
+  if (current.status !== "CANCELADO") {
+    throw new InvalidQuoteTransitionError("A versão atual não está cancelada — não há o que restaurar.");
+  }
+
+  const previous = findRestorableVersion(await listQuoteVersionsByQuote(quoteId), current.versionNumber);
+  if (!previous) throw new InvalidQuoteTransitionError("Não há versão anterior para voltar.");
+
+  await withTransaction(async (client) => {
+    await makeVersionCurrent(quoteId, previous, client);
+  });
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "QUOTE_VERSION_RESTORED",
+    entityType: "quote_version",
+    entityId: previous.id,
+    metadata: { fromVersion: current.versionNumber, backToVersion: previous.versionNumber },
+  });
+
+  return previous;
+}
+
+export async function listQuoteWorkOrdersService(quoteId: string) {
+  return listWorkOrdersByQuote(quoteId);
 }
 
 /** Link ativo (não revogado) da versão, se existir — usado na ficha do
