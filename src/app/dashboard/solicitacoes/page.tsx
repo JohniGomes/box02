@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listServiceRequestsService } from "@/lib/serviceRequests/service";
-import { formatPhone, whatsappLink } from "@/lib/validation/phone";
+import { formatPhone, whatsappLinkWithMessage } from "@/lib/validation/phone";
 import { RequestActions } from "./RequestActions";
 import type { ServiceRequestStatus } from "@/lib/db/repositories/serviceRequests";
 
@@ -15,6 +15,16 @@ const STATUS_BADGE: Record<ServiceRequestStatus, string> = {
   ATENDIDA: "bg-success/15 text-success",
   DESCARTADA: "bg-muted/20 text-muted",
 };
+
+/** Mensagem pronta para responder o cliente: quem abre só confere e envia. */
+function buildReplyMessage(r: { customerName: string; vehicleDescription: string | null; description: string }): string {
+  const firstName = r.customerName.trim().split(/\s+/)[0];
+  const vehicle = r.vehicleDescription ? ` para o ${r.vehicleDescription}` : "";
+  return (
+    `Olá, ${firstName}! Aqui é da BOX 02. Recebemos seu pedido${vehicle}: "${r.description}". ` +
+    `Qual dia e horário ficam bons para você trazer o veículo?`
+  );
+}
 
 export default async function ServiceRequestsPage({
   searchParams,
@@ -77,7 +87,7 @@ export default async function ServiceRequestsPage({
               <p className="text-xs text-muted">{new Date(r.createdAt).toLocaleString("pt-BR")}</p>
 
               <a
-                href={whatsappLink(r.customerPhone)}
+                href={whatsappLinkWithMessage(r.customerPhone, buildReplyMessage(r))}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex h-9 w-fit items-center rounded-lg border border-border px-3 text-xs font-medium text-muted"

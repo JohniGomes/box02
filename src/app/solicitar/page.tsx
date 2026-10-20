@@ -1,4 +1,7 @@
 import { ServiceRequestForm } from "./ServiceRequestForm";
+import { BUSINESS_HOURS } from "@/lib/serviceRequests/businessInfo";
+import { SERVICE_REQUEST_NOTIFY_TEAM } from "@/lib/serviceRequests/notifyTeam";
+import { whatsappLink } from "@/lib/validation/phone";
 
 export default function PublicServiceRequestPage() {
   return (
@@ -17,6 +20,35 @@ export default function PublicServiceRequestPage() {
         </div>
 
         <ServiceRequestForm />
+
+        <footer className="mt-8 flex flex-col gap-3 border-t border-border pt-5 text-center">
+          <div>
+            <p className="text-xs font-semibold">Horário de atendimento</p>
+            <ul className="mt-1 text-xs text-muted">
+              {BUSINESS_HOURS.map((h) => (
+                <li key={h.days}>
+                  {h.days}: {h.hours}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-semibold">Prefere falar direto? Chame no WhatsApp</p>
+            <div className="mt-2 flex gap-2">
+              {SERVICE_REQUEST_NOTIFY_TEAM.map((person) => (
+                <a
+                  key={person.phone}
+                  href={whatsappLink(person.phone)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-11 flex-1 items-center justify-center rounded-xl border border-border text-sm font-medium"
+                >
+                  {person.name}
+                </a>
+              ))}
+            </div>
+          </div>
+        </footer>
       </div>
     </main>
   );
