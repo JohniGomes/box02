@@ -97,7 +97,7 @@ export default async function TermoRecepcaoPage({
               : workOrder.vehicleDescriptionSnapshot ?? "—"
           }
         />
-        <Field label="Km (painel)" value={`${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km`} />
+        <Field label="Km (painel)" value={workOrder.mileageAtEntry != null ? `${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : "Não informado"} />
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">

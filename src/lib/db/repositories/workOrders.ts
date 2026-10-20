@@ -27,7 +27,7 @@ export interface WorkOrderRecord {
   completedAt: Date | null;
   deliveredAt: Date | null;
   cancelledAt: Date | null;
-  mileageAtEntry: number;
+  mileageAtEntry: number | null;
   customerComplaint: string | null;
   diagnosis: string | null;
   technicalNotes: string | null;
@@ -99,7 +99,7 @@ export interface CreateWorkOrderInput {
   customerId: string;
   vehicleId: string;
   sourceQuoteVersionId?: string | null;
-  mileageAtEntry: number;
+  mileageAtEntry?: number | null;
   customerComplaint?: string;
   diagnosis?: string;
   discountType?: QuoteAdjustmentType | null;
@@ -141,7 +141,7 @@ export async function createWorkOrder(
       input.customerId,
       input.vehicleId,
       input.sourceQuoteVersionId ?? null,
-      input.mileageAtEntry,
+      input.mileageAtEntry ?? null,
       input.customerComplaint ?? null,
       input.diagnosis ?? null,
       input.discountType ?? null,

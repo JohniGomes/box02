@@ -18,10 +18,12 @@ export const workOrderItemInputSchema = z.object({
 
 /** Check-in — usado tanto na criação a partir de orçamento quanto sem orçamento. */
 export const workOrderCheckInSchema = z.object({
+  /** Opcional: vazio vira undefined (OS sem km informado). */
   mileageAtEntry: z
     .union([z.string(), z.number()])
-    .transform((v) => Number(v))
-    .pipe(z.number().int().min(0, "Quilometragem inválida")),
+    .optional()
+    .transform((v) => (v === undefined || (typeof v === "string" && v.trim() === "") ? undefined : Number(v)))
+    .pipe(z.number().int().min(0, "Quilometragem inválida").optional()),
   customerComplaint: optionalTrimmed,
   diagnosis: optionalTrimmed,
 });

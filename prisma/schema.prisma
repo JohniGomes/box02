@@ -544,7 +544,7 @@ model WorkOrder {
   cancelledAt DateTime?
 
   /// Congelada no check-in — nunca recalculada a partir de vehicles.mileage.
-  mileageAtEntry Int
+  mileageAtEntry Int?
 
   customerComplaint String?
   diagnosis         String?

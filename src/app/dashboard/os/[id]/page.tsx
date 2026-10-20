@@ -80,7 +80,7 @@ export default async function WorkOrderDetailPage({
           </span>
         </div>
         <p className="text-sm text-muted">
-          Entrada em {new Date(workOrder.entryAt).toLocaleString("pt-BR")} · {workOrder.mileageAtEntry.toLocaleString("pt-BR")} km
+          Entrada em {new Date(workOrder.entryAt).toLocaleString("pt-BR")}{workOrder.mileageAtEntry != null ? ` · ${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : ""}
         </p>
       </div>
 

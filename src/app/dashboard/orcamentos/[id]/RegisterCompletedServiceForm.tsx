@@ -135,7 +135,7 @@ export function RegisterCompletedServiceForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" htmlFor="rcsMileage">
-            Quilometragem
+            Quilometragem (opcional)
           </label>
           <input
             id="rcsMileage"
@@ -262,7 +262,6 @@ export function RegisterCompletedServiceForm({
           disabled={
             submitting ||
             !serviceDate ||
-            !mileage ||
             paidCents <= 0 ||
             remainingCents < 0 ||
             deliveryName.trim().length < 2
