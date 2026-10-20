@@ -4,9 +4,46 @@ import {
   centsToReais,
   computeQuoteTotals,
   formatBRL,
+  calculateSalePriceCents,
   lineTotalCents,
+  markupPercentForPrice,
   reaisToCents,
 } from "../index";
+
+describe("markupPercentForPrice", () => {
+  it("comprei por 400 e vendo por 520 -> 30%", () => {
+    expect(markupPercentForPrice(40000, 52000)).toBe(30);
+  });
+
+  it("percentual redondo é devolvido sem casas inúteis", () => {
+    expect(markupPercentForPrice(10000, 12000)).toBe(20);
+  });
+
+  it("sempre reproduz exatamente o preço digitado (ida e volta)", () => {
+    const casos: [number, number][] = [
+      [3333, 5000],
+      [12345, 19999],
+      [7, 10],
+      [99999, 123456],
+      [40000, 40001],
+      [45000, 45000],
+    ];
+    for (const [custo, preco] of casos) {
+      const m = markupPercentForPrice(custo, preco);
+      expect(m).not.toBeNull();
+      expect(calculateSalePriceCents(custo, m as number)).toBe(preco);
+    }
+  });
+
+  it("sem custo válido não calcula", () => {
+    expect(markupPercentForPrice(0, 1000)).toBeNull();
+    expect(markupPercentForPrice(-5, 1000)).toBeNull();
+  });
+
+  it("preço abaixo do custo dá markup negativo (a tela avisa)", () => {
+    expect(markupPercentForPrice(10000, 9000)).toBe(-10);
+  });
+});
 
 describe("reaisToCents", () => {
   it("converte string com vírgula", () => {
