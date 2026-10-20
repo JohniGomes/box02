@@ -12,6 +12,7 @@ import {
 import { formatBRL } from "@/lib/money";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
+import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import { WorkOrderItemExecutorInfo, type ActiveUserOption } from "./WorkOrderActions";
 
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
@@ -144,6 +145,16 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
             setPartId(part.id);
             setServiceId(undefined);
             setDescription(part.label);
+            setUnitPriceReais(part.suggestedPriceReais ?? "");
+          }}
+        />
+        <PurchasedPartButton
+          onCreated={(part, qty) => {
+            setType("PECA");
+            setPartId(part.id);
+            setServiceId(undefined);
+            setDescription(part.label);
+            setQuantity(String(qty));
             setUnitPriceReais(part.suggestedPriceReais ?? "");
           }}
         />

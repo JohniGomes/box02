@@ -1,6 +1,8 @@
+import { withTransaction } from "@/lib/db/transaction";
 import {
   createPart,
   findPartById,
+  findPartByName,
   findPartBySku,
   getPartCurrentStock,
   listPartsWithStock,
@@ -15,10 +17,22 @@ import {
   listStockMovementsByPart,
   type StockMovementRecord,
 } from "@/lib/db/repositories/stockMovements";
-import { createPartSchema, createStockMovementSchema, updatePartSchema } from "@/lib/validation/part";
-import { calculateSalePriceCents, reaisToCents } from "@/lib/money";
+import {
+  createPartSchema,
+  createPurchasedPartSchema,
+  createStockMovementSchema,
+  updatePartSchema,
+} from "@/lib/validation/part";
+import { calculateSalePriceCents, markupPercentForPrice, reaisToCents } from "@/lib/money";
 import { getDefaultMarkupPercent } from "@/lib/settings/service";
-import { DuplicatePartSkuError, InsufficientStockError, PartNotActiveError, PartNotFoundError } from "./errors";
+import {
+  DuplicatePartNameError,
+  DuplicatePartSkuError,
+  InsufficientStockError,
+  InvalidPurchasedPartError,
+  PartNotActiveError,
+  PartNotFoundError,
+} from "./errors";
 
 export async function createPartService(rawInput: unknown): Promise<PartRecord> {
   const input = createPartSchema.parse(rawInput);
@@ -36,6 +50,56 @@ export async function createPartService(rawInput: unknown): Promise<PartRecord> 
     minStock: input.minStock ?? null,
     markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
+  });
+}
+
+/**
+ * Peça comprada para um cliente, direto do orçamento/OS ("comprei por X, vendo
+ * por Y"): cria a peça já com custo e markup, e dá a ENTRADA da quantidade no
+ * estoque — tudo na mesma transação. Assim o orçamento já pode usar a peça (com
+ * preço sugerido) e, quando o item for executado, a baixa automática fecha o
+ * saldo em zero, sem o usuário passar pela aba Estoque.
+ *
+ * Recusa nome já existente (para não duplicar o cadastro).
+ */
+export async function createPurchasedPartService(
+  actorUserId: string,
+  rawInput: unknown,
+): Promise<{ part: PartRecord; quantity: number }> {
+  const input = createPurchasedPartSchema.parse(rawInput);
+
+  const costCents = reaisToCents(input.costReais);
+  if (!(costCents > 0)) throw new InvalidPurchasedPartError("Informe quanto custou a peça (maior que zero).");
+
+  let markupPercent: number | null = null;
+  const priceRaw = input.priceReais;
+  if (priceRaw !== undefined && String(priceRaw).trim() !== "") {
+    const priceCents = reaisToCents(priceRaw);
+    const m = markupPercentForPrice(costCents, priceCents);
+    if (m === null || m < 0) {
+      throw new InvalidPurchasedPartError("O preço de venda não pode ser menor que o custo.");
+    }
+    markupPercent = m;
+  }
+
+  return withTransaction(async (client) => {
+    if (await findPartByName(input.name, client)) throw new DuplicatePartNameError(input.name);
+
+    const part = await createPart(
+      { name: input.name, costCents, markupPercent, unit: "un" },
+      client,
+    );
+    await createStockMovement(
+      {
+        partId: part.id,
+        type: "ENTRADA",
+        quantity: input.quantity,
+        reason: "Entrada — peça comprada para orçamento/OS",
+        createdByUserId: actorUserId,
+      },
+      client,
+    );
+    return { part, quantity: input.quantity };
   });
 }
 

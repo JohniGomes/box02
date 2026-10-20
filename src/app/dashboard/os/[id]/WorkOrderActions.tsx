@@ -6,9 +6,12 @@ import {
   cancelWorkOrderAction,
   closeWorkOrderAction,
   correctWorkOrderItemExecutorAction,
+  executeItemWithStockEntryAction,
+  getItemStockEntryDefaultsAction,
   setWorkOrderItemStatusAction,
   setWorkOrderStatusAction,
 } from "../actions";
+import type { StockEntryDefaults } from "@/lib/workOrders/stockEntry";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 import { WORK_ORDER_STATUS_LABEL } from "../statusLabels";
 
@@ -111,6 +114,10 @@ export function WorkOrderItemActions({
   const [reason, setReason] = useState("");
   const [executorId, setExecutorId] = useState(currentUserId);
   const [error, setError] = useState<string | null>(null);
+  // Falta de estoque: em vez de só travar, oferece dar a entrada e executar.
+  const [shortage, setShortage] = useState<StockEntryDefaults | null>(null);
+  const [entryQty, setEntryQty] = useState("");
+  const [entryCost, setEntryCost] = useState("");
 
   function markExecuted() {
     setError(null);
@@ -119,9 +126,35 @@ export function WorkOrderItemActions({
         executedByUserId: executorId,
       });
       if (!result.success) {
+        if (result.stockShortage) {
+          const info = await getItemStockEntryDefaultsAction(workOrderId, itemId);
+          if (info.success && info.defaults) {
+            setShortage(info.defaults);
+            setEntryQty(String(Math.max(1, info.defaults.shortage)));
+            setEntryCost(info.defaults.costReais ?? "");
+            return;
+          }
+        }
         setError(result.error ?? "Falha ao marcar como executado.");
         return;
       }
+      router.refresh();
+    });
+  }
+
+  function confirmEntryAndExecute() {
+    setError(null);
+    startTransition(async () => {
+      const result = await executeItemWithStockEntryAction(workOrderId, itemId, {
+        executedByUserId: executorId,
+        entryQuantity: entryQty,
+        unitCostReais: entryCost || undefined,
+      });
+      if (!result.success) {
+        setError(result.error ?? "Falha ao dar entrada e executar.");
+        return;
+      }
+      setShortage(null);
       router.refresh();
     });
   }
@@ -159,6 +192,54 @@ export function WorkOrderItemActions({
             Confirmar
           </button>
           <button onClick={() => setCancelling(false)} className="h-9 flex-1 rounded-lg border border-border text-xs">
+            Voltar
+          </button>
+        </div>
+        {error ? <p className="text-xs text-danger">{error}</p> : null}
+      </div>
+    );
+  }
+
+  if (shortage) {
+    return (
+      <div className="flex flex-col gap-2 rounded-xl border border-accent/40 bg-accent/5 p-3">
+        <p className="text-xs">
+          <strong>{shortage.partName}</strong>: tem {shortage.available} {shortage.unit} em estoque e este item precisa de{" "}
+          {shortage.needed}. Dê a entrada do que chegou para executar — a baixa fecha o saldo.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] text-muted">Entrou quantas?</label>
+            <input
+              value={entryQty}
+              onChange={(e) => setEntryQty(e.target.value)}
+              inputMode="numeric"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted">Custo de cada (R$)</label>
+            <input
+              value={entryCost}
+              onChange={(e) => setEntryCost(e.target.value)}
+              inputMode="decimal"
+              placeholder="0,00"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            />
+          </div>
+        </div>
+        <p className="text-[11px] text-muted">
+          Se o custo mudou, ele passa a ser o novo custo da peça. A entrada fica no histórico da peça.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={confirmEntryAndExecute}
+            disabled={isPending || !entryQty.trim()}
+            className="h-9 flex-1 rounded-lg bg-success/15 text-xs font-semibold text-success disabled:opacity-60"
+          >
+            Dar entrada e executar
+          </button>
+          <button onClick={() => setShortage(null)} className="h-9 flex-1 rounded-lg border border-border text-xs">
             Voltar
           </button>
         </div>

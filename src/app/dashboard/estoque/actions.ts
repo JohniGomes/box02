@@ -5,13 +5,20 @@ import { ZodError } from "zod";
 import { auth } from "@/auth";
 import {
   createPartService,
+  createPurchasedPartService,
   createStockMovementService,
   getPartSuggestedSalePriceService,
   listPartsWithStockService,
   setPartStatusService,
   updatePartService,
 } from "@/lib/inventory/service";
-import { DuplicatePartSkuError, InsufficientStockError, PartNotFoundError } from "@/lib/inventory/errors";
+import {
+  DuplicatePartNameError,
+  DuplicatePartSkuError,
+  InsufficientStockError,
+  InvalidPurchasedPartError,
+  PartNotFoundError,
+} from "@/lib/inventory/errors";
 import { centsToReais } from "@/lib/money";
 import type { PartStatus, PartWithStock } from "@/lib/db/repositories/parts";
 
@@ -110,6 +117,32 @@ export async function searchActivePartsForPickerAction(query: string): Promise<P
   await requireUserId();
   const parts = await listPartsWithStockService(query);
   return Promise.all(parts.filter((p) => p.status === "ATIVO").map(toPickerOption));
+}
+
+export interface PurchasedPartResult {
+  success: boolean;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+  part?: PartPickerOption;
+  quantity?: number;
+}
+
+/** Peça comprada para um cliente: cria a peça + entrada de estoque e devolve a
+ * peça já no formato do seletor, para o orçamento/OS preencher o item. */
+export async function createPurchasedPartAction(input: unknown): Promise<PurchasedPartResult> {
+  try {
+    const userId = await requireUserId();
+    const { part, quantity } = await createPurchasedPartService(userId, input);
+    revalidatePath("/dashboard/estoque");
+    const option = await toPickerOption({ ...part, currentStock: quantity });
+    return { success: true, part: option, quantity };
+  } catch (err) {
+    if (err instanceof DuplicatePartNameError || err instanceof InvalidPurchasedPartError) {
+      return { success: false, error: err.message };
+    }
+    const base = friendlyError(err, "Não foi possível cadastrar a peça.");
+    return { success: false, error: base.error, fieldErrors: base.fieldErrors };
+  }
 }
 
 export async function createStockMovementAction(partId: string, input: unknown): Promise<InventoryActionResult> {
