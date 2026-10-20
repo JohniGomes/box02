@@ -136,8 +136,10 @@ export default async function DashboardHomePage() {
             </div>
           </div>
           <div className="mt-3 flex flex-col gap-2 text-sm">
+            <Row label="Entradas do mês" value={formatBRL(metrics.monthlyRevenueCents)} />
+            <Row label="Saídas do mês (pagas)" value={formatBRL(metrics.monthlyExpensesCents)} />
             <Row label="Resultado do mês" value={formatBRL(metrics.netResultCents)} />
-            <Row label="Despesas pendentes" value={formatBRL(metrics.pendingExpensesCents)} />
+            <Row label="Despesas a pagar até o fim do mês" value={formatBRL(metrics.pendingExpensesCents)} />
           </div>
         </div>
       </div>

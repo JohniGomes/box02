@@ -95,7 +95,9 @@ export function buildDashboardMetricsSql(nowExpr = "now()"): string {
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
         WHERE ${inMonth('"paidAt"')}
       ) AS monthly_expenses_cents,
-      (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses WHERE "paidAt" IS NULL) AS pending_expenses_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
+        WHERE "paidAt" IS NULL AND "dueDate" < (${nextMonth})::date
+      ) AS pending_expenses_cents,
       (SELECT COUNT(DISTINCT "workOrderId") FROM work_order_payments
         WHERE ${inMonth('"receivedAt"')}
       ) AS paid_work_orders_this_month,

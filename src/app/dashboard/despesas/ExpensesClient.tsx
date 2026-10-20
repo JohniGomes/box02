@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatBRL, centsToReais } from "@/lib/money";
 import {
   createExpenseAction,
+  deleteExpenseAction,
   markExpenseAsPaidAction,
   repeatExpenseNextMonthAction,
   unmarkExpenseAsPaidAction,
@@ -174,6 +175,7 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
   const today = todayInBrasilia();
   const [paidOn, setPaidOn] = useState(today);
   const [confirmUndo, setConfirmUndo] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +202,19 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
         return;
       }
       setConfirmUndo(false);
+      router.refresh();
+    });
+  }
+
+  function deleteExpense() {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteExpenseAction(expense.id);
+      if (!result.success) {
+        setError(result.error ?? "Falha ao excluir a despesa.");
+        return;
+      }
+      setConfirmDelete(false);
       router.refresh();
     });
   }
@@ -336,7 +351,29 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
             </div>
           </div>
         ) : (
-          <div className="mt-2 flex gap-2">
+          confirmDelete ? (
+            <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p className="text-xs">
+                Excluir esta despesa? Ela some da lista e não dá para recuperar (fica só no histórico interno).
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={deleteExpense}
+                  disabled={isPending}
+                  className="h-9 flex-1 rounded-lg bg-danger/15 text-xs font-semibold text-danger disabled:opacity-50"
+                >
+                  {isPending ? "Excluindo…" : "Sim, excluir"}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="h-9 flex-1 rounded-lg border border-border text-xs font-medium"
+                >
+                  Não
+                </button>
+              </div>
+            </div>
+          ) : (
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
               onClick={() => setPayMode(true)}
               className="h-9 flex-1 rounded-lg bg-success/15 text-xs font-semibold text-success"
@@ -353,7 +390,14 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
             >
               Repetir no mês seguinte
             </button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="h-9 flex-1 rounded-lg border border-border text-xs font-medium text-danger"
+            >
+              Excluir
+            </button>
           </div>
+          )
         )
       ) : null}
       {expense.status !== "PAGA" && !payMode && error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}

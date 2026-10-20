@@ -1,6 +1,7 @@
 import { withTransaction } from "@/lib/db/transaction";
 import {
   createExpense,
+  deleteUnpaidExpense,
   existsEqualExpense,
   findExpenseById,
   hasBankReconciliation,
@@ -149,6 +150,36 @@ export async function markExpenseAsPaidService(
     });
 
     return toView(updated);
+  });
+}
+
+/**
+ * Exclui uma despesa que ainda NÃO foi paga (ex.: conta lançada por engano ou
+ * repetida para o mês seguinte sem necessidade). Despesa já paga não pode ser
+ * excluída — primeiro desfaz-se o pagamento. Fica registrado no histórico.
+ */
+export async function deleteExpenseService(actorUserId: string, expenseId: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const expense = await lockExpenseById(expenseId, client);
+    if (!expense) throw new ExpenseNotFoundError(expenseId);
+    if (expense.paidAt) throw new ExpenseAlreadyPaidError();
+    if (await hasBankReconciliation(expenseId, client)) throw new ExpenseReconciledError();
+
+    const deleted = await deleteUnpaidExpense(expenseId, client);
+    if (!deleted) throw new ExpenseNotFoundError(expenseId);
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "EXPENSE_DELETED",
+      entityType: "expense",
+      entityId: expenseId,
+      metadata: {
+        category: expense.category,
+        description: expense.description,
+        amountCents: expense.amountCents,
+        dueDate: expense.dueDate,
+      },
+    });
   });
 }
 
