@@ -50,7 +50,7 @@ export async function setRuleAction(rule: RuleKey, required: boolean): Promise<R
     });
 
     revalidatePath("/dashboard/configuracoes/regras");
-    revalidatePath("/dashboard/os");
+    revalidatePath("/dashboard/os", "layout");
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {

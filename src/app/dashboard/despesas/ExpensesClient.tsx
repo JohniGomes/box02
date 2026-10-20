@@ -406,7 +406,7 @@ function ExpenseForm({
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Descrição"
+        placeholder="Descrição (opcional)"
         className={inputClass}
       />
       <input
@@ -435,7 +435,7 @@ function ExpenseForm({
       <div className="flex gap-2">
         <button
           onClick={handleSubmit}
-          disabled={isPending || !description.trim() || !amountReais.trim() || !dueDate}
+          disabled={isPending || !amountReais.trim() || !dueDate}
           className="h-11 flex-1 rounded-xl bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
         >
           {isPending ? "Salvando…" : expense ? "Salvar correção" : "Registrar despesa"}

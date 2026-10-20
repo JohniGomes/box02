@@ -3,10 +3,15 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { QuoteItemsEditor, newItem, type ItemDraft } from "../orcamentos/QuoteForm";
-import { lookupCustomerByPhoneAction, quickSaleAction } from "./actions";
+import {
+  lookupCustomerByIdAction,
+  lookupCustomerByPhoneAction,
+  quickSaleAction,
+  searchCustomersByNameAction,
+} from "./actions";
 import { computeQuoteTotals, formatBRL, lineTotalCents, reaisToCents } from "@/lib/money";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
-import type { CustomerLookup } from "@/lib/quickSale/service";
+import type { CustomerLookup, CustomerSuggestion } from "@/lib/quickSale/service";
 
 type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
 
@@ -55,6 +60,7 @@ export function QuickSaleForm({
   const [lookup, setLookup] = useState<CustomerLookup | null>(null);
   const [lookedUp, setLookedUp] = useState(false);
   const [customerName, setCustomerName] = useState("");
+  const [suggestions, setSuggestions] = useState<CustomerSuggestion[]>([]);
   // Veículo ("" = veículo novo, digitado abaixo)
   const [existingVehicleId, setExistingVehicleId] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
@@ -66,6 +72,8 @@ export function QuickSaleForm({
   const [mileage, setMileage] = useState("");
   const [executedBy, setExecutedBy] = useState(defaultExecutorOptionId(executors, currentUserId));
   const [deliveryName, setDeliveryName] = useState("");
+  const [discountType, setDiscountType] = useState<"" | "PERCENTUAL" | "FIXO">("");
+  const [discountValue, setDiscountValue] = useState("");
   const [rows, setRows] = useState<PaymentRow[]>([{ key: "p1", method: "PIX", amount: "" }]);
 
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +90,16 @@ export function QuickSaleForm({
           reaisToCents(i.unitPriceReais || "0"),
         ),
       }));
+    const dv = Number(discountValue.replace(",", "."));
+    const hasDiscount = discountType !== "" && Number.isFinite(dv) && dv > 0;
     return computeQuoteTotals({
       items: lines,
-      discountType: null,
-      discountValue: null,
+      discountType: hasDiscount ? discountType : null,
+      discountValue: hasDiscount ? (discountType === "PERCENTUAL" ? Math.round(dv * 100) : reaisToCents(discountValue)) : null,
       surchargeType: null,
       surchargeValue: null,
     }).totalCents;
-  }, [items]);
+  }, [items, discountType, discountValue]);
 
   const paidCents = rows.reduce((sum, r) => sum + reaisToCents(r.amount || "0"), 0);
   const remainingCents = totalCents - paidCents;
@@ -113,6 +123,35 @@ export function QuickSaleForm({
         setExistingVehicleId("");
       }
     });
+  }
+
+  function handleNameChange(value: string) {
+    setCustomerName(value);
+    if (value.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    searchCustomersByNameAction(value).then(setSuggestions);
+  }
+
+  async function pickSuggestion(s: CustomerSuggestion) {
+    const found = await lookupCustomerByIdAction(s.id);
+    setSuggestions([]);
+    if (!found) return;
+    setLookup(found);
+    setLookedUp(true);
+    setPhone(s.phone ?? "");
+    setCustomerName(found.customer.name);
+    setDeliveryName((prev) => prev || found.customer.name);
+    setExistingVehicleId(found.vehicles[0]?.id ?? "");
+  }
+
+  function clearCustomer() {
+    setLookup(null);
+    setLookedUp(false);
+    setCustomerName("");
+    setPhone("");
+    setExistingVehicleId("");
   }
 
   function updateItem(key: string, patch: Partial<ItemDraft>) {
@@ -142,6 +181,8 @@ export function QuickSaleForm({
             category: i.category,
             notes: i.type === "MAO_DE_OBRA" ? i.notes : undefined,
           })),
+        discountType: discountType || undefined,
+        discountValue: discountType ? discountValue : undefined,
         serviceDate,
         mileageAtEntry: mileage,
         executedBy,
@@ -205,10 +246,32 @@ export function QuickSaleForm({
           <input
             id="qsName"
             value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
+            onChange={(e) => handleNameChange(e.target.value)}
             disabled={Boolean(lookup)}
+            placeholder="Digite o nome para buscar um cliente já cadastrado"
+            autoComplete="off"
             className={`${inputClass} disabled:opacity-70`}
           />
+          {lookup ? (
+            <button type="button" onClick={clearCustomer} className="self-start text-xs font-medium text-muted underline">
+              Trocar cliente
+            </button>
+          ) : suggestions.length > 0 ? (
+            <div className="flex flex-col overflow-hidden rounded-xl border border-border">
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => pickSuggestion(s)}
+                  className="border-b border-border px-4 py-2.5 text-left text-sm last:border-b-0 hover:bg-background"
+                >
+                  {s.name}
+                  {s.phone ? <span className="ml-2 text-xs text-muted">{s.phone}</span> : null}
+                </button>
+              ))}
+              <p className="px-4 py-2 text-xs text-muted">Não é nenhum deles? Continue digitando o nome completo e o telefone.</p>
+            </div>
+          ) : null}
           {fieldErrors.customerName ? <p className="text-xs text-danger">{fieldErrors.customerName}</p> : null}
         </div>
       </Section>
@@ -319,6 +382,30 @@ export function QuickSaleForm({
               placeholder={customerName || "Nome"}
               className={inputClass}
             />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Desconto (opcional)</span>
+          <div className="flex gap-2">
+            <select
+              value={discountType}
+              onChange={(e) => setDiscountType(e.target.value as "" | "PERCENTUAL" | "FIXO")}
+              className={`${inputClass} w-36`}
+            >
+              <option value="">Sem desconto</option>
+              <option value="FIXO">Em R$</option>
+              <option value="PERCENTUAL">Em %</option>
+            </select>
+            {discountType ? (
+              <input
+                value={discountValue}
+                onChange={(e) => setDiscountValue(e.target.value)}
+                inputMode="decimal"
+                placeholder={discountType === "PERCENTUAL" ? "10" : "0,00"}
+                className={`${inputClass} min-w-0 flex-1`}
+              />
+            ) : null}
           </div>
         </div>
 

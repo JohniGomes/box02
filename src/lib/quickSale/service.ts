@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   findCustomerById,
   findCustomersByPhone,
+  searchCustomers,
   type CustomerRecord,
 } from "@/lib/db/repositories/customers";
 import { findVehicleById, findVehicleByPlate, listVehiclesByCustomer, type VehicleRecord } from "@/lib/db/repositories/vehicles";
@@ -54,6 +55,31 @@ export async function lookupCustomerByPhoneService(rawPhone: string): Promise<Cu
   if (!isPlausiblePhone(digits)) return null;
   const found = (await findCustomersByPhone(digits)).find((c) => c.status === "ATIVO");
   if (!found) return null;
+  const vehicles = (await listVehiclesByCustomer(found.id)).filter((v) => v.status === "ATIVO");
+  return {
+    customer: { id: found.id, name: found.legalName },
+    vehicles: vehicles.map((v) => ({ id: v.id, label: vehicleLabel(v) })),
+  };
+}
+
+export interface CustomerSuggestion {
+  id: string;
+  name: string;
+  phone: string | null;
+}
+
+/** Busca clientes ativos pelo nome (ou parte dele) para a Venda rápida. */
+export async function searchCustomersByNameService(rawQuery: string): Promise<CustomerSuggestion[]> {
+  const query = (rawQuery ?? "").trim();
+  if (query.length < 2) return [];
+  const { items } = await searchCustomers({ query, status: "ATIVO", limit: 6 });
+  return items.map((c) => ({ id: c.id, name: c.legalName, phone: c.whatsapp || c.phone || null }));
+}
+
+/** Traz um cliente escolhido na busca por nome, com seus veículos ativos. */
+export async function lookupCustomerByIdService(customerId: string): Promise<CustomerLookup | null> {
+  const found = await findCustomerById(customerId);
+  if (!found || found.status !== "ATIVO") return null;
   const vehicles = (await listVehiclesByCustomer(found.id)).filter((v) => v.status === "ATIVO");
   return {
     customer: { id: found.id, name: found.legalName },
@@ -161,6 +187,9 @@ const quickSaleSchema = z.object({
   vehicleModel: z.string().trim().optional(),
   vehiclePlate: z.string().trim().optional(),
   items: z.array(quoteItemInputSchema).min(1, "Adicione pelo menos um item"),
+  /** Desconto opcional: percentual (ex.: 10) ou valor fixo em reais. */
+  discountType: z.enum(["PERCENTUAL", "FIXO"]).optional(),
+  discountValue: z.union([z.string(), z.number()]).optional(),
   serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do serviço"),
   mileageAtEntry: z.union([z.string(), z.number()]).optional(),
   executedBy: z.string().trim().min(1, "Selecione quem executou"),
@@ -204,10 +233,19 @@ export async function quickSaleService(actorUserId: string, rawInput: unknown): 
     const unit = reaisToCents(i.unitPriceReais);
     return { type: i.type, totalCents: lineTotalCents(i.quantity, unit), category: i.category };
   });
+  const discountNumber =
+    input.discountValue === undefined || input.discountValue === ""
+      ? NaN
+      : Number(String(input.discountValue).replace(",", "."));
+  const hasDiscount = Boolean(input.discountType) && Number.isFinite(discountNumber) && discountNumber > 0;
   const total = computeQuoteTotals({
     items: lines.filter((l) => l.category !== "INFORMATIVO").map((l) => ({ type: l.type, totalCents: l.totalCents })),
-    discountType: null,
-    discountValue: null,
+    discountType: hasDiscount ? input.discountType! : null,
+    discountValue: hasDiscount
+      ? input.discountType === "PERCENTUAL"
+        ? Math.round(discountNumber * 100)
+        : reaisToCents(discountNumber)
+      : null,
     surchargeType: null,
     surchargeValue: null,
   }).totalCents;
@@ -256,6 +294,7 @@ export async function quickSaleService(actorUserId: string, rawInput: unknown): 
     customerId: customer.id,
     vehicleId: vehicle.id,
     items: input.items,
+    discount: hasDiscount ? { type: input.discountType, value: discountNumber } : undefined,
   });
 
   // 4) Aprova, cria a OS, executa, entrega, recebe e ajusta as datas
