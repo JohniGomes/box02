@@ -215,6 +215,14 @@ export const registerWorkOrderPaymentSchema = z.object({
   amountReais: z.union([z.string(), z.number()]),
   method: z.enum(["DINHEIRO", "PIX", "CARTAO", "OUTRO"], { message: "Selecione a forma de pagamento" }),
   notes: optionalTrimmed,
+  /** Data em que foi recebido (AAAA-MM-DD). Vazio = agora. Serve para lançar
+   * um pagamento que aconteceu em outro dia. */
+  receivedOn: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data do recebimento inválida")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
 export type RegisterWorkOrderPaymentInput = z.infer<typeof registerWorkOrderPaymentSchema>;
 

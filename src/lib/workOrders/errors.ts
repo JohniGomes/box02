@@ -112,6 +112,13 @@ export class WorkOrderDeliveryChecklistPendingError extends Error {
   }
 }
 
+export class WorkOrderPaymentDateError extends Error {
+  constructor() {
+    super("A data do recebimento não pode ser no futuro.");
+    this.name = "WorkOrderPaymentDateError";
+  }
+}
+
 // ============================================================
 // Ciclo F — Termo de Recepção
 // ============================================================

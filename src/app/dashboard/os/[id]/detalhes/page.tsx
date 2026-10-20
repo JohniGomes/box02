@@ -6,6 +6,7 @@ import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { getServiceService } from "@/lib/services/service";
+import { isReceptionRequiredForExecution } from "@/lib/settings/service";
 import { listActiveUsers } from "@/lib/db/repositories/users";
 import { findQuoteVersionById } from "@/lib/db/repositories/quoteVersions";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
@@ -66,11 +67,12 @@ export default async function WorkOrderDetailsPage({
   const paymentsSummary =
     workOrder.status === "ENTREGUE" ? await getWorkOrderPaymentsSummaryService(workOrder.id) : null;
   const evidences = await listWorkOrderEvidencesService(workOrder.id);
-  const [customer, vehicle, workOrderChecklists, activeUsers] = await Promise.all([
+  const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
     getWorkOrderChecklistsService(workOrder.id),
     listActiveUsers(),
+    isReceptionRequiredForExecution(),
   ]);
 
   const isOpenForCancel = workOrder.status !== "ENTREGUE" && workOrder.status !== "CANCELADA";
@@ -376,6 +378,7 @@ export default async function WorkOrderDetailsPage({
           workOrderId={workOrder.id}
           status={workOrder.status}
           receptionAccepted={workOrder.receptionAcceptedAt !== null}
+          receptionRequired={receptionRequired}
         />
         {canClose ? (
           <CloseWorkOrderForm workOrderId={workOrder.id} deliveryChecklistPendingCount={deliveryChecklistPendingCount} />

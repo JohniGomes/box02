@@ -7,6 +7,7 @@ import { refundWorkOrderPaymentService, registerWorkOrderPaymentService } from "
 import {
   WorkOrderNotDeliveredError,
   WorkOrderNotFoundError,
+  WorkOrderPaymentDateError,
   WorkOrderPaymentExceedsBalanceError,
   WorkOrderPaymentNotFoundError,
   WorkOrderPaymentRefundExceedsAmountError,
@@ -26,7 +27,7 @@ async function requireUserId(): Promise<string> {
 
 export async function registerWorkOrderPaymentAction(
   workOrderId: string,
-  input: { amountReais: string; method: string; notes?: string },
+  input: { amountReais: string; method: string; notes?: string; receivedOn?: string },
 ): Promise<PaymentActionResult> {
   try {
     const userId = await requireUserId();
@@ -45,7 +46,8 @@ export async function registerWorkOrderPaymentAction(
     if (
       err instanceof WorkOrderNotFoundError ||
       err instanceof WorkOrderNotDeliveredError ||
-      err instanceof WorkOrderPaymentExceedsBalanceError
+      err instanceof WorkOrderPaymentExceedsBalanceError ||
+      err instanceof WorkOrderPaymentDateError
     ) {
       return { success: false, error: err.message };
     }

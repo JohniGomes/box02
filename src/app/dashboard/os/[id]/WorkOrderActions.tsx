@@ -24,6 +24,7 @@ export function WorkOrderStatusActions({
   workOrderId,
   status,
   receptionAccepted,
+  receptionRequired = true,
 }: {
   workOrderId: string;
   status: WorkOrderStatus;
@@ -32,6 +33,8 @@ export function WorkOrderStatusActions({
    * aceite existe ou não, e desabilita/explica antes do clique. A
    * validação definitiva continua exclusivamente no servidor. */
   receptionAccepted: boolean;
+  /** Regra ligada/desligada em Configurações → Regras (padrão: ligada). */
+  receptionRequired?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -56,7 +59,8 @@ export function WorkOrderStatusActions({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
-          const blockedByReception = opt === "EM_EXECUCAO" && !receptionAccepted;
+          const receptionMissing = opt === "EM_EXECUCAO" && !receptionAccepted;
+          const blockedByReception = receptionMissing && receptionRequired;
           return (
             <div key={opt} className="flex flex-col gap-1">
               <button
@@ -68,6 +72,10 @@ export function WorkOrderStatusActions({
               </button>
               {blockedByReception ? (
                 <p className="max-w-[160px] text-[10px] text-muted">Requer aceite de recepção registrado</p>
+              ) : receptionMissing ? (
+                <p className="max-w-[160px] text-[10px] text-muted">
+                  Termo de Recepção pendente — pode registrar depois
+                </p>
               ) : null}
             </div>
           );

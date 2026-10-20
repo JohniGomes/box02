@@ -35,15 +35,25 @@ export async function createWorkOrderPayment(
     method: WorkOrderPaymentMethod;
     notes?: string | null;
     registeredByUserId: string;
+    /** Data real do recebimento; sem ela, vale o momento do lançamento. */
+    receivedAt?: Date | null;
   },
   db: Queryable = pool,
 ): Promise<WorkOrderPaymentRecord> {
   const id = createId();
   const result = await db.query<WorkOrderPaymentRecord>(
-    `INSERT INTO work_order_payments (id, "workOrderId", "amountCents", method, notes, "registeredByUserId")
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO work_order_payments (id, "workOrderId", "amountCents", method, notes, "registeredByUserId", "receivedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamp, CURRENT_TIMESTAMP))
      RETURNING ${COLUMNS}`,
-    [id, input.workOrderId, input.amountCents, input.method, input.notes ?? null, input.registeredByUserId],
+    [
+      id,
+      input.workOrderId,
+      input.amountCents,
+      input.method,
+      input.notes ?? null,
+      input.registeredByUserId,
+      input.receivedAt ?? null,
+    ],
   );
   return result.rows[0];
 }
