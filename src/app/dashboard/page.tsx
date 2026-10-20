@@ -3,6 +3,7 @@ import { getDashboardMetricsService } from "@/lib/dashboard/service";
 import { listAppointmentsWithNamesBetweenService } from "@/lib/appointments/service";
 import { formatBRL } from "@/lib/money";
 import { CalendarWidget } from "@/components/CalendarWidget";
+import { HomeAlerts } from "@/components/HomeAlerts";
 
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -85,6 +86,8 @@ export default async function DashboardHomePage() {
           </Link>
         </div>
       </div>
+
+      <HomeAlerts />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CalendarWidget
