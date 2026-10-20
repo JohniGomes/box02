@@ -5,6 +5,7 @@ const ITEMS = [
   { label: "Checklists", href: "/dashboard/configuracoes/checklists" },
   { label: "Procedimentos", href: "/dashboard/configuracoes/procedimentos" },
   { label: "Precificação", href: "/dashboard/configuracoes/precificacao" },
+  { label: "Regras da oficina", href: "/dashboard/configuracoes/regras" },
 ];
 
 export default function ConfiguracoesPage() {

@@ -102,6 +102,7 @@ import {
   WorkOrderItemNotFoundError,
   WorkOrderNotDeliveredError,
   WorkOrderNotFoundError,
+  WorkOrderPaymentDateError,
   WorkOrderPaymentExceedsBalanceError,
   WorkOrderPaymentNotFoundError,
   WorkOrderPaymentRefundExceedsAmountError,
@@ -112,6 +113,7 @@ import { findWorkOrderChecklist, listWorkOrderChecklistItems } from "@/lib/db/re
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
 import { findUserById } from "@/lib/db/repositories/users";
+import { isReceptionRequiredForExecution } from "@/lib/settings/service";
 
 /** Máquina de estados da OS — qualquer par fora daqui é rejeitado. */
 const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
@@ -348,7 +350,10 @@ export async function setWorkOrderStatusService(
   // Ciclo F, DEC-1: transição para EM_EXECUCAO exige aceite de recepção
   // já registrado. EM_DIAGNOSTICO e CANCELADA nunca são afetados por
   // esta checagem — só passam por assertTransitionAllowed acima.
-  if (newStatus === "EM_EXECUCAO" && !existing.receptionAcceptedAt) {
+  // A trava pode ser desligada em Configurações → Regras (padrão: ligada).
+  // Desligada, a OS avança e o termo segue como pendência visível.
+  const receptionPending = !existing.receptionAcceptedAt;
+  if (newStatus === "EM_EXECUCAO" && receptionPending && (await isReceptionRequiredForExecution())) {
     throw new WorkOrderReceptionNotAcceptedError();
   }
 
@@ -364,7 +369,11 @@ export async function setWorkOrderStatusService(
     action: "WORK_ORDER_STATUS_CHANGED",
     entityType: "work_order",
     entityId: workOrderId,
-    metadata: { from: existing.status, to: newStatus },
+    metadata: {
+      from: existing.status,
+      to: newStatus,
+      ...(newStatus === "EM_EXECUCAO" && receptionPending ? { receptionPending: true } : {}),
+    },
   });
 
   return updated;
@@ -771,6 +780,15 @@ export async function registerWorkOrderPaymentService(
       throw new WorkOrderPaymentExceedsBalanceError(remaining);
     }
 
+    // Data real do recebimento (opcional): meio-dia de Brasília, sem passar
+    // do dia de hoje.
+    let receivedAt: Date | null = null;
+    if (input.receivedOn) {
+      const todayBr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+      if (input.receivedOn > todayBr) throw new WorkOrderPaymentDateError();
+      receivedAt = new Date(`${input.receivedOn}T12:00:00-03:00`);
+    }
+
     const payment = await createWorkOrderPayment(
       {
         workOrderId,
@@ -778,6 +796,7 @@ export async function registerWorkOrderPaymentService(
         method: input.method,
         notes: input.notes ?? null,
         registeredByUserId: actorUserId,
+        receivedAt,
       },
       client,
     );
@@ -787,7 +806,7 @@ export async function registerWorkOrderPaymentService(
       action: "WORK_ORDER_PAYMENT_REGISTERED",
       entityType: "work_order",
       entityId: workOrderId,
-      metadata: { amountCents, method: input.method, paymentId: payment.id },
+      metadata: { amountCents, method: input.method, paymentId: payment.id, receivedOn: input.receivedOn ?? null },
     });
 
     return payment;

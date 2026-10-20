@@ -20,6 +20,27 @@ export async function setQuoteDefaultValidityDays(days: number): Promise<void> {
 }
 
 // ============================================================
+// Regras da oficina (travas que podem ser ligadas/desligadas)
+// ============================================================
+
+export const RECEPTION_REQUIRED_KEY = "rule_reception_required_for_execution";
+
+/**
+ * A OS só passa para "Em execução" com o Termo de Recepção aceito?
+ * Padrão: SIM (comportamento original do sistema). Só vira "não" se alguém
+ * desligar em Configurações → Regras. Quando desligado, o termo continua
+ * existindo e aparece como pendência ("Aceite pendente"), só não trava.
+ */
+export async function isReceptionRequiredForExecution(): Promise<boolean> {
+  const raw = await getSetting(RECEPTION_REQUIRED_KEY);
+  return raw !== "false";
+}
+
+export async function setReceptionRequiredForExecution(required: boolean): Promise<void> {
+  await setSetting(RECEPTION_REQUIRED_KEY, required ? "true" : "false");
+}
+
+// ============================================================
 // Ciclo H — Precificação e Custos
 // ============================================================
 

@@ -70,19 +70,30 @@ export function WorkOrderPaymentsSection({
   const [amountReais, setAmountReais] = useState("");
   const [method, setMethod] = useState("DINHEIRO");
   const [notes, setNotes] = useState("");
+  // Data do recebimento: padrão hoje (horário de Brasília); pode ser um dia
+  // anterior para lançar um pagamento que já aconteceu.
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+  const [receivedOn, setReceivedOn] = useState(today);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function handleRegister() {
     setError(null);
     startTransition(async () => {
-      const result = await registerWorkOrderPaymentAction(workOrderId, { amountReais, method, notes: notes || undefined });
+      const result = await registerWorkOrderPaymentAction(workOrderId, {
+        amountReais,
+        method,
+        notes: notes || undefined,
+        // Só envia quando é um dia anterior; hoje continua sendo "agora".
+        receivedOn: receivedOn && receivedOn !== today ? receivedOn : undefined,
+      });
       if (!result.success) {
         setError(result.error ?? "Falha ao registrar recebimento.");
         return;
       }
       setAmountReais("");
       setNotes("");
+      setReceivedOn(today);
       setShowForm(false);
       router.refresh();
     });
@@ -177,6 +188,17 @@ export function WorkOrderPaymentsSection({
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            <label className="text-xs text-muted" htmlFor="receivedOn">
+              Data do recebimento
+            </label>
+            <input
+              id="receivedOn"
+              type="date"
+              value={receivedOn}
+              max={today}
+              onChange={(e) => setReceivedOn(e.target.value)}
+              className={inputClass}
+            />
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
