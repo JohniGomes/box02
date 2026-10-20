@@ -7,6 +7,9 @@ import {
   createQuickCustomerService,
   createQuickVehicleService,
   lookupCustomerByPhoneService,
+  lookupCustomerByIdService,
+  searchCustomersByNameService,
+  type CustomerSuggestion,
   quickSaleService,
   QuickRegistrationError,
   vehicleLabel,
@@ -60,6 +63,16 @@ function friendlyError(err: unknown, fallback: string): QuickActionResult {
 export async function lookupCustomerByPhoneAction(phone: string): Promise<CustomerLookup | null> {
   await requireUserId();
   return lookupCustomerByPhoneService(phone);
+}
+
+export async function searchCustomersByNameAction(query: string): Promise<CustomerSuggestion[]> {
+  await requireUserId();
+  return searchCustomersByNameService(query);
+}
+
+export async function lookupCustomerByIdAction(customerId: string): Promise<CustomerLookup | null> {
+  await requireUserId();
+  return lookupCustomerByIdService(customerId);
 }
 
 export interface QuickCustomerActionResult extends QuickActionResult {

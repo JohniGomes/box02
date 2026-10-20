@@ -114,6 +114,12 @@ export async function unmarkExpenseAsPaid(id: string, db: Queryable = pool): Pro
   return result.rows[0] ?? null;
 }
 
+/** Apaga uma despesa que ainda não foi paga. Quem chama já conferiu isso. */
+export async function deleteUnpaidExpense(id: string, db: Queryable = pool): Promise<boolean> {
+  const result = await db.query(`DELETE FROM expenses WHERE id = $1 AND "paidAt" IS NULL`, [id]);
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function hasBankReconciliation(expenseId: string, db: Queryable = pool): Promise<boolean> {
   const result = await db.query(`SELECT 1 FROM bank_reconciliations WHERE "expenseId" = $1 LIMIT 1`, [expenseId]);
   return (result.rowCount ?? 0) > 0;

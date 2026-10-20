@@ -21,14 +21,32 @@ export const EXPENSE_CATEGORIES = [
   "OUTROS",
 ] as const;
 
-export const createExpenseSchema = z.object({
+/** Nome da categoria — usado como descrição quando ela não é informada. */
+export const EXPENSE_CATEGORY_DEFAULT_DESCRIPTION: Record<(typeof EXPENSE_CATEGORIES)[number], string> = {
+  ALUGUEL: "Aluguel",
+  SALARIOS: "Salários/Pró-labore",
+  FORNECEDORES: "Fornecedores/Peças",
+  IMPOSTOS: "Impostos",
+  MANUTENCAO_EQUIPAMENTOS: "Manutenção de equipamentos",
+  UTILIDADES: "Utilidades",
+  MARKETING: "Marketing",
+  OUTROS: "Outros",
+};
+
+export const createExpenseSchema = z
+  .object({
   category: z.enum(EXPENSE_CATEGORIES, { message: "Selecione a categoria" }),
-  description: z.string().trim().min(1, "Descrição obrigatória"),
+  /** Opcional: vazio vira o nome da categoria. */
+  description: z.string().trim().optional(),
   supplierName: optionalTrimmed,
   amountReais: z.union([z.string(), z.number()]),
   dueDate: z.string().trim().min(1, "Informe o vencimento"),
   notes: optionalTrimmed,
-});
+  })
+  .transform((data) => ({
+    ...data,
+    description: data.description || EXPENSE_CATEGORY_DEFAULT_DESCRIPTION[data.category],
+  }));
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
 export const updateExpenseSchema = createExpenseSchema;

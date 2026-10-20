@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { auth } from "@/auth";
 import {
   createExpenseService,
+  deleteExpenseService,
   markExpenseAsPaidService,
   repeatExpenseNextMonthService,
   unmarkExpenseAsPaidService,
@@ -112,5 +113,17 @@ export async function repeatExpenseNextMonthAction(expenseId: string): Promise<E
     return { success: true, expenseId: created.id };
   } catch (err) {
     return friendlyError(err, "Não foi possível repetir a despesa.");
+  }
+}
+
+export async function deleteExpenseAction(expenseId: string): Promise<ExpenseActionResult> {
+  try {
+    const userId = await requireUserId();
+    await deleteExpenseService(userId, expenseId);
+    revalidatePath("/dashboard/despesas");
+    revalidatePath("/dashboard");
+    return { success: true, expenseId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível excluir a despesa.");
   }
 }
