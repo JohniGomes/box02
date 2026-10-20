@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { getActiveQuoteLinkService, getQuoteApprovalService, getQuoteService } from "@/lib/quotes/service";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
-import { formatBRL } from "@/lib/money";
+import { computeQuoteTotals, formatBRL } from "@/lib/money";
+import { auth } from "@/auth";
+import { listActiveUsers } from "@/lib/db/repositories/users";
+import { RegisterCompletedServiceForm } from "./RegisterCompletedServiceForm";
 import { formatPlate } from "@/lib/validation/plate";
 import { QUOTE_STATUS_CLASS, QUOTE_STATUS_LABEL } from "../statusLabels";
 import { CancelQuoteButton, DeleteQuoteButton, NewVersionButton, SendQuoteButton } from "./QuoteActions";
@@ -43,6 +46,22 @@ export default async function QuoteDetailPage({
   const canRegisterApproval =
     (isDraft || isSent || version.status === "EXPIRADO") &&
     items.some((i) => i.category !== "INFORMATIVO");
+  const canRegisterCompleted = canRegisterApproval || isApprovedForConversion;
+
+  // Total que o serviço fechará: tudo (não informativo) se ainda vai ser
+  // aprovado por inteiro; só os itens já aprovados se a decisão já existe.
+  const completedTotals = computeQuoteTotals({
+    items: items
+      .filter((i) => i.category !== "INFORMATIVO" && (isApprovedForConversion ? i.clientDecision === "APROVADO" : true))
+      .map((i) => ({ type: i.type, totalCents: i.totalCents })),
+    discountType: version.discountType,
+    discountValue: version.discountValue,
+    surchargeType: version.surchargeType,
+    surchargeValue: version.surchargeValue,
+  });
+  const [executors, session] = canRegisterCompleted
+    ? await Promise.all([listActiveUsers(), auth()])
+    : [[], null];
 
   return (
     <div className="flex flex-col gap-5">
@@ -233,6 +252,15 @@ export default async function QuoteDetailPage({
           />
         ) : null}
         {isApprovedForConversion ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
+        {canRegisterCompleted && completedTotals.totalCents > 0 ? (
+          <RegisterCompletedServiceForm
+            quoteId={quote.id}
+            totalCents={completedTotals.totalCents}
+            customerName={customer?.legalName ?? ""}
+            executors={executors}
+            currentUserId={session?.user?.id ?? ""}
+          />
+        ) : null}
         {canCreateNewVersion ? <NewVersionButton quoteId={quote.id} /> : null}
         {canCancel ? <CancelQuoteButton quoteId={quote.id} /> : null}
         <DeleteQuoteButton quoteId={quote.id} />
