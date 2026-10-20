@@ -8,11 +8,13 @@ import {
   createNewQuoteVersionService,
   createQuoteService,
   deleteQuoteService,
+  registerInternalQuoteDecisionService,
   sendQuoteVersionService,
   updateQuoteVersionService,
 } from "@/lib/quotes/service";
 import {
   InvalidQuoteTransitionError,
+  QuoteItemsIncompleteDecisionError,
   QuoteNotDeletableError,
   QuoteNotFoundError,
   QuoteVersionNotEditableError,
@@ -57,6 +59,7 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
     err instanceof QuoteNotFoundError ||
     err instanceof QuoteVersionNotEditableError ||
     err instanceof InvalidQuoteTransitionError ||
+    err instanceof QuoteItemsIncompleteDecisionError ||
     err instanceof QuoteNotDeletableError ||
     err instanceof PartNotActiveError ||
     err instanceof PartNotFoundError
@@ -113,6 +116,23 @@ export async function sendQuoteVersionAction(quoteId: string): Promise<ActionRes
     return { success: true, quoteId };
   } catch (err) {
     return mapKnownError(err, "Não foi possível enviar o orçamento.");
+  }
+}
+
+/** Aprovação registrada pela oficina (presencial/telefone/serviço já feito),
+ * sem depender do link público do cliente. */
+export async function registerInternalQuoteDecisionAction(
+  quoteId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await registerInternalQuoteDecisionService(userId, quoteId, input);
+    revalidatePath("/dashboard/orcamentos");
+    revalidatePath(`/dashboard/orcamentos/${quoteId}`);
+    return { success: true, quoteId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível registrar a aprovação.");
   }
 }
 

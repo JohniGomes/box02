@@ -699,6 +699,115 @@ export async function submitPublicQuoteDecisionService(
   return result;
 }
 
+/**
+ * Registra a decisão do cliente pela própria oficina (aprovação presencial,
+ * por telefone/WhatsApp, ou serviço já realizado) — sem depender do link
+ * público. Mesmas regras do link: todo item decidível recebe decisão,
+ * INFORMATIVO nunca é decidido, resultado total/parcial/recusado calculado
+ * igual, trava de linha contra concorrência. A diferença é o canal
+ * (`PRESENCIAL`) e quem registra (usuário logado, gravado na auditoria).
+ *
+ * Aceita versões em RASCUNHO, ENVIADO ou EXPIRADO — o link público, se
+ * existir, é revogado para o cliente não decidir de novo por cima.
+ */
+export async function registerInternalQuoteDecisionService(
+  actorUserId: string,
+  quoteId: string,
+  rawInput: unknown,
+): Promise<QuoteVersionRecord> {
+  const input = quoteDecisionInputSchema.parse(rawInput) as QuoteDecisionInput;
+
+  const quote = await findQuoteById(quoteId);
+  if (!quote) throw new QuoteNotFoundError(quoteId);
+
+  const current = await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber);
+  if (!current) throw new QuoteVersionNotFoundError(quoteId);
+
+  const result = await withTransaction(async (client) => {
+    const version = await lockQuoteVersionById(current.id, client);
+    if (!version) throw new QuoteVersionNotFoundError(quoteId);
+
+    if (version.status !== "RASCUNHO" && version.status !== "ENVIADO" && version.status !== "EXPIRADO") {
+      throw new InvalidQuoteTransitionError(
+        "Este orçamento já foi decidido ou cancelado — só dá para registrar a aprovação de um orçamento em rascunho, enviado ou expirado.",
+      );
+    }
+
+    const items = await listQuoteItemsByVersion(version.id, client);
+    if (items.length === 0) {
+      throw new InvalidQuoteTransitionError("O orçamento não tem itens.");
+    }
+
+    const itemById = new Map(items.map((i) => [i.id, i]));
+    for (const d of input.itemDecisions) {
+      const item = itemById.get(d.itemId);
+      if (!item) throw new QuoteItemsIncompleteDecisionError("Item não pertence a este orçamento.");
+      if (item.category === "INFORMATIVO") {
+        throw new QuoteItemsIncompleteDecisionError(
+          "Item informativo não é decidível — não exige aprovação nem recusa do cliente.",
+        );
+      }
+    }
+
+    const decisionByItemId = new Map(input.itemDecisions.map((d) => [d.itemId, d.decision]));
+    const decidableItems = items.filter((item) => item.category !== "INFORMATIVO");
+    if (decidableItems.some((item) => !decisionByItemId.has(item.id))) {
+      throw new QuoteItemsIncompleteDecisionError(
+        "Todos os itens precisam de uma decisão (aprovado ou recusado) antes de confirmar.",
+      );
+    }
+
+    for (const item of decidableItems) {
+      await setQuoteItemDecision(item.id, decisionByItemId.get(item.id)!, client);
+    }
+
+    const allApproved = decidableItems.every((i) => decisionByItemId.get(i.id) === "APROVADO");
+    const allRejected = decidableItems.every((i) => decisionByItemId.get(i.id) === "RECUSADO");
+    const overallDecision: "APROVADO" | "APROVADO_PARCIAL" | "RECUSADO" = allApproved
+      ? "APROVADO"
+      : allRejected
+        ? "RECUSADO"
+        : "APROVADO_PARCIAL";
+
+    await createQuoteApproval(
+      {
+        quoteVersionId: version.id,
+        decision: overallDecision,
+        approverName: input.approverName,
+        approverDocument: input.approverDocument,
+        reason: input.reason,
+        notes: input.notes,
+        channel: "PRESENCIAL",
+      },
+      client,
+    );
+
+    const now = new Date();
+    const updatedVersion = await setQuoteVersionStatus(
+      version.id,
+      overallDecision,
+      // Versão que nunca foi "enviada" (rascunho) ganha o sentAt agora, para
+      // o histórico não ficar com decisão sem envio.
+      { decidedAt: now, ...(version.sentAt ? {} : { sentAt: now }) },
+      client,
+    );
+    await updateQuoteStatusAndVersion(version.quoteId, overallDecision, version.versionNumber, client);
+    await revokeActiveLinksForVersion(version.id, client);
+
+    return updatedVersion as QuoteVersionRecord;
+  });
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "QUOTE_DECIDED",
+    entityType: "quote_version",
+    entityId: result.id,
+    metadata: { decision: result.status, channel: "PRESENCIAL", registeredByOffice: true },
+  });
+
+  return result;
+}
+
 /** Exclusão real — distinta de cancelar (que mantém histórico). Bloqueada
  * se já existir OS criada a partir deste orçamento (checagem explícita:
  * a FK de sourceQuoteVersionId é SET NULL, não RESTRICT, então o banco

@@ -9,8 +9,9 @@ export default function NewWorkOrderPage() {
       </Link>
       <h1 className="text-lg font-semibold tracking-tight">Nova OS (sem orçamento)</h1>
       <p className="text-sm text-muted">
-        Para converter um orçamento já aprovado em OS, use o botão &quot;Converter em OS&quot; na própria
-        ficha do orçamento.
+        Para converter um orçamento já aprovado em OS, use o botão &quot;Criar OS a partir deste
+        orçamento&quot; na própria ficha do orçamento. Se o cliente aprovou fora do link, use antes
+        &quot;Registrar aprovação&quot; na mesma ficha.
       </p>
       <NewWorkOrderWithoutQuoteForm />
     </div>

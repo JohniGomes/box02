@@ -8,6 +8,7 @@ import { formatPlate } from "@/lib/validation/plate";
 import { QUOTE_STATUS_CLASS, QUOTE_STATUS_LABEL } from "../statusLabels";
 import { CancelQuoteButton, DeleteQuoteButton, NewVersionButton, SendQuoteButton } from "./QuoteActions";
 import { ConvertQuoteToWorkOrderForm } from "./ConvertQuoteToWorkOrderForm";
+import { RegisterApprovalForm } from "./RegisterApprovalForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { PrintButton } from "@/components/PrintButton";
 
@@ -39,6 +40,9 @@ export default async function QuoteDetailPage({
   const canCreateNewVersion = !isDraft;
   const canCancel = isDraft || isSent;
   const isApprovedForConversion = version.status === "APROVADO" || version.status === "APROVADO_PARCIAL";
+  const canRegisterApproval =
+    (isDraft || isSent || version.status === "EXPIRADO") &&
+    items.some((i) => i.category !== "INFORMATIVO");
 
   return (
     <div className="flex flex-col gap-5">
@@ -162,12 +166,14 @@ export default async function QuoteDetailPage({
             <p>
               Decidido por <span className="font-medium">{approval.approverName}</span> em{" "}
               {new Date(approval.decidedAt).toLocaleString("pt-BR")}
+              {approval.channel === "PRESENCIAL" ? " (registrado pela oficina)" : ""}
             </p>
             <p className="text-muted">
               Resultado:{" "}
               <span className="font-medium text-foreground">{QUOTE_STATUS_LABEL[approval.decision]}</span>
             </p>
             {approval.reason ? <p className="text-muted">Motivo: {approval.reason}</p> : null}
+            {approval.notes ? <p className="text-muted">Obs.: {approval.notes}</p> : null}
           </div>
         ) : activeLink ? (
           <div className="mt-2 flex flex-col gap-2">
@@ -212,6 +218,20 @@ export default async function QuoteDetailPage({
 
       <div className="flex flex-col gap-3 print:hidden">
         {isDraft ? <SendQuoteButton quoteId={quote.id} /> : null}
+        {canRegisterApproval ? (
+          <RegisterApprovalForm
+            quoteId={quote.id}
+            customerName={customer?.legalName ?? ""}
+            items={items
+              .filter((i) => i.category !== "INFORMATIVO")
+              .map((i) => ({
+                id: i.id,
+                description: i.description,
+                typeLabel: ITEM_TYPE_LABEL[i.type],
+                totalCents: i.totalCents,
+              }))}
+          />
+        ) : null}
         {isApprovedForConversion ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
         {canCreateNewVersion ? <NewVersionButton quoteId={quote.id} /> : null}
         {canCancel ? <CancelQuoteButton quoteId={quote.id} /> : null}
