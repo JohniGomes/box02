@@ -30,6 +30,8 @@ export interface DashboardMetrics {
   netResultCents: number;
   averageTicketCents: number;
   pendingExpensesCents: number;
+  /** Despesas não pagas que vencem no mês seguinte. */
+  nextMonthExpensesCents: number;
   todayRevenueCents: number;
   todayExpensesCents: number;
   salesByMethodThisMonth: SalesByMethod;
@@ -47,6 +49,7 @@ interface DashboardMetricsRow {
   monthly_refunds_cents: string;
   monthly_expenses_cents: string;
   pending_expenses_cents: string;
+  next_month_expenses_cents: string;
   paid_work_orders_this_month: string;
   today_revenue_cents: string;
   today_expenses_cents: string;
@@ -98,6 +101,11 @@ export function buildDashboardMetricsSql(nowExpr = "now()"): string {
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
         WHERE "paidAt" IS NULL AND "dueDate" < (${nextMonth})::date
       ) AS pending_expenses_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
+        WHERE "paidAt" IS NULL
+          AND "dueDate" >= (${nextMonth})::date
+          AND "dueDate" < ((${nextMonth}) + interval '1 month')::date
+      ) AS next_month_expenses_cents,
       (SELECT COUNT(DISTINCT "workOrderId") FROM work_order_payments
         WHERE ${inMonth('"receivedAt"')}
       ) AS paid_work_orders_this_month,
@@ -147,6 +155,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     netResultCents: monthlyRevenueCents - monthlyExpensesCents,
     averageTicketCents: paidWorkOrdersThisMonth > 0 ? Math.round(monthlyRevenueCents / paidWorkOrdersThisMonth) : 0,
     pendingExpensesCents: Number(row.pending_expenses_cents),
+    nextMonthExpensesCents: Number(row.next_month_expenses_cents),
     todayRevenueCents: Number(row.today_revenue_cents),
     todayExpensesCents: Number(row.today_expenses_cents),
     salesByMethodThisMonth: {
