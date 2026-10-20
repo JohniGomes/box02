@@ -67,6 +67,27 @@ export async function deleteQuote(id: string, db: Queryable = pool): Promise<voi
   await db.query(`DELETE FROM quotes WHERE id = $1`, [id]);
 }
 
+export interface QuoteWorkOrderRef {
+  id: string;
+  number: string;
+  status: string;
+  versionNumber: number;
+}
+
+/** OS geradas a partir de QUALQUER versão do orçamento (a OS fica presa à
+ * versão de onde nasceu, mesmo que depois exista uma versão mais nova). */
+export async function listWorkOrdersByQuote(quoteId: string, db: Queryable = pool): Promise<QuoteWorkOrderRef[]> {
+  const result = await db.query<QuoteWorkOrderRef>(
+    `SELECT w.id, w.number, w.status, v."versionNumber"
+     FROM work_orders w
+     JOIN quote_versions v ON v.id = w."sourceQuoteVersionId"
+     WHERE v."quoteId" = $1
+     ORDER BY w."createdAt" ASC`,
+    [quoteId],
+  );
+  return result.rows;
+}
+
 /** Existe pelo menos uma OS criada a partir de alguma versão deste
  * orçamento? work_orders.sourceQuoteVersionId é ON DELETE SET NULL,
  * então o banco sozinho deixaria apagar e silenciosamente desvincular

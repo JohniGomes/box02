@@ -8,7 +8,9 @@ import {
   createNewQuoteVersionService,
   createQuoteService,
   deleteQuoteService,
+  discardQuoteVersionService,
   registerInternalQuoteDecisionService,
+  restorePreviousQuoteVersionService,
   sendQuoteVersionService,
   updateQuoteVersionService,
 } from "@/lib/quotes/service";
@@ -178,6 +180,32 @@ export async function createNewQuoteVersionAction(quoteId: string): Promise<Acti
     return { success: true, quoteId };
   } catch (err) {
     return mapKnownError(err, "Não foi possível criar uma nova versão.");
+  }
+}
+
+/** Descarta a versão vigente e volta para a anterior (que continua como estava). */
+export async function discardQuoteVersionAction(quoteId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await discardQuoteVersionService(userId, quoteId);
+    revalidatePath("/dashboard/orcamentos");
+    revalidatePath(`/dashboard/orcamentos/${quoteId}`);
+    return { success: true, quoteId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível descartar a versão.");
+  }
+}
+
+/** Para uma versão vigente cancelada: volta para a versão anterior. */
+export async function restorePreviousQuoteVersionAction(quoteId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await restorePreviousQuoteVersionService(userId, quoteId);
+    revalidatePath("/dashboard/orcamentos");
+    revalidatePath(`/dashboard/orcamentos/${quoteId}`);
+    return { success: true, quoteId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível voltar para a versão anterior.");
   }
 }
 

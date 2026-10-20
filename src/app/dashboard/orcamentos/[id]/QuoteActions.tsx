@@ -6,6 +6,8 @@ import {
   cancelQuoteVersionAction,
   createNewQuoteVersionAction,
   deleteQuoteAction,
+  discardQuoteVersionAction,
+  restorePreviousQuoteVersionAction,
   sendQuoteVersionAction,
 } from "../actions";
 
@@ -66,12 +68,130 @@ export function SendQuoteButton({ quoteId }: { quoteId: string }) {
   );
 }
 
-export function NewVersionButton({ quoteId }: { quoteId: string }) {
+/** Nova versão pede confirmação: copia os itens para um rascunho e passa a ser
+ * a versão vigente. Se já existe OS, avisa que a OS NÃO muda. */
+export function NewVersionButton({
+  quoteId,
+  currentVersionNumber,
+  workOrderNumbers,
+}: {
+  quoteId: string;
+  currentVersionNumber: number;
+  workOrderNumbers: string[];
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        className="h-11 rounded-xl border border-border px-4 text-sm font-semibold text-foreground"
+      >
+        Criar nova versão
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+      <p className="text-sm">
+        Criar a versão {currentVersionNumber + 1}? Ela começa como <strong>rascunho</strong>, com os mesmos itens, e
+        passa a ser a versão em uso. A versão {currentVersionNumber} fica guardada como está.
+      </p>
+      {workOrderNumbers.length > 0 ? (
+        <p className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
+          Atenção: este orçamento já virou {workOrderNumbers.length === 1 ? "a OS" : "as OS"}{" "}
+          <strong>{workOrderNumbers.join(", ")}</strong>. Uma nova versão <strong>não altera</strong> a OS já criada.
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <ActionButton
+            label="Sim, criar nova versão"
+            pendingLabel="Criando…"
+            variant="primary"
+            onRun={() => createNewQuoteVersionAction(quoteId)}
+          />
+        </div>
+        <button
+          onClick={() => setConfirming(false)}
+          className="h-11 flex-1 rounded-xl border border-border text-sm font-medium"
+        >
+          Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Descarta a versão em uso e volta para a anterior (que continua como estava). */
+export function DiscardVersionButton({
+  quoteId,
+  currentVersionNumber,
+  previousVersionNumber,
+  previousStatusLabel,
+}: {
+  quoteId: string;
+  currentVersionNumber: number;
+  previousVersionNumber: number;
+  previousStatusLabel: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        className="h-11 rounded-xl border border-border px-4 text-sm font-semibold text-foreground"
+      >
+        Descartar versão {currentVersionNumber} e voltar para a {previousVersionNumber}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+      <p className="text-sm">
+        Descartar a versão {currentVersionNumber}? O orçamento volta para a versão {previousVersionNumber} (
+        {previousStatusLabel}), do jeito que estava. A versão {currentVersionNumber} fica no histórico como
+        cancelada.
+      </p>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <ActionButton
+            label="Sim, descartar"
+            pendingLabel="Descartando…"
+            variant="primary"
+            onRun={() => discardQuoteVersionAction(quoteId)}
+          />
+        </div>
+        <button
+          onClick={() => setConfirming(false)}
+          className="h-11 flex-1 rounded-xl border border-border text-sm font-medium"
+        >
+          Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Versão em uso foi cancelada: um toque devolve a anterior (ex.: aprovada). */
+export function RestoreVersionButton({
+  quoteId,
+  previousVersionNumber,
+  previousStatusLabel,
+}: {
+  quoteId: string;
+  previousVersionNumber: number;
+  previousStatusLabel: string;
+}) {
   return (
     <ActionButton
-      label="Criar nova versão"
-      pendingLabel="Criando…"
-      onRun={() => createNewQuoteVersionAction(quoteId)}
+      label={`Voltar para a versão ${previousVersionNumber} (${previousStatusLabel})`}
+      pendingLabel="Voltando…"
+      variant="primary"
+      onRun={() => restorePreviousQuoteVersionAction(quoteId)}
     />
   );
 }
@@ -85,14 +205,17 @@ export function CancelQuoteButton({ quoteId }: { quoteId: string }) {
         onClick={() => setConfirming(true)}
         className="h-11 rounded-xl border border-danger/40 px-4 text-sm font-semibold text-danger"
       >
-        Cancelar orçamento
+        Cancelar orçamento inteiro
       </button>
     );
   }
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-danger/30 bg-danger/5 p-4">
-      <p className="text-sm">Cancelar este orçamento? Ele fica registrado no histórico, só não segue mais em andamento.</p>
+      <p className="text-sm">
+        Cancelar o orçamento <strong>inteiro</strong>? Ele fica registrado no histórico, só não segue mais em
+        andamento. (Para descartar só a versão nova e voltar para a anterior, use o outro botão.)
+      </p>
       <div className="flex gap-2">
         <div className="flex-1">
           <ActionButton
