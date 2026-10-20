@@ -140,6 +140,7 @@ export default async function DashboardHomePage() {
             <Row label="Saídas do mês (pagas)" value={formatBRL(metrics.monthlyExpensesCents)} />
             <Row label="Resultado do mês" value={formatBRL(metrics.netResultCents)} />
             <Row label="Despesas a pagar até o fim do mês" value={formatBRL(metrics.pendingExpensesCents)} />
+            <Row label="A pagar no mês que vem" value={formatBRL(metrics.nextMonthExpensesCents)} />
           </div>
         </div>
       </div>
