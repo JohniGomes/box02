@@ -3,8 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
-import { createExpenseService, markExpenseAsPaidService, updateExpenseService } from "@/lib/expenses/service";
-import { ExpenseAlreadyPaidError, ExpenseNotFoundError } from "@/lib/expenses/errors";
+import {
+  createExpenseService,
+  markExpenseAsPaidService,
+  repeatExpenseNextMonthService,
+  unmarkExpenseAsPaidService,
+  updateExpenseService,
+} from "@/lib/expenses/service";
+import {
+  ExpenseAlreadyPaidError,
+  ExpenseDuplicateError,
+  ExpenseNotFoundError,
+  ExpenseNotPaidError,
+  ExpensePaidInFutureError,
+  ExpenseReconciledError,
+} from "@/lib/expenses/errors";
 
 export interface ExpenseActionResult {
   success: boolean;
@@ -28,7 +41,14 @@ function friendlyError(err: unknown, fallback: string): ExpenseActionResult {
     }
     return { success: false, error: "Existem campos inválidos.", fieldErrors };
   }
-  if (err instanceof ExpenseNotFoundError || err instanceof ExpenseAlreadyPaidError) {
+  if (
+    err instanceof ExpenseNotFoundError ||
+    err instanceof ExpenseAlreadyPaidError ||
+    err instanceof ExpenseNotPaidError ||
+    err instanceof ExpenseReconciledError ||
+    err instanceof ExpenseDuplicateError ||
+    err instanceof ExpensePaidInFutureError
+  ) {
     return { success: false, error: err.message };
   }
   return { success: false, error: fallback };
@@ -56,13 +76,41 @@ export async function updateExpenseAction(expenseId: string, input: unknown): Pr
   }
 }
 
-export async function markExpenseAsPaidAction(expenseId: string, paymentMethod: string): Promise<ExpenseActionResult> {
+export async function markExpenseAsPaidAction(
+  expenseId: string,
+  paymentMethod: string,
+  paidOn?: string,
+): Promise<ExpenseActionResult> {
   try {
     const userId = await requireUserId();
-    await markExpenseAsPaidService(userId, expenseId, { paymentMethod });
+    await markExpenseAsPaidService(userId, expenseId, { paymentMethod, paidOn });
     revalidatePath("/dashboard/despesas");
+    revalidatePath("/dashboard");
     return { success: true, expenseId };
   } catch (err) {
     return friendlyError(err, "Não foi possível marcar a despesa como paga.");
+  }
+}
+
+export async function unmarkExpenseAsPaidAction(expenseId: string): Promise<ExpenseActionResult> {
+  try {
+    const userId = await requireUserId();
+    await unmarkExpenseAsPaidService(userId, expenseId);
+    revalidatePath("/dashboard/despesas");
+    revalidatePath("/dashboard");
+    return { success: true, expenseId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível desfazer o pagamento.");
+  }
+}
+
+export async function repeatExpenseNextMonthAction(expenseId: string): Promise<ExpenseActionResult> {
+  try {
+    const userId = await requireUserId();
+    const created = await repeatExpenseNextMonthService(userId, expenseId);
+    revalidatePath("/dashboard/despesas");
+    return { success: true, expenseId: created.id };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível repetir a despesa.");
   }
 }
