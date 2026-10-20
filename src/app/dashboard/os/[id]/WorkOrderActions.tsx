@@ -12,6 +12,7 @@ import {
   setWorkOrderStatusAction,
 } from "../actions";
 import type { StockEntryDefaults } from "@/lib/workOrders/stockEntry";
+import { defaultExecutorOptionId } from "@/lib/executors/value";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 import { WORK_ORDER_STATUS_LABEL } from "../statusLabels";
 
@@ -112,7 +113,7 @@ export function WorkOrderItemActions({
   const [isPending, startTransition] = useTransition();
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
-  const [executorId, setExecutorId] = useState(currentUserId);
+  const [executorId, setExecutorId] = useState(defaultExecutorOptionId(users, currentUserId));
   const [error, setError] = useState<string | null>(null);
   // Falta de estoque: em vez de só travar, oferece dar a entrada e executar.
   const [shortage, setShortage] = useState<StockEntryDefaults | null>(null);
@@ -123,7 +124,7 @@ export function WorkOrderItemActions({
     setError(null);
     startTransition(async () => {
       const result = await setWorkOrderItemStatusAction(workOrderId, itemId, "EXECUTADO", {
-        executedByUserId: executorId,
+        executedBy: executorId,
       });
       if (!result.success) {
         if (result.stockShortage) {
@@ -146,7 +147,7 @@ export function WorkOrderItemActions({
     setError(null);
     startTransition(async () => {
       const result = await executeItemWithStockEntryAction(workOrderId, itemId, {
-        executedByUserId: executorId,
+        executedBy: executorId,
         entryQuantity: entryQty,
         unitCostReais: entryCost || undefined,
       });
@@ -308,22 +309,29 @@ export function WorkOrderItemExecutorInfo({
   workOrderId,
   itemId,
   executedByUserId,
+  executedByName,
   users,
   canManage,
 }: {
   workOrderId: string;
   itemId: string;
   executedByUserId: string | null;
+  /** Nome escolhido na lista de executores (tem prioridade sobre o usuário). */
+  executedByName?: string | null;
+  /** Opções do seletor (executores da lista, ou usuários se a lista estiver vazia). */
   users: ActiveUserOption[];
   canManage: boolean;
 }) {
   const router = useRouter();
   const [correcting, setCorrecting] = useState(false);
-  const [newExecutorId, setNewExecutorId] = useState(executedByUserId ?? users[0]?.id ?? "");
+  const [newExecutorId, setNewExecutorId] = useState(
+    defaultExecutorOptionId(users, executedByUserId ?? ""),
+  );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const executorName = users.find((u) => u.id === executedByUserId)?.name ?? "—";
+  const executorName =
+    executedByName ?? users.find((u) => u.id === executedByUserId)?.name ?? (executedByUserId ? "(usuário)" : "—");
 
   function confirmCorrection() {
     setError(null);
@@ -374,8 +382,11 @@ export function WorkOrderItemExecutorInfo({
 export function CloseWorkOrderForm({
   workOrderId,
   deliveryChecklistPendingCount,
+  deliveryChecklistRequired = true,
 }: {
   workOrderId: string;
+  /** Regra ligada/desligada em Configurações → Regras (padrão: ligada). */
+  deliveryChecklistRequired?: boolean;
   /** Antecipação de UI (UX-10) — mesma lógica de `WorkOrderStatusActions`:
    * lê o dado já calculado (itens obrigatórios pendentes no checklist de
    * entrega, se uma instância existir), nunca recalcula a regra do
@@ -389,7 +400,8 @@ export function CloseWorkOrderForm({
   const [document, setDocumentValue] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const blocked = deliveryChecklistPendingCount > 0;
+  const hasPending = deliveryChecklistPendingCount > 0;
+  const blocked = hasPending && deliveryChecklistRequired;
 
   function handleClose() {
     setError(null);
@@ -419,6 +431,11 @@ export function CloseWorkOrderForm({
         {blocked ? (
           <p className="text-xs text-danger">
             {deliveryChecklistPendingCount} item(ns) obrigatório(s) pendente(s) no checklist de entrega
+          </p>
+        ) : hasPending ? (
+          <p className="text-xs text-muted">
+            {deliveryChecklistPendingCount} item(ns) do checklist de entrega ainda pendente(s) — pode entregar e
+            registrar depois (fica em Pendências).
           </p>
         ) : null}
       </div>

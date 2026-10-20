@@ -6,8 +6,8 @@ import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { getServiceService } from "@/lib/services/service";
-import { isReceptionRequiredForExecution } from "@/lib/settings/service";
-import { listActiveUsers } from "@/lib/db/repositories/users";
+import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
+import { listExecutorOptionsService } from "@/lib/executors/service";
 import { findQuoteVersionById } from "@/lib/db/repositories/quoteVersions";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
 import { formatBRL } from "@/lib/money";
@@ -67,12 +67,15 @@ export default async function WorkOrderDetailsPage({
   const paymentsSummary =
     workOrder.status === "ENTREGUE" ? await getWorkOrderPaymentsSummaryService(workOrder.id) : null;
   const evidences = await listWorkOrderEvidencesService(workOrder.id);
-  const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired] = await Promise.all([
+  const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired, deliveryChecklistRequired] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
     getWorkOrderChecklistsService(workOrder.id),
-    listActiveUsers(),
+    // Opções de "executado por": nomes da lista de executores (ou, se ela
+    // estiver vazia, os usuários ativos).
+    listExecutorOptionsService(),
     isReceptionRequiredForExecution(),
+    isDeliveryChecklistRequired(),
   ]);
 
   const isOpenForCancel = workOrder.status !== "ENTREGUE" && workOrder.status !== "CANCELADA";
@@ -257,6 +260,7 @@ export default async function WorkOrderDetailsPage({
                     workOrderId={workOrder.id}
                     itemId={item.id}
                     executedByUserId={item.executedByUserId}
+                    executedByName={item.executedByName}
                     users={activeUsers}
                     canManage={isOpenForCancel}
                   />
@@ -299,6 +303,7 @@ export default async function WorkOrderDetailsPage({
             cancelReason: item.cancelReason,
             customerPhone: customer?.whatsapp ?? customer?.phone ?? null,
             executedByUserId: item.executedByUserId,
+            executedByName: item.executedByName,
           }))}
         />
       </CollapsibleSection>
@@ -381,7 +386,11 @@ export default async function WorkOrderDetailsPage({
           receptionRequired={receptionRequired}
         />
         {canClose ? (
-          <CloseWorkOrderForm workOrderId={workOrder.id} deliveryChecklistPendingCount={deliveryChecklistPendingCount} />
+          <CloseWorkOrderForm
+            workOrderId={workOrder.id}
+            deliveryChecklistPendingCount={deliveryChecklistPendingCount}
+            deliveryChecklistRequired={deliveryChecklistRequired}
+          />
         ) : null}
         {isOpenForCancel ? <CancelWorkOrderForm workOrderId={workOrder.id} /> : null}
       </div>

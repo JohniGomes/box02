@@ -123,13 +123,21 @@ export const cancelWorkOrderItemSchema = z.object({
 // Ciclo L — Rastreabilidade de Execução por Mecânico
 // ============================================================
 
-export const executeWorkOrderItemSchema = z.object({
-  executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
-});
+/** Quem executou: um usuário (executedByUserId) OU um nome da lista de
+ * executores (executorId). Um dos dois é obrigatório. */
+const executorChoiceShape = {
+  executedByUserId: z.string().trim().optional(),
+  executorId: z.string().trim().optional(),
+};
+const executorChoiceRefine = (d: { executedByUserId?: string; executorId?: string }) =>
+  Boolean(d.executedByUserId) || Boolean(d.executorId);
+const executorChoiceMessage = { message: "Selecione quem executou", path: ["executedByUserId"] };
 
-export const correctWorkOrderItemExecutorSchema = z.object({
-  executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
-});
+export const executeWorkOrderItemSchema = z.object(executorChoiceShape).refine(executorChoiceRefine, executorChoiceMessage);
+
+export const correctWorkOrderItemExecutorSchema = z
+  .object(executorChoiceShape)
+  .refine(executorChoiceRefine, executorChoiceMessage);
 
 // ============================================================
 // Sub-etapa 2 — Adicionais durante a execução

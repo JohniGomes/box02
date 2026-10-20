@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { registerCompletedServiceAction } from "../actions";
+import { defaultExecutorOptionId } from "@/lib/executors/value";
 
 type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
 
@@ -50,9 +51,9 @@ export function RegisterCompletedServiceForm({
   const [open, setOpen] = useState(false);
   const [serviceDate, setServiceDate] = useState("");
   const [mileage, setMileage] = useState("");
-  const [executedByUserId, setExecutedByUserId] = useState(
-    executors.some((e) => e.id === currentUserId) ? currentUserId : (executors[0]?.id ?? ""),
-  );
+  // `executors` = opções do seletor (nomes da lista de executores; se estiver
+  // vazia, usuários ativos). O valor escolhido é enviado como `executedBy`.
+  const [executedBy, setExecutedBy] = useState(defaultExecutorOptionId(executors, currentUserId));
   const [deliveryName, setDeliveryName] = useState(customerName);
   const [rows, setRows] = useState<PaymentRow[]>([newRow(centsToField(totalCents))]);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +79,7 @@ export function RegisterCompletedServiceForm({
     const result = await registerCompletedServiceAction(quoteId, {
       serviceDate,
       mileageAtEntry: mileage,
-      executedByUserId,
+      executedBy,
       deliveryAcceptedName: deliveryName,
       payments: rows
         .filter((r) => reaisToCents(r.amount || "0") > 0)
@@ -156,8 +157,8 @@ export function RegisterCompletedServiceForm({
           </label>
           <select
             id="rcsExecutor"
-            value={executedByUserId}
-            onChange={(e) => setExecutedByUserId(e.target.value)}
+            value={executedBy}
+            onChange={(e) => setExecutedBy(e.target.value)}
             className={inputClass}
           >
             {executors.map((u) => (

@@ -40,6 +40,22 @@ export async function setReceptionRequiredForExecution(required: boolean): Promi
   await setSetting(RECEPTION_REQUIRED_KEY, required ? "true" : "false");
 }
 
+export const DELIVERY_CHECKLIST_REQUIRED_KEY = "rule_delivery_checklist_required";
+
+/**
+ * A OS só pode ser entregue com os itens obrigatórios do checklist de entrega
+ * marcados (quando esse checklist foi iniciado)? Padrão: SIM. Desligada, a OS
+ * pode ser entregue e a pendência aparece em "Pendências das OS" no Início.
+ */
+export async function isDeliveryChecklistRequired(): Promise<boolean> {
+  const raw = await getSetting(DELIVERY_CHECKLIST_REQUIRED_KEY);
+  return raw !== "false";
+}
+
+export async function setDeliveryChecklistRequired(required: boolean): Promise<void> {
+  await setSetting(DELIVERY_CHECKLIST_REQUIRED_KEY, required ? "true" : "false");
+}
+
 // ============================================================
 // Ciclo H — Precificação e Custos
 // ============================================================
