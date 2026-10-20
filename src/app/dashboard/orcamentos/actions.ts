@@ -20,7 +20,13 @@ import {
   QuoteVersionNotEditableError,
   VehicleNotOwnedByCustomerError,
 } from "@/lib/quotes/errors";
-import { PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
+import { InsufficientStockError, PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
+import {
+  RetroactiveServiceError,
+  RetroactiveServiceIncompleteError,
+  registerCompletedServiceFromQuoteService,
+} from "@/lib/workOrders/retroactive";
+import { InvalidExecutorUserError, QuoteNotApprovedError } from "@/lib/workOrders/errors";
 import { listVehiclesByCustomerService } from "@/lib/vehicles/service";
 import { searchCustomersService } from "@/lib/customers/service";
 import { formatPlate } from "@/lib/validation/plate";
@@ -133,6 +139,33 @@ export async function registerInternalQuoteDecisionAction(
     return { success: true, quoteId };
   } catch (err) {
     return mapKnownError(err, "Não foi possível registrar a aprovação.");
+  }
+}
+
+/** Serviço que já aconteceu e foi pago: aprova (se preciso), cria a OS,
+ * executa, entrega, lança os pagamentos e ajusta as datas — tudo de uma vez. */
+export async function registerCompletedServiceAction(
+  quoteId: string,
+  input: unknown,
+): Promise<ActionResult & { workOrderId?: string }> {
+  try {
+    const userId = await requireUserId();
+    const result = await registerCompletedServiceFromQuoteService(userId, quoteId, input);
+    revalidatePath("/dashboard/orcamentos");
+    revalidatePath(`/dashboard/orcamentos/${quoteId}`);
+    revalidatePath("/dashboard/os");
+    return { success: true, quoteId, workOrderId: result.workOrderId };
+  } catch (err) {
+    if (
+      err instanceof RetroactiveServiceError ||
+      err instanceof RetroactiveServiceIncompleteError ||
+      err instanceof QuoteNotApprovedError ||
+      err instanceof InvalidExecutorUserError ||
+      err instanceof InsufficientStockError
+    ) {
+      return { success: false, error: err.message };
+    }
+    return mapKnownError(err, "Não foi possível registrar o serviço concluído.");
   }
 }
 

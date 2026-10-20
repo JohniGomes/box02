@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL } from "@/lib/money";
 import { refundWorkOrderPaymentAction, registerWorkOrderPaymentAction } from "../paymentActions";
@@ -94,6 +95,11 @@ export function WorkOrderPaymentsSection({
     <section className="rounded-2xl border border-border bg-surface p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-accent">Recebimentos</h2>
+        {summary.paidCents > 0 ? (
+          <Link href={`/dashboard/os/${workOrderId}/recibo`} className="text-xs font-medium text-accent">
+            Ver recibo →
+          </Link>
+        ) : null}
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_CLASS[summary.status]}`}>
           {STATUS_LABEL[summary.status]}
         </span>
