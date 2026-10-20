@@ -20,16 +20,19 @@ export function QuickCustomerForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleCreate() {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       const result = await createQuickCustomerAction({ name, phone: phone || undefined });
       if (!result.success || !result.customer) {
         setError(result.error ?? "Não foi possível cadastrar o cliente.");
         return;
       }
+      if (result.reused) setNotice(`Já existia um cliente com esse telefone (${result.customer.label}) — usei o cadastro dele.`);
       onCreated(result.customer, Boolean(result.reused));
       setName("");
       setPhone("");
@@ -39,6 +42,8 @@ export function QuickCustomerForm({
 
   if (!open) {
     return (
+      <div className="flex flex-col gap-1">
+        {notice ? <p className="text-xs text-muted">{notice}</p> : null}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -46,6 +51,7 @@ export function QuickCustomerForm({
       >
         + Cliente novo (só nome e telefone)
       </button>
+      </div>
     );
   }
 

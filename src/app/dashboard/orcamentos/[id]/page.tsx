@@ -65,7 +65,8 @@ export default async function QuoteDetailPage({
   const canRegisterApproval =
     (isDraft || isSent || version.status === "EXPIRADO") &&
     items.some((i) => i.category !== "INFORMATIVO");
-  const canRegisterCompleted = canRegisterApproval || isApprovedForConversion;
+  const hasActiveWorkOrder = workOrders.some((w) => w.status !== "CANCELADA");
+  const canRegisterCompleted = !hasActiveWorkOrder && (canRegisterApproval || isApprovedForConversion);
 
   // Total que o serviço fechará: tudo (não informativo) se ainda vai ser
   // aprovado por inteiro; só os itens já aprovados se a decisão já existe.
@@ -294,7 +295,7 @@ export default async function QuoteDetailPage({
               }))}
           />
         ) : null}
-        {isApprovedForConversion ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
+        {isApprovedForConversion && !hasActiveWorkOrder ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
         {canRegisterCompleted && completedTotals.totalCents > 0 ? (
           <RegisterCompletedServiceForm
             quoteId={quote.id}
