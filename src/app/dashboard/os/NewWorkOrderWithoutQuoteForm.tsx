@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
+import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import { createWorkOrderWithoutQuoteAction } from "./actions";
 import { searchCustomersForPickerAction } from "../veiculos/actions";
 import { listCustomerVehiclesAction, type VehicleOption } from "../orcamentos/actions";
@@ -216,6 +217,18 @@ export function NewWorkOrderWithoutQuoteForm() {
                     partId: part.id,
                     serviceId: undefined,
                     description: part.label,
+                    unitPriceReais: part.suggestedPriceReais ?? "",
+                  })
+                }
+              />
+              <PurchasedPartButton
+                onCreated={(part, quantity) =>
+                  updateItem(item.key, {
+                    type: "PECA",
+                    partId: part.id,
+                    serviceId: undefined,
+                    description: part.label,
+                    quantity: String(quantity),
                     unitPriceReais: part.suggestedPriceReais ?? "",
                   })
                 }

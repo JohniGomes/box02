@@ -12,6 +12,21 @@ export class DuplicatePartSkuError extends Error {
   }
 }
 
+export class DuplicatePartNameError extends Error {
+  constructor(public readonly name_: string) {
+    super(`Já existe uma peça chamada "${name_}". Use "Selecionar do estoque" para escolher ela.`);
+    this.name = "DuplicatePartNameError";
+  }
+}
+
+/** Dado inválido ao cadastrar a peça comprada (mensagem já pronta p/ o usuário). */
+export class InvalidPurchasedPartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidPurchasedPartError";
+  }
+}
+
 export class InsufficientStockError extends Error {
   constructor(public readonly available: number, public readonly requested: number) {
     super(`Estoque insuficiente — disponível: ${available}, solicitado: ${requested}.`);

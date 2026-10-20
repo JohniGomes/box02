@@ -30,12 +30,20 @@ import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { InsufficientStockError, PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
+import {
+  executeItemWithStockEntryService,
+  getItemStockEntryDefaultsService,
+  type StockEntryDefaults,
+} from "@/lib/workOrders/stockEntry";
 
 export interface ActionResult {
   success: boolean;
   error?: string;
   fieldErrors?: Record<string, string>;
   workOrderId?: string;
+  /** Preenchido quando a execução parou por falta de estoque da peça: a tela
+   * oferece "dar entrada e executar" em vez de só mostrar o erro. */
+  stockShortage?: { available: number; needed: number };
 }
 
 async function requireUserId(): Promise<string> {
@@ -56,6 +64,13 @@ function toFieldErrors(err: ZodError): Record<string, string> {
 function friendlyError(err: unknown, fallback: string): ActionResult {
   if (err instanceof ZodError) {
     return { success: false, error: "Existem campos inválidos.", fieldErrors: toFieldErrors(err) };
+  }
+  if (err instanceof InsufficientStockError) {
+    return {
+      success: false,
+      error: err.message,
+      stockShortage: { available: err.available, needed: err.requested },
+    };
   }
   if (
     err instanceof QuoteNotApprovedError ||
@@ -180,6 +195,37 @@ export async function cancelWorkOrderAction(workOrderId: string, reason: string)
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível cancelar a OS.");
+  }
+}
+
+/** Dados do aviso de falta de estoque (nome da peça, quanto falta, custo atual). */
+export async function getItemStockEntryDefaultsAction(
+  workOrderId: string,
+  itemId: string,
+): Promise<{ success: boolean; error?: string; defaults?: StockEntryDefaults }> {
+  try {
+    await requireUserId();
+    const defaults = await getItemStockEntryDefaultsService(workOrderId, itemId);
+    return { success: true, defaults };
+  } catch (err) {
+    return { success: false, error: friendlyError(err, "Não foi possível consultar o estoque.").error };
+  }
+}
+
+/** Dá a entrada da peça que chegou e executa o item (a baixa fecha o saldo). */
+export async function executeItemWithStockEntryAction(
+  workOrderId: string,
+  itemId: string,
+  input: { executedByUserId: string; entryQuantity: string; unitCostReais?: string },
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await executeItemWithStockEntryService(userId, workOrderId, itemId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/estoque");
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível dar entrada e executar o item.");
   }
 }
 

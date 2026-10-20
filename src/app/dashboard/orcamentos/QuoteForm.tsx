@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
+import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import {
   createQuoteAction,
   listCustomerVehiclesAction,
@@ -408,6 +409,18 @@ function QuoteItemsEditor({
                   partId: part.id,
                   serviceId: undefined,
                   description: part.label,
+                  unitPriceReais: part.suggestedPriceReais ?? "",
+                })
+              }
+            />
+            <PurchasedPartButton
+              onCreated={(part, quantity) =>
+                onUpdate(item.key, {
+                  type: "PECA",
+                  partId: part.id,
+                  serviceId: undefined,
+                  description: part.label,
+                  quantity: String(quantity),
                   unitPriceReais: part.suggestedPriceReais ?? "",
                 })
               }

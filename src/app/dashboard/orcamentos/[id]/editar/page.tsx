@@ -48,6 +48,9 @@ export default async function EditQuotePage({
       quantity: String(Number(item.quantity)),
       unitPriceReais: centsToReais(item.unitPriceCents),
       serviceId: item.serviceId ?? undefined,
+      // Sem isto, editar um rascunho perdia o vínculo do item com a peça do
+      // estoque e a baixa automática deixava de acontecer na execução.
+      partId: item.partId ?? undefined,
       category: item.category,
       notes: item.notes ?? undefined,
     })),

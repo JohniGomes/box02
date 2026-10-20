@@ -32,9 +32,9 @@ export interface CreatePartInput {
   markupPercent?: number | null;
 }
 
-export async function createPart(input: CreatePartInput): Promise<PartRecord> {
+export async function createPart(input: CreatePartInput, db: Queryable = pool): Promise<PartRecord> {
   const id = createId();
-  const result = await pool.query<PartRecord>(
+  const result = await db.query<PartRecord>(
     `INSERT INTO parts (id, name, sku, unit, "costCents", "minStock", notes, "markupPercent", "updatedAt")
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
      RETURNING ${COLUMNS}`,
@@ -96,6 +96,15 @@ export async function setPartStatus(id: string, status: PartStatus): Promise<Par
 
 export async function findPartById(id: string): Promise<PartRecord | null> {
   const result = await pool.query<PartRecord>(`SELECT ${COLUMNS} FROM parts WHERE id = $1`, [id]);
+  return result.rows[0] ?? null;
+}
+
+/** Nome igual, sem diferenciar maiúsculas/minúsculas nem espaços nas pontas. */
+export async function findPartByName(name: string, db: Queryable = pool): Promise<PartRecord | null> {
+  const result = await db.query<PartRecord>(
+    `SELECT ${COLUMNS} FROM parts WHERE lower(btrim(name)) = lower(btrim($1)) LIMIT 1`,
+    [name],
+  );
   return result.rows[0] ?? null;
 }
 

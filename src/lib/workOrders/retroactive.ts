@@ -6,14 +6,13 @@ import { findQuoteVersionByNumber } from "@/lib/db/repositories/quoteVersions";
 import { listQuoteItemsByVersion } from "@/lib/db/repositories/quoteItems";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findUserById } from "@/lib/db/repositories/users";
-import { getPartCurrentStock } from "@/lib/db/repositories/parts";
+import { findPartById, getPartCurrentStock } from "@/lib/db/repositories/parts";
 import { findWorkOrderById, setWorkOrderStatus, type WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 import { workOrderCheckInSchema } from "@/lib/validation/workOrder";
 import { listWorkOrderItemsByWorkOrder } from "@/lib/db/repositories/workOrderItems";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { registerInternalQuoteDecisionService } from "@/lib/quotes/service";
 import { QuoteNotFoundError } from "@/lib/quotes/errors";
-import { InsufficientStockError } from "@/lib/inventory/errors";
 import { computeQuoteTotals, reaisToCents } from "@/lib/money";
 import {
   closeWorkOrderService,
@@ -226,7 +225,13 @@ export async function registerCompletedServiceFromQuoteService(
   }
   for (const [partId, needed] of neededByPart) {
     const stock = await getPartCurrentStock(partId);
-    if (needed > stock) throw new InsufficientStockError(stock, needed);
+    if (needed > stock) {
+      const part = await findPartById(partId);
+      throw new RetroactiveServiceError(
+        `Falta estoque da peça "${part?.name ?? "do orçamento"}": tem ${stock} e o serviço usa ${needed}. ` +
+          `Dê entrada dessa peça na aba Estoque (ou use "Peça comprada p/ este cliente" ao montar o orçamento) e tente de novo.`,
+      );
+    }
   }
 
   const customer = await findCustomerById(quote.customerId);

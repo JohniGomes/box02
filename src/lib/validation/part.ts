@@ -38,6 +38,21 @@ export const createPartSchema = z.object({
 
 export const updatePartSchema = createPartSchema;
 
+/**
+ * Peça comprada para um cliente (fluxo direto do orçamento/OS): nasce já com
+ * custo e quantidade em estoque. O preço de venda é só outra forma de informar
+ * o markup — o que fica gravado é o percentual (preço nunca é armazenado).
+ */
+export const createPurchasedPartSchema = z.object({
+  name: z.string().trim().min(2, "Informe o nome da peça"),
+  quantity: z
+    .union([z.string(), z.number()])
+    .transform((v) => (typeof v === "string" ? Number(v.replace(",", ".")) : v))
+    .pipe(z.number().int("Quantidade deve ser um número inteiro").positive("Quantidade deve ser maior que zero")),
+  costReais: z.union([z.string(), z.number()]),
+  priceReais: z.union([z.string(), z.number()]).optional(),
+});
+
 export const createStockMovementSchema = z.object({
   type: z.enum(["ENTRADA", "SAIDA"], { message: "Selecione o tipo de movimentação" }),
   quantity: z
