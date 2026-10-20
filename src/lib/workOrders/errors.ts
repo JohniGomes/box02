@@ -218,3 +218,11 @@ export class InvalidExecutorUserError extends Error {
     this.name = "InvalidExecutorUserError";
   }
 }
+
+/** Só uma OS já entregue pode ter "retorno". */
+export class WorkOrderReturnNotDeliveredError extends Error {
+  constructor() {
+    super("Só é possível abrir um retorno para uma OS já entregue.");
+    this.name = "WorkOrderReturnNotDeliveredError";
+  }
+}

@@ -10,6 +10,7 @@ import {
   createAdditionalItemService,
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
+  openWorkOrderReturnService,
   authorizeAdditionalItemDirectlyService,
   adjustAdditionalItemService,
   generateAdditionalItemLinkService,
@@ -24,6 +25,7 @@ import {
   InvalidWorkOrderItemTransitionError,
   InvalidWorkOrderTransitionError,
   QuoteNotApprovedError,
+  WorkOrderReturnNotDeliveredError,
   WorkOrderHasPendingItemsError,
 } from "@/lib/workOrders/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
@@ -75,6 +77,7 @@ function friendlyError(err: unknown, fallback: string): ActionResult {
   }
   if (
     err instanceof QuoteNotApprovedError ||
+    err instanceof WorkOrderReturnNotDeliveredError ||
     err instanceof InvalidWorkOrderTransitionError ||
     err instanceof InvalidWorkOrderItemTransitionError ||
     err instanceof WorkOrderHasPendingItemsError ||
@@ -116,6 +119,18 @@ export async function createWorkOrderWithoutQuoteAction(input: unknown): Promise
     return { success: true, workOrderId: workOrder.id };
   } catch (err) {
     return friendlyError(err, "Não foi possível criar a OS.");
+  }
+}
+
+export async function openWorkOrderReturnAction(originalWorkOrderId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    const { workOrder } = await openWorkOrderReturnService(userId, originalWorkOrderId);
+    revalidatePath("/dashboard/os");
+    revalidatePath(`/dashboard/os/${originalWorkOrderId}`);
+    return { success: true, workOrderId: workOrder.id };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível abrir o retorno.");
   }
 }
 

@@ -16,6 +16,8 @@ export type WorkOrderStatus =
   | "CANCELADA";
 
 export interface WorkOrderRecord {
+  /** Retorno: id da OS original (null se não é retorno). */
+  returnOfWorkOrderId: string | null;
   id: string;
   number: string;
   status: WorkOrderStatus;
@@ -91,7 +93,7 @@ const COLUMNS = `
   "receptionDamagesSnapshot", "receptionChecklistSnapshot",
   "receptionAwareness1", "receptionAwareness2", "receptionAwareness3",
   "diagnosisExplanationNotes",
-  "createdByUserId", "createdAt", "updatedAt"
+  "returnOfWorkOrderId", "createdByUserId", "createdAt", "updatedAt"
 `;
 
 export interface CreateWorkOrderInput {
@@ -99,6 +101,7 @@ export interface CreateWorkOrderInput {
   customerId: string;
   vehicleId: string;
   sourceQuoteVersionId?: string | null;
+  returnOfWorkOrderId?: string | null;
   mileageAtEntry?: number | null;
   customerComplaint?: string;
   diagnosis?: string;
@@ -126,14 +129,14 @@ export async function createWorkOrder(
       "discountType", "discountValue", "discountTotalCents",
       "surchargeType", "surchargeValue", "surchargeTotalCents",
       "customerNameSnapshot", "vehiclePlateSnapshot", "vehicleDescriptionSnapshot",
-      "createdByUserId", "updatedAt"
+      "createdByUserId", "returnOfWorkOrderId", "updatedAt"
     ) VALUES (
       $1, $2, 'ABERTA', $3, $4, $5,
       $6, $7, $8,
       $9, $10, $11,
       $12, $13, $14,
       $15, $16, $17,
-      $18, NOW()
+      $18, $19, NOW()
     ) RETURNING ${COLUMNS}`,
     [
       id,
@@ -154,9 +157,22 @@ export async function createWorkOrder(
       input.vehiclePlateSnapshot ?? null,
       input.vehicleDescriptionSnapshot ?? null,
       input.createdByUserId,
+      input.returnOfWorkOrderId ?? null,
     ],
   );
   return result.rows[0];
+}
+
+/** Retornos (OS abertas a partir desta), da mais antiga para a mais nova. */
+export async function listReturnsOfWorkOrder(
+  originalId: string,
+  db: Queryable = pool,
+): Promise<{ id: string; number: string; status: WorkOrderStatus }[]> {
+  const result = await db.query<{ id: string; number: string; status: WorkOrderStatus }>(
+    `SELECT id, number, status FROM work_orders WHERE "returnOfWorkOrderId" = $1 ORDER BY "createdAt" ASC`,
+    [originalId],
+  );
+  return result.rows;
 }
 
 export async function findWorkOrderById(

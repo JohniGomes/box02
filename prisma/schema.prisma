@@ -620,6 +620,11 @@ model WorkOrder {
   /// explicado ao cliente).
   diagnosisExplanationNotes String?
 
+  /// Retorno: quando o carro volta depois de entregue, a OS nova aponta para a original.
+  returnOfWorkOrderId String?
+  returnOfWorkOrder   WorkOrder?  @relation("WorkOrderReturn", fields: [returnOfWorkOrderId], references: [id], onDelete: SetNull)
+  returns             WorkOrder[] @relation("WorkOrderReturn")
+
   createdByUserId String
   createdByUser   User   @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   createdAt       DateTime @default(now())

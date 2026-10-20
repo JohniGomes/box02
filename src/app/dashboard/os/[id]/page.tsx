@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getWorkOrderService } from "@/lib/workOrders/service";
+import { getWorkOrderService, listWorkOrderReturnsService } from "@/lib/workOrders/service";
 import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { formatPlate } from "@/lib/validation/plate";
 import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL } from "../statusLabels";
 import { WorkOrderReceptionSection } from "./WorkOrderReceptionSection";
+import { OpenReturnButton } from "./OpenReturnButton";
 import type { WorkOrderChecklistView } from "./WorkOrderChecklistPanel";
 
 /**
@@ -26,10 +27,12 @@ export default async function WorkOrderDetailPage({
   if (!data) notFound();
   const { workOrder } = data;
 
-  const [customer, vehicle, workOrderChecklists] = await Promise.all([
+  const [customer, vehicle, workOrderChecklists, returns, original] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
     getWorkOrderChecklistsService(workOrder.id),
+    listWorkOrderReturnsService(workOrder.id),
+    workOrder.returnOfWorkOrderId ? getWorkOrderService(workOrder.returnOfWorkOrderId) : Promise.resolve(null),
   ]);
 
   function toChecklistView(
@@ -83,6 +86,31 @@ export default async function WorkOrderDetailPage({
           Entrada em {new Date(workOrder.entryAt).toLocaleString("pt-BR")}{workOrder.mileageAtEntry != null ? ` · ${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : ""}
         </p>
       </div>
+
+      {original ? (
+        <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+          Retorno da{" "}
+          <Link href={`/dashboard/os/${original.workOrder.id}`} className="font-mono font-semibold text-accent">
+            {original.workOrder.number}
+          </Link>
+          .
+        </p>
+      ) : null}
+      {returns.length > 0 ? (
+        <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+          {returns.length === 1 ? "Retorno:" : "Retornos:"}{" "}
+          {returns.map((r, idx) => (
+            <span key={r.id}>
+              {idx > 0 ? ", " : ""}
+              <Link href={`/dashboard/os/${r.id}`} className="font-mono font-semibold text-accent">
+                {r.number}
+              </Link>{" "}
+              <span className="text-muted">({WORK_ORDER_STATUS_LABEL[r.status]})</span>
+            </span>
+          ))}
+        </p>
+      ) : null}
+      {workOrder.status === "ENTREGUE" ? <OpenReturnButton workOrderId={workOrder.id} /> : null}
 
       <section className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="mb-3 text-sm font-semibold">Cliente e veículo</h2>

@@ -3,6 +3,7 @@ import {
   closeWorkOrder,
   createWorkOrder,
   findWorkOrderById,
+  listReturnsOfWorkOrder,
   lockWorkOrderById,
   registerWorkOrderReceptionAcceptance,
   searchWorkOrders,
@@ -79,6 +80,7 @@ import {
   executeWorkOrderItemSchema,
   refundWorkOrderPaymentSchema,
   registerWorkOrderPaymentSchema,
+  registerWorkOrderPaymentsSchema,
   updateDiagnosisExplanationSchema,
   updatePreExistingDamagesSchema,
   updateTechnicalNotesSchema,
@@ -108,6 +110,7 @@ import {
   WorkOrderPaymentRefundExceedsAmountError,
   WorkOrderReceptionAlreadyAcceptedError,
   WorkOrderReceptionNotAcceptedError,
+  WorkOrderReturnNotDeliveredError,
 } from "./errors";
 import { findWorkOrderChecklist, listWorkOrderChecklistItems } from "@/lib/db/repositories/workOrderChecklists";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
@@ -262,6 +265,7 @@ function toAdjustmentInternal(
 export async function createWorkOrderWithoutQuoteService(
   actorUserId: string,
   rawInput: unknown,
+  opts: { returnOfWorkOrderId?: string } = {},
 ): Promise<CreateWorkOrderResult> {
   const input = createWorkOrderWithoutQuoteSchema.parse(rawInput);
   const { customer, vehicle } = await assertVehicleBelongsToCustomer(input.customerId, input.vehicleId);
@@ -291,6 +295,7 @@ export async function createWorkOrderWithoutQuoteService(
         customerId: input.customerId,
         vehicleId: input.vehicleId,
         sourceQuoteVersionId: null,
+        returnOfWorkOrderId: opts.returnOfWorkOrderId ?? null,
         mileageAtEntry: input.mileageAtEntry,
         customerComplaint: input.customerComplaint,
         diagnosis: input.diagnosis,
@@ -337,6 +342,61 @@ export async function createWorkOrderWithoutQuoteService(
 // ============================================================
 // Transições de status
 // ============================================================
+
+export interface WorkOrderReturnResult {
+  workOrder: WorkOrderRecord;
+  /** true = já havia um retorno em aberto e ele foi reaproveitado (nada novo foi criado). */
+  reused: boolean;
+}
+
+/**
+ * Abre um retorno: nova OS (sem orçamento) para o mesmo cliente e veículo de uma
+ * OS já entregue, ligada à original, com a queixa já começando por
+ * "Retorno da OS-XXXX". Se já existe um retorno ainda em andamento, devolve esse
+ * em vez de criar outro. A OS original não é alterada.
+ */
+export async function openWorkOrderReturnService(
+  actorUserId: string,
+  originalWorkOrderId: string,
+): Promise<WorkOrderReturnResult> {
+  const original = await findWorkOrderById(originalWorkOrderId);
+  if (!original) throw new WorkOrderNotFoundError(originalWorkOrderId);
+  if (original.status !== "ENTREGUE") throw new WorkOrderReturnNotDeliveredError();
+
+  const open = (await listReturnsOfWorkOrder(original.id)).find(
+    (r) => r.status !== "ENTREGUE" && r.status !== "CANCELADA",
+  );
+  if (open) {
+    const existing = await findWorkOrderById(open.id);
+    if (existing) return { workOrder: existing, reused: true };
+  }
+
+  const deliveredOn = original.deliveredAt
+    ? ` (entregue em ${original.deliveredAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })})`
+    : "";
+  const { workOrder } = await createWorkOrderWithoutQuoteService(
+    actorUserId,
+    {
+      customerId: original.customerId,
+      vehicleId: original.vehicleId,
+      customerComplaint: `Retorno da ${original.number}${deliveredOn}:`,
+      items: [],
+    },
+    { returnOfWorkOrderId: original.id },
+  );
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_RETURN_OPENED",
+    entityType: "work_order",
+    entityId: workOrder.id,
+    metadata: { returnOfWorkOrderId: original.id, returnOfNumber: original.number },
+  });
+  return { workOrder, reused: false };
+}
+
+export async function listWorkOrderReturnsService(workOrderId: string) {
+  return listReturnsOfWorkOrder(workOrderId);
+}
 
 export async function setWorkOrderStatusService(
   actorUserId: string,
@@ -840,6 +900,76 @@ export async function registerWorkOrderPaymentService(
     });
 
     return payment;
+  });
+}
+
+/**
+ * Registra vários recebimentos de uma vez (ex.: parte no Pix, parte no cartão).
+ * Cada forma vira um recebimento separado — igual a registrar um por um —, mas
+ * tudo numa transação só: se a soma passar do saldo, nada é gravado.
+ */
+export async function registerWorkOrderPaymentsService(
+  actorUserId: string,
+  workOrderId: string,
+  rawInput: unknown,
+): Promise<WorkOrderPaymentRecord[]> {
+  const input = registerWorkOrderPaymentsSchema.parse(rawInput);
+  const lines = input.payments
+    .map((p) => ({ method: p.method, amountCents: reaisToCents(p.amountReais) }))
+    .filter((p) => p.amountCents !== 0);
+  if (lines.length === 0 || lines.some((l) => l.amountCents < 0)) {
+    throw new Error("O valor do recebimento precisa ser maior que zero.");
+  }
+  const totalCents = lines.reduce((sum, l) => sum + l.amountCents, 0);
+
+  return withTransaction(async (client) => {
+    const workOrder = await lockWorkOrderById(workOrderId, client);
+    if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+    if (workOrder.status !== "ENTREGUE") throw new WorkOrderNotDeliveredError();
+
+    const closures = await listClosuresByWorkOrder(workOrderId, client);
+    const latestClosure = closures[0];
+    if (!latestClosure) throw new WorkOrderNotDeliveredError();
+
+    const paidSoFar = await sumWorkOrderPayments(workOrderId, client);
+    const remaining = latestClosure.totalAtClosureCents - paidSoFar;
+    if (totalCents > remaining) throw new WorkOrderPaymentExceedsBalanceError(remaining);
+
+    let receivedAt: Date | null = null;
+    if (input.receivedOn) {
+      const todayBr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+      if (input.receivedOn > todayBr) throw new WorkOrderPaymentDateError();
+      receivedAt = new Date(`${input.receivedOn}T12:00:00-03:00`);
+    }
+
+    const created: WorkOrderPaymentRecord[] = [];
+    for (const line of lines) {
+      const payment = await createWorkOrderPayment(
+        {
+          workOrderId,
+          amountCents: line.amountCents,
+          method: line.method,
+          notes: input.notes ?? null,
+          registeredByUserId: actorUserId,
+          receivedAt,
+        },
+        client,
+      );
+      created.push(payment);
+      await recordAuditLog({
+        userId: actorUserId,
+        action: "WORK_ORDER_PAYMENT_REGISTERED",
+        entityType: "work_order",
+        entityId: workOrderId,
+        metadata: {
+          amountCents: line.amountCents,
+          method: line.method,
+          paymentId: payment.id,
+          receivedOn: input.receivedOn ?? null,
+        },
+      });
+    }
+    return created;
   });
 }
 
