@@ -5,8 +5,12 @@ import { pool } from "../pool";
  * escalares) em vez de várias chamadas separadas — evita N round-trips
  * ao banco só para montar um resumo.
  *
- * "Mês"/"hoje" são sempre calculados no próprio Postgres (date_trunc,
- * CURRENT_DATE) para não depender do fuso horário do processo Node.
+ * "Mês"/"hoje" são calculados no próprio Postgres, SEMPRE no horário de
+ * Brasília. As colunas de data são `timestamp` sem fuso e guardam o relógio
+ * UTC (default CURRENT_TIMESTAMP do banco e `new Date()` do servidor), então
+ * cada coluna é convertida de UTC para Brasília antes de comparar. Sem isso,
+ * a partir das 21h (meia-noite UTC) o "hoje" virava o dia seguinte e um
+ * pagamento do próprio dia deixava de aparecer em "Entradas hoje".
  */
 export interface SalesByMethod {
   dinheiroCents: number;
@@ -54,68 +58,76 @@ interface DashboardMetricsRow {
   quotes_this_month_approved: string;
 }
 
-export async function getDashboardMetrics(): Promise<DashboardMetrics> {
-  const result = await pool.query<DashboardMetricsRow>(`
+const TZ_BR = "America/Sao_Paulo";
+
+/**
+ * Monta a query. `nowExpr` existe só para teste (permite simular outro
+ * instante); em produção é sempre `now()`.
+ */
+export function buildDashboardMetricsSql(nowExpr = "now()"): string {
+  // Relógio de Brasília "de parede" (timestamp sem fuso).
+  const localNow = `(${nowExpr} AT TIME ZONE '${TZ_BR}')`;
+  const monthStart = `date_trunc('month', ${localNow})`;
+  const nextMonth = `(${monthStart} + interval '1 month')`;
+  const dayStart = `date_trunc('day', ${localNow})`;
+  const nextDay = `(${dayStart} + interval '1 day')`;
+  // Coluna guardada em UTC -> relógio de Brasília.
+  const br = (col: string) => `((${col} AT TIME ZONE 'UTC') AT TIME ZONE '${TZ_BR}')`;
+
+  const inMonth = (col: string) => `${br(col)} >= ${monthStart} AND ${br(col)} < ${nextMonth}`;
+  const inToday = (col: string) => `${br(col)} >= ${dayStart} AND ${br(col)} < ${nextDay}`;
+
+  return `
     SELECT
       (SELECT COUNT(*) FROM customers WHERE status = 'ATIVO') AS total_customers,
       (SELECT COUNT(*) FROM vehicles WHERE status = 'ATIVO') AS total_vehicles,
       (SELECT COUNT(*) FROM work_orders WHERE status NOT IN ('ENTREGUE', 'CANCELADA')) AS open_work_orders,
       (SELECT COUNT(*) FROM work_orders WHERE status = 'AGUARDANDO_PECA') AS awaiting_part_work_orders,
       (SELECT COUNT(*) FROM work_orders
-        WHERE status = 'ENTREGUE'
-          AND "deliveredAt" >= date_trunc('month', now())
-          AND "deliveredAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE status = 'ENTREGUE' AND ${inMonth('"deliveredAt"')}
       ) AS delivered_this_month,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
-        WHERE "receivedAt" >= date_trunc('month', now())
-          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE ${inMonth('"receivedAt"')}
       ) AS monthly_revenue_cents,
       (SELECT COALESCE(SUM("refundCents"), 0) FROM work_order_payment_refunds
-        WHERE "createdAt" >= date_trunc('month', now())
-          AND "createdAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE ${inMonth('"createdAt"')}
       ) AS monthly_refunds_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
-        WHERE "paidAt" >= date_trunc('month', now())
-          AND "paidAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE ${inMonth('"paidAt"')}
       ) AS monthly_expenses_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses WHERE "paidAt" IS NULL) AS pending_expenses_cents,
       (SELECT COUNT(DISTINCT "workOrderId") FROM work_order_payments
-        WHERE "receivedAt" >= date_trunc('month', now())
-          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE ${inMonth('"receivedAt"')}
       ) AS paid_work_orders_this_month,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
-        WHERE "receivedAt" >= CURRENT_DATE AND "receivedAt" < CURRENT_DATE + interval '1 day'
+        WHERE ${inToday('"receivedAt"')}
       ) AS today_revenue_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
-        WHERE "paidAt" >= CURRENT_DATE AND "paidAt" < CURRENT_DATE + interval '1 day'
+        WHERE ${inToday('"paidAt"')}
       ) AS today_expenses_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
-        WHERE method = 'DINHEIRO' AND "receivedAt" >= date_trunc('month', now())
-          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE method = 'DINHEIRO' AND ${inMonth('"receivedAt"')}
       ) AS sales_dinheiro_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
-        WHERE method = 'PIX' AND "receivedAt" >= date_trunc('month', now())
-          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE method = 'PIX' AND ${inMonth('"receivedAt"')}
       ) AS sales_pix_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
-        WHERE method = 'CARTAO' AND "receivedAt" >= date_trunc('month', now())
-          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE method = 'CARTAO' AND ${inMonth('"receivedAt"')}
       ) AS sales_cartao_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM work_order_payments
-        WHERE method = 'OUTRO' AND "receivedAt" >= date_trunc('month', now())
-          AND "receivedAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE method = 'OUTRO' AND ${inMonth('"receivedAt"')}
       ) AS sales_outro_cents,
       (SELECT COUNT(*) FROM quotes
-        WHERE status IN ('RASCUNHO', 'ENVIADO')
-          AND "createdAt" >= date_trunc('month', now())
-          AND "createdAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE status IN ('RASCUNHO', 'ENVIADO') AND ${inMonth('"createdAt"')}
       ) AS quotes_this_month_pending,
       (SELECT COUNT(*) FROM quotes
-        WHERE status IN ('APROVADO', 'APROVADO_PARCIAL')
-          AND "createdAt" >= date_trunc('month', now())
-          AND "createdAt" < date_trunc('month', now()) + interval '1 month'
+        WHERE status IN ('APROVADO', 'APROVADO_PARCIAL') AND ${inMonth('"createdAt"')}
       ) AS quotes_this_month_approved
-  `);
+  `;
+}
+
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+  const result = await pool.query<DashboardMetricsRow>(buildDashboardMetricsSql());
 
   const row = result.rows[0];
   const monthlyRevenueCents = Number(row.monthly_revenue_cents) - Number(row.monthly_refunds_cents);
