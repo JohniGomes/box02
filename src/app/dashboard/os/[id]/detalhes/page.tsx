@@ -16,6 +16,7 @@ import { formatDocument } from "@/lib/validation/document";
 import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL, workOrderStatusToActiveMethodStage, isAtVerificamosBarrier } from "../../statusLabels";
 import {
   CancelWorkOrderForm,
+  ReactivateWorkOrderForm,
   CloseWorkOrderForm,
   WorkOrderItemActions,
   WorkOrderItemExecutorInfo,
@@ -393,6 +394,7 @@ export default async function WorkOrderDetailsPage({
           />
         ) : null}
         {isOpenForCancel ? <CancelWorkOrderForm workOrderId={workOrder.id} /> : null}
+        {workOrder.status === "CANCELADA" ? <ReactivateWorkOrderForm workOrderId={workOrder.id} /> : null}
       </div>
     </div>
   );

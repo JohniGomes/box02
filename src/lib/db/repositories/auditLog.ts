@@ -22,3 +22,14 @@ export async function recordAuditLog(input: {
     ],
   );
 }
+
+/** Último status para o qual a OS foi mudada pelo fluxo normal (de/para gravados no histórico). */
+export async function findLastStatusChangeTarget(workOrderId: string): Promise<string | null> {
+  const result = await pool.query<{ to: string | null }>(
+    `SELECT metadata->>'to' AS "to" FROM audit_logs
+     WHERE "entityType" = 'work_order' AND "entityId" = $1 AND action = 'WORK_ORDER_STATUS_CHANGED'
+     ORDER BY "createdAt" DESC LIMIT 1`,
+    [workOrderId],
+  );
+  return result.rows[0]?.to ?? null;
+}

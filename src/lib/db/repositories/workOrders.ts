@@ -236,6 +236,22 @@ export async function setWorkOrderStatus(
   return result.rows[0] ?? null;
 }
 
+/** Tira a OS do cancelamento: volta ao status dado e limpa data/motivo do cancelamento. */
+export async function reactivateCancelledWorkOrder(
+  id: string,
+  status: WorkOrderStatus,
+  db: Queryable = pool,
+): Promise<WorkOrderRecord | null> {
+  const result = await db.query<WorkOrderRecord>(
+    `UPDATE work_orders SET
+      status = $2, "cancelledAt" = NULL, "cancelReason" = NULL, "updatedAt" = NOW()
+    WHERE id = $1 AND status = 'CANCELADA'
+    RETURNING ${COLUMNS}`,
+    [id, status],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function closeWorkOrder(
   id: string,
   input: {

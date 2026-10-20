@@ -226,3 +226,10 @@ export class WorkOrderReturnNotDeliveredError extends Error {
     this.name = "WorkOrderReturnNotDeliveredError";
   }
 }
+
+export class WorkOrderNotCancelledError extends Error {
+  constructor() {
+    super("Só é possível reativar uma OS que está cancelada.");
+    this.name = "WorkOrderNotCancelledError";
+  }
+}
