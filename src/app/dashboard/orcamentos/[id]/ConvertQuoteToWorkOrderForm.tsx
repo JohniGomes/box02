@@ -39,7 +39,7 @@ export function ConvertQuoteToWorkOrderForm({ quoteId }: { quoteId: string }) {
     <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
       <h2 className="text-sm font-semibold">Check-in do veículo</h2>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium" htmlFor="mileage">Quilometragem de entrada</label>
+        <label className="text-sm font-medium" htmlFor="mileage">Quilometragem de entrada (opcional)</label>
         <input
           id="mileage"
           inputMode="numeric"
@@ -64,7 +64,7 @@ export function ConvertQuoteToWorkOrderForm({ quoteId }: { quoteId: string }) {
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!mileageAtEntry || submitting}
+        disabled={submitting}
         className="h-12 rounded-xl bg-accent text-base font-semibold text-accent-foreground disabled:opacity-50"
       >
         {submitting ? "Criando OS…" : "Criar OS a partir deste orçamento"}

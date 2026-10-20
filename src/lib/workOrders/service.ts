@@ -239,7 +239,9 @@ export async function createWorkOrderFromQuoteService(
 
     return { workOrder, items };
   }).then(async (result) => {
-    await bumpVehicleMileageIfHigherService(actorUserId, quote.vehicleId, checkIn.mileageAtEntry);
+    if (checkIn.mileageAtEntry !== undefined) {
+      await bumpVehicleMileageIfHigherService(actorUserId, quote.vehicleId, checkIn.mileageAtEntry);
+    }
     return result;
   });
 }
@@ -323,7 +325,9 @@ export async function createWorkOrderWithoutQuoteService(
     return { workOrder, items };
   });
 
-  await bumpVehicleMileageIfHigherService(actorUserId, input.vehicleId, input.mileageAtEntry);
+  if (input.mileageAtEntry !== undefined) {
+    await bumpVehicleMileageIfHigherService(actorUserId, input.vehicleId, input.mileageAtEntry);
+  }
   return result;
 }
 

@@ -76,7 +76,7 @@ export default async function PrintWorkOrderPage({
           </div>
           <div>
             <dt className="text-xs text-muted">Quilometragem na recepção</dt>
-            <dd>{workOrder.mileageAtEntry.toLocaleString("pt-BR")} km</dd>
+            <dd>{workOrder.mileageAtEntry != null ? `${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : "Não informada"}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted">Data de entrada</dt>

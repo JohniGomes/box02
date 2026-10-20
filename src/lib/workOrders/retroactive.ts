@@ -7,7 +7,8 @@ import { listQuoteItemsByVersion } from "@/lib/db/repositories/quoteItems";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findUserById } from "@/lib/db/repositories/users";
 import { getPartCurrentStock } from "@/lib/db/repositories/parts";
-import { setWorkOrderStatus } from "@/lib/db/repositories/workOrders";
+import { findWorkOrderById, setWorkOrderStatus, type WorkOrderStatus } from "@/lib/db/repositories/workOrders";
+import { workOrderCheckInSchema } from "@/lib/validation/workOrder";
 import { listWorkOrderItemsByWorkOrder } from "@/lib/db/repositories/workOrderItems";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { registerInternalQuoteDecisionService } from "@/lib/quotes/service";
@@ -41,10 +42,8 @@ export const registerCompletedServiceSchema = z.object({
   serviceDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do serviço"),
-  mileageAtEntry: z
-    .union([z.string(), z.number()])
-    .transform((v) => Number(v))
-    .pipe(z.number().int().min(0, "Quilometragem inválida")),
+  /** Opcional — serviço antigo muitas vezes não tem o km anotado. */
+  mileageAtEntry: workOrderCheckInSchema.shape.mileageAtEntry,
   customerComplaint: optionalText,
   executedByUserId: z.string().trim().min(1, "Selecione quem executou"),
   deliveryAcceptedName: z.string().trim().min(2, "Informe quem retirou o veículo"),
@@ -124,14 +123,21 @@ export async function registerCompletedServiceFromQuoteService(
   const executor = await findUserById(input.executedByUserId);
   if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
 
-  const duplicate = await pool.query(
-    `SELECT number FROM work_orders WHERE "sourceQuoteVersionId" = $1 LIMIT 1`,
-    [version.id],
-  );
-  if (duplicate.rows[0]) {
+  // Se a OS deste orçamento já foi criada (ex.: pelo botão "Criar OS a partir
+  // deste orçamento"), continua dela em vez de criar outra.
+  const existingRow = (
+    await pool.query(`SELECT id FROM work_orders WHERE "sourceQuoteVersionId" = $1 ORDER BY "createdAt" LIMIT 1`, [
+      version.id,
+    ])
+  ).rows[0];
+  const existing = existingRow ? await findWorkOrderById(existingRow.id) : null;
+  if (existing?.status === "ENTREGUE") {
     throw new RetroactiveServiceError(
-      `Já existe a OS ${duplicate.rows[0].number} para este orçamento. Use a ficha dela para concluir.`,
+      `A OS ${existing.number} já foi entregue. Para lançar o pagamento, use a seção Recebimentos da própria OS.`,
     );
+  }
+  if (existing?.status === "CANCELADA") {
+    throw new RetroactiveServiceError(`A OS ${existing.number} deste orçamento está cancelada.`);
   }
 
   const paymentsCents = input.payments.map((p) => ({ ...p, cents: reaisToCents(p.amountReais) }));
@@ -139,26 +145,66 @@ export async function registerCompletedServiceFromQuoteService(
     throw new RetroactiveServiceError("Cada pagamento precisa ter valor maior que zero.");
   }
 
-  // Aprova pela oficina se ainda não houver decisão (rascunho/enviado/expirado).
-  const needsApproval = version.status === "RASCUNHO" || version.status === "ENVIADO" || version.status === "EXPIRADO";
-  if (!needsApproval && version.status !== "APROVADO" && version.status !== "APROVADO_PARCIAL") {
-    throw new QuoteNotApprovedError();
-  }
+  // O que vai ser executado/cobrado: os itens da OS existente, ou os itens
+  // do orçamento (todos, se ainda vai ser aprovado agora; só os aprovados,
+  // se a decisão já existe).
+  type PlanItem = { type: "SERVICO" | "PECA" | "MAO_DE_OBRA"; totalCents: number; partId: string | null; quantity: number; pending: boolean };
+  let needsApproval = false;
+  let decidable: { id: string }[] = [];
+  let plan: PlanItem[];
+  let adjustments: {
+    discountType: "PERCENTUAL" | "FIXO" | null;
+    discountValue: number | null;
+    surchargeType: "PERCENTUAL" | "FIXO" | null;
+    surchargeValue: number | null;
+  };
 
-  const allItems = await listQuoteItemsByVersion(version.id);
-  const decidable = allItems.filter((i) => i.category !== "INFORMATIVO");
-  const approvedItems = needsApproval ? decidable : allItems.filter((i) => i.clientDecision === "APROVADO");
-  if (approvedItems.length === 0) {
-    throw new RetroactiveServiceError("O orçamento não tem itens aprovados para virar OS.");
+  if (existing) {
+    const woItems = (await listWorkOrderItemsByWorkOrder(existing.id)).filter((i) => i.status !== "CANCELADO");
+    plan = woItems.map((i) => ({
+      type: i.type,
+      totalCents: i.totalCents,
+      partId: i.partId,
+      quantity: Number(i.quantity),
+      pending: i.status === "PLANEJADO",
+    }));
+    adjustments = {
+      discountType: existing.discountType,
+      discountValue: existing.discountValue,
+      surchargeType: existing.surchargeType,
+      surchargeValue: existing.surchargeValue,
+    };
+  } else {
+    // Aprova pela oficina se ainda não houver decisão (rascunho/enviado/expirado).
+    needsApproval = version.status === "RASCUNHO" || version.status === "ENVIADO" || version.status === "EXPIRADO";
+    if (!needsApproval && version.status !== "APROVADO" && version.status !== "APROVADO_PARCIAL") {
+      throw new QuoteNotApprovedError();
+    }
+    const allItems = await listQuoteItemsByVersion(version.id);
+    decidable = allItems.filter((i) => i.category !== "INFORMATIVO");
+    const approvedItems = needsApproval ? decidable : allItems.filter((i) => i.clientDecision === "APROVADO");
+    plan = (approvedItems as typeof allItems).map((i) => ({
+      type: i.type,
+      totalCents: i.totalCents,
+      partId: i.partId,
+      quantity: Number(i.quantity),
+      pending: true,
+    }));
+    adjustments = {
+      discountType: version.discountType,
+      discountValue: version.discountValue,
+      surchargeType: version.surchargeType,
+      surchargeValue: version.surchargeValue,
+    };
+  }
+  if (plan.length === 0) {
+    throw new RetroactiveServiceError("Não há itens para concluir neste orçamento.");
   }
 
   // Total que a OS vai fechar (mesma conta do fechamento).
   const totals = computeQuoteTotals({
-    items: approvedItems.map((i) => ({ type: i.type, totalCents: i.totalCents })),
-    discountType: version.discountType,
-    discountValue: version.discountValue,
-    surchargeType: version.surchargeType,
-    surchargeValue: version.surchargeValue,
+    items: plan.map((i) => ({ type: i.type, totalCents: i.totalCents })),
+    ...adjustments,
   });
   const paidCents = paymentsCents.reduce((sum, p) => sum + p.cents, 0);
   if (paidCents > totals.totalCents) {
@@ -170,9 +216,9 @@ export async function registerCompletedServiceFromQuoteService(
   // Estoque: itens ligados a uma peça dão baixa ao serem executados. Confere
   // antes para não criar a OS e travar no meio.
   const neededByPart = new Map<string, number>();
-  for (const item of approvedItems) {
-    if (!item.partId) continue;
-    const qty = Math.max(1, Math.round(Number(item.quantity)));
+  for (const item of plan) {
+    if (!item.partId || !item.pending) continue;
+    const qty = Math.max(1, Math.round(item.quantity));
     neededByPart.set(item.partId, (neededByPart.get(item.partId) ?? 0) + qty);
   }
   for (const [partId, needed] of neededByPart) {
@@ -191,18 +237,29 @@ export async function registerCompletedServiceFromQuoteService(
     version = (await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber)) ?? version;
   }
 
-  const { workOrder } = await createWorkOrderFromQuoteService(actorUserId, quoteId, {
-    mileageAtEntry: input.mileageAtEntry,
-    customerComplaint: input.customerComplaint,
-  });
+  const workOrder =
+    existing ??
+    (
+      await createWorkOrderFromQuoteService(actorUserId, quoteId, {
+        mileageAtEntry: input.mileageAtEntry,
+        customerComplaint: input.customerComplaint,
+      })
+    ).workOrder;
 
   let step = "andamento da OS";
   try {
-    // ABERTA -> EM_EXECUCAO -> TESTE_FINAL -> PRONTA, direto pelo repositório
-    // (sem o gate do Termo de Recepção — ver comentário da função).
-    await setWorkOrderStatus(workOrder.id, "EM_EXECUCAO", { startedAt: serviceDate });
-    await setWorkOrderStatus(workOrder.id, "TESTE_FINAL", { completedAt: serviceDate });
-    await setWorkOrderStatus(workOrder.id, "PRONTA");
+    // Leva a OS até PRONTA, direto pelo repositório (sem o gate do Termo de
+    // Recepção — ver comentário da função), a partir do status atual.
+    const path: WorkOrderStatus[] = ["EM_EXECUCAO", "TESTE_FINAL", "PRONTA"];
+    const startIndex = { ABERTA: 0, EM_DIAGNOSTICO: 0, AGUARDANDO_PECA: 0, EM_EXECUCAO: 1, TESTE_FINAL: 2, PRONTA: 3 }[
+      workOrder.status as "ABERTA" | "EM_DIAGNOSTICO" | "AGUARDANDO_PECA" | "EM_EXECUCAO" | "TESTE_FINAL" | "PRONTA"
+    ];
+    for (const next of path.slice(startIndex ?? 0)) {
+      await setWorkOrderStatus(workOrder.id, next, {
+        startedAt: next === "EM_EXECUCAO" ? serviceDate : undefined,
+        completedAt: next === "TESTE_FINAL" ? serviceDate : undefined,
+      });
+    }
 
     step = "execução dos itens";
     const woItems = await listWorkOrderItemsByWorkOrder(workOrder.id);
