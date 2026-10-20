@@ -6,6 +6,8 @@ import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
+import { QuickCustomerForm } from "@/components/QuickCustomerForm";
+import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 import { createWorkOrderWithoutQuoteAction } from "./actions";
 import { searchCustomersForPickerAction } from "../veiculos/actions";
 import { listCustomerVehiclesAction, type VehicleOption } from "../orcamentos/actions";
@@ -108,6 +110,13 @@ export function NewWorkOrderWithoutQuoteForm() {
           placeholder="Buscar cliente por nome, CPF ou CNPJ…"
           error={fieldErrors.customerId}
         />
+        <QuickCustomerForm
+          onCreated={(c) => {
+            setCustomer(c);
+            setVehicles([]);
+            setVehicleId("");
+          }}
+        />
 
         {customer ? (
           <>
@@ -130,6 +139,13 @@ export function NewWorkOrderWithoutQuoteForm() {
                 ))}
               </div>
             )}
+            <QuickVehicleForm
+              customerId={customer.id}
+              onCreated={(v) => {
+                setVehicles((prev) => (prev.some((o) => o.id === v.id) ? prev : [...prev, v]));
+                setVehicleId(v.id);
+              }}
+            />
             {fieldErrors.vehicleId ? <p className="text-xs text-danger">{fieldErrors.vehicleId}</p> : null}
           </>
         ) : null}
