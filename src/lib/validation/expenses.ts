@@ -36,5 +36,12 @@ export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 
 export const markExpenseAsPaidSchema = z.object({
   paymentMethod: z.enum(["DINHEIRO", "PIX", "CARTAO", "OUTRO"], { message: "Selecione a forma de pagamento" }),
+  /** Data em que foi paga (AAAA-MM-DD). Vazio = hoje. */
+  paidOn: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data do pagamento inválida")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
 export type MarkExpenseAsPaidInput = z.infer<typeof markExpenseAsPaidSchema>;

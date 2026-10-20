@@ -102,6 +102,37 @@ export async function markExpenseAsPaid(
   return result.rows[0] ?? null;
 }
 
+/** Volta a despesa para "em aberto" (apaga a baixa). Quem chama já conferiu
+ * que estava paga e não conciliada. */
+export async function unmarkExpenseAsPaid(id: string, db: Queryable = pool): Promise<ExpenseRecord | null> {
+  const result = await db.query<ExpenseRecord>(
+    `UPDATE expenses SET "paidAt" = NULL, "paymentMethod" = NULL, "updatedAt" = NOW()
+     WHERE id = $1
+     RETURNING ${COLUMNS}`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function hasBankReconciliation(expenseId: string, db: Queryable = pool): Promise<boolean> {
+  const result = await db.query(`SELECT 1 FROM bank_reconciliations WHERE "expenseId" = $1 LIMIT 1`, [expenseId]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Já existe uma despesa idêntica (categoria, descrição, valor) nesse vencimento? */
+export async function existsEqualExpense(
+  input: { category: ExpenseCategory; description: string; amountCents: number; dueDate: string },
+  db: Queryable = pool,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM expenses
+     WHERE category = $1 AND description = $2 AND "amountCents" = $3 AND "dueDate" = $4
+     LIMIT 1`,
+    [input.category, input.description, input.amountCents, input.dueDate],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 /** Correção de valor/descrição — só permitida enquanto PENDENTE (checado
  * no service, não aqui). */
 export async function updateExpense(
