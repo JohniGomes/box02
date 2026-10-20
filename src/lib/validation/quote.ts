@@ -9,9 +9,14 @@ export const quoteItemInputSchema = z.object({
     .pipe(z.number().positive("Quantidade deve ser maior que zero")),
   unitPriceReais: z
     .union([z.string(), z.number()])
-    .transform((v) =>
-      typeof v === "string" ? Number(v.replace(/\./g, "").replace(",", ".")) : v,
-    )
+    .transform((v) => {
+      if (typeof v !== "string") return v;
+      // Mesma regra de `reaisToCents` (src/lib/money): "." só é separador de
+      // milhar quando há vírgula decimal ("1.234,56"). Sem vírgula, "." é o
+      // decimal ("47.12") — antes virava 4712 reais, 100x o valor da tela.
+      const normalized = v.includes(",") ? v.replace(/\./g, "").replace(",", ".") : v;
+      return Number(normalized);
+    })
     .pipe(z.number().nonnegative("Preço não pode ser negativo")),
   /// Ciclo B — origem opcional no catálogo de serviços. Só usado para
   /// preencher description/unitPriceReais no momento da criação; nunca

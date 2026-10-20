@@ -63,7 +63,11 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
   ) {
     return { success: false, error: err.message };
   }
-  return { success: false, error: fallback };
+  // Erro inesperado (banco, conexão…): registra no log do servidor e mostra o
+  // motivo técnico, para não ficar só a mensagem genérica sem pista da causa.
+  console.error(`[orcamentos] ${fallback}`, err);
+  const detail = err instanceof Error && err.message ? ` (${err.message.slice(0, 200)})` : "";
+  return { success: false, error: `${fallback}${detail}` };
 }
 
 export async function deleteQuoteAction(quoteId: string): Promise<ActionResult> {
