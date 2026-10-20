@@ -11,6 +11,7 @@ const ITEMS = [
   { label: "Veículos", href: "/dashboard/veiculos" },
   { label: "Orçamentos", href: "/dashboard/orcamentos" },
   { label: "OS", href: "/dashboard/os" },
+  { label: "Checklists", href: "/dashboard/checklists" },
   { label: "Estoque", href: "/dashboard/estoque" },
   { label: "Despesas", href: "/dashboard/despesas" },
   { label: "Configurações", href: "/dashboard/configuracoes" },
@@ -26,11 +27,12 @@ export function DashboardNav({ mobile }: { mobile?: boolean }) {
 
   if (mobile) {
     return (
-      <ul className="flex items-stretch justify-around">
+      // Com tantas abas, a barra de baixo rola para o lado em vez de espremer os nomes.
+      <ul className="flex items-stretch overflow-x-auto">
         {ITEMS.map((item) => {
           const active = isActive(pathname, item.href);
           return (
-            <li key={item.href} className="flex-1">
+            <li key={item.href} className="min-w-[76px] flex-1">
               <Link
                 href={item.href}
                 className={`flex h-16 flex-col items-center justify-center gap-1 text-xs font-medium ${

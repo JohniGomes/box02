@@ -6,6 +6,8 @@ import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
+import { QuickCustomerForm } from "@/components/QuickCustomerForm";
+import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 import {
   createQuoteAction,
   listCustomerVehiclesAction,
@@ -20,7 +22,7 @@ import { fromDateOnlyLocal } from "@/lib/dateOnly";
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
 type ItemCategory = "NECESSARIO" | "RECOMENDADO" | "INFORMATIVO";
 
-interface ItemDraft {
+export interface ItemDraft {
   key: string;
   type: ItemType;
   description: string;
@@ -44,7 +46,7 @@ const ITEM_CATEGORY_LABEL: Record<ItemCategory, string> = {
   INFORMATIVO: "Informativo",
 };
 
-function newItem(): ItemDraft {
+export function newItem(): ItemDraft {
   return {
     key: Math.random().toString(36).slice(2),
     type: "SERVICO",
@@ -218,6 +220,14 @@ export function QuoteForm({
               error={fieldErrors.customerId}
             />
           )}
+          {mode === "create" ? (
+            <QuickCustomerForm
+              onCreated={(c) => {
+                setCustomer(c);
+                setVehicle(null);
+              }}
+            />
+          ) : null}
         </FieldGroup>
       ) : null}
 
@@ -231,9 +241,18 @@ export function QuoteForm({
           ) : loadingVehicles ? (
             <p className="text-sm text-muted">Carregando veículos…</p>
           ) : vehicleOptions.length === 0 ? (
-            <p className="text-sm text-danger">
-              Este cliente não tem veículos ativos cadastrados. Cadastre um veículo antes de montar o orçamento.
-            </p>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted">Este cliente ainda não tem veículo ativo. Cadastre um aqui mesmo:</p>
+              {customer ? (
+                <QuickVehicleForm
+                  customerId={customer.id}
+                  onCreated={(v) => {
+                    setVehicleOptions((prev) => [...prev, v]);
+                    setVehicle(v);
+                  }}
+                />
+              ) : null}
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               {vehicleOptions.map((v) => (
@@ -248,6 +267,15 @@ export function QuoteForm({
                   {v.label}
                 </button>
               ))}
+              {customer ? (
+                <QuickVehicleForm
+                  customerId={customer.id}
+                  onCreated={(v) => {
+                    setVehicleOptions((prev) => (prev.some((o) => o.id === v.id) ? prev : [...prev, v]));
+                    setVehicle(v);
+                  }}
+                />
+              ) : null}
             </div>
           )}
           {fieldErrors.vehicleId ? <p className="text-xs text-danger">{fieldErrors.vehicleId}</p> : null}
@@ -360,7 +388,7 @@ function FieldGroup({ children }: { children: ReactNode }) {
 const inputClass =
   "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 
-function QuoteItemsEditor({
+export function QuoteItemsEditor({
   items,
   onAdd,
   onUpdate,

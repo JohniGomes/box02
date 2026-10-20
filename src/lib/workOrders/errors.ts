@@ -158,7 +158,7 @@ export class WorkOrderNotDeliveredError extends Error {
  * sobrepagamento, sem crédito, sem estorno neste ciclo. */
 export class WorkOrderPaymentExceedsBalanceError extends Error {
   constructor(remainingCents: number) {
-    super(`O valor informado ultrapassa o saldo restante da OS (R$ ${(remainingCents / 100).toFixed(2)}).`);
+    super(`O valor informado ultrapassa o saldo restante da OS (R$ ${(remainingCents / 100).toFixed(2).replace(".", ",")}).`);
     this.name = "WorkOrderPaymentExceedsBalanceError";
   }
 }
@@ -178,7 +178,7 @@ export class WorkOrderPaymentNotFoundError extends Error {
  * original dele — o recebimento em si continua write-once (DEC-I6). */
 export class WorkOrderPaymentRefundExceedsAmountError extends Error {
   constructor(availableCents: number) {
-    super(`O estorno ultrapassa o valor disponível deste recebimento (R$ ${(availableCents / 100).toFixed(2)}).`);
+    super(`O estorno ultrapassa o valor disponível deste recebimento (R$ ${(availableCents / 100).toFixed(2).replace(".", ",")}).`);
     this.name = "WorkOrderPaymentRefundExceedsAmountError";
   }
 }

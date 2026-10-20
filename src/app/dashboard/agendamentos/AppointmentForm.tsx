@@ -9,6 +9,8 @@ import {
   type VehicleOption,
 } from "../orcamentos/actions";
 import { createAppointmentAction, type ActionResult } from "./actions";
+import { QuickCustomerForm } from "@/components/QuickCustomerForm";
+import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 
 export function AppointmentForm() {
   const router = useRouter();
@@ -71,6 +73,12 @@ export function AppointmentForm() {
           placeholder="Buscar cliente por nome, CPF ou CNPJ…"
           error={fieldErrors.customerId}
         />
+        <QuickCustomerForm
+          onCreated={(c) => {
+            setCustomer(c);
+            setVehicle(null);
+          }}
+        />
       </div>
 
       {customer ? (
@@ -79,7 +87,16 @@ export function AppointmentForm() {
           {loadingVehicles ? (
             <p className="text-sm text-muted">Carregando veículos…</p>
           ) : vehicleOptions.length === 0 ? (
-            <p className="text-sm text-muted">Este cliente não tem veículos ativos cadastrados.</p>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted">Este cliente não tem veículos ativos cadastrados.</p>
+              <QuickVehicleForm
+                customerId={customer.id}
+                onCreated={(v) => {
+                  setVehicleOptions((prev) => [...prev, v]);
+                  setVehicle(v);
+                }}
+              />
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               {vehicleOptions.map((v) => (

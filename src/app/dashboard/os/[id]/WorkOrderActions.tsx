@@ -325,7 +325,7 @@ export function WorkOrderItemExecutorInfo({
   const router = useRouter();
   const [correcting, setCorrecting] = useState(false);
   const [newExecutorId, setNewExecutorId] = useState(
-    defaultExecutorOptionId(users, executedByUserId ?? ""),
+    users.find((u) => u.name === executedByName)?.id ?? defaultExecutorOptionId(users, executedByUserId ?? ""),
   );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);

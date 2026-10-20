@@ -179,6 +179,17 @@ export async function findCustomerByDocument(document: string): Promise<Customer
   return result.rows[0] ?? null;
 }
 
+/** Clientes cujo telefone OU WhatsApp (só dígitos) é exatamente este. */
+export async function findCustomersByPhone(digits: string): Promise<CustomerRecord[]> {
+  const result = await pool.query<CustomerRecord>(
+    `SELECT ${CUSTOMER_COLUMNS} FROM customers
+     WHERE phone = $1 OR whatsapp = $1
+     ORDER BY (status = 'ATIVO') DESC, "createdAt" ASC`,
+    [digits],
+  );
+  return result.rows;
+}
+
 export interface SearchCustomersFilters {
   query?: string;
   type?: CustomerType;

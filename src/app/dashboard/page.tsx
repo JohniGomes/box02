@@ -73,6 +73,12 @@ export default async function DashboardHomePage() {
             Nova Venda
           </Link>
           <Link
+            href="/dashboard/venda-rapida"
+            className="flex h-10 items-center rounded-lg border border-accent px-4 text-sm font-semibold"
+          >
+            Venda rápida
+          </Link>
+          <Link
             href="/dashboard/agendamentos/novo"
             className="flex h-10 items-center rounded-lg border border-border px-4 text-sm font-semibold"
           >
