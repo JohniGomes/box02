@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardNav } from "@/components/DashboardNav";
+import { AssistenteChat } from "@/components/AssistenteChat";
 
 export default async function DashboardLayout({
   children,
@@ -54,6 +55,9 @@ export default async function DashboardLayout({
       >
         <DashboardNav mobile />
       </nav>
+
+      {/* Assistente IA — botão flutuante para lançamento por voz/foto */}
+      <AssistenteChat />
     </div>
   );
 }
