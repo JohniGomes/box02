@@ -16,11 +16,13 @@ export interface PartRecord {
   status: PartStatus;
   notes: string | null;
   markupPercent: number | null;
+  /** Insumo (uso interno): fica no estoque, mas não é oferecido nos orçamentos. */
+  isConsumable: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const COLUMNS = `id, name, sku, unit, "costCents", "minStock", status, notes, "markupPercent", "createdAt", "updatedAt"`;
+const COLUMNS = `id, name, sku, unit, "costCents", "minStock", status, notes, "markupPercent", "isConsumable", "createdAt", "updatedAt"`;
 
 export interface CreatePartInput {
   name: string;
@@ -30,13 +32,14 @@ export interface CreatePartInput {
   minStock?: number | null;
   notes?: string | null;
   markupPercent?: number | null;
+  isConsumable?: boolean;
 }
 
 export async function createPart(input: CreatePartInput, db: Queryable = pool): Promise<PartRecord> {
   const id = createId();
   const result = await db.query<PartRecord>(
-    `INSERT INTO parts (id, name, sku, unit, "costCents", "minStock", notes, "markupPercent", "updatedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    `INSERT INTO parts (id, name, sku, unit, "costCents", "minStock", notes, "markupPercent", "isConsumable", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
      RETURNING ${COLUMNS}`,
     [
       id,
@@ -47,6 +50,7 @@ export async function createPart(input: CreatePartInput, db: Queryable = pool): 
       input.minStock ?? null,
       input.notes ?? null,
       input.markupPercent ?? null,
+      input.isConsumable ?? false,
     ],
   );
   return result.rows[0];
@@ -64,6 +68,7 @@ export async function updatePart(id: string, input: UpdatePartInput): Promise<Pa
       "minStock" = CASE WHEN $8::boolean THEN $9 ELSE "minStock" END,
       notes = CASE WHEN $10::boolean THEN $11 ELSE notes END,
       "markupPercent" = CASE WHEN $12::boolean THEN $13 ELSE "markupPercent" END,
+      "isConsumable" = COALESCE($14, "isConsumable"),
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
@@ -81,6 +86,7 @@ export async function updatePart(id: string, input: UpdatePartInput): Promise<Pa
       input.notes ?? null,
       "markupPercent" in input,
       input.markupPercent ?? null,
+      input.isConsumable ?? null,
     ],
   );
   return result.rows[0] ?? null;
@@ -123,7 +129,7 @@ export async function listPartsWithStock(query?: string): Promise<PartWithStock[
   const result = await pool.query<PartWithStock>(
     `SELECT
        p.id, p.name, p.sku, p.unit, p."costCents", p."minStock", p.status, p.notes,
-       p."markupPercent", p."createdAt", p."updatedAt",
+       p."markupPercent", p."isConsumable", p."createdAt", p."updatedAt",
        COALESCE(SUM(CASE WHEN sm.type = 'ENTRADA' THEN sm.quantity ELSE -sm.quantity END), 0)::int as "currentStock"
      FROM parts p
      LEFT JOIN stock_movements sm ON sm."partId" = p.id
@@ -151,4 +157,9 @@ export async function getPartCurrentStock(partId: string, db: Queryable = pool):
 export async function findPartByIdForUpdate(id: string, client: PoolClient): Promise<PartRecord | null> {
   const result = await client.query<PartRecord>(`SELECT ${COLUMNS} FROM parts WHERE id = $1 FOR UPDATE`, [id]);
   return result.rows[0] ?? null;
+}
+
+/** Atualiza só o custo unitário atual da peça (usado ao registrar uma compra). */
+export async function setPartCost(id: string, costCents: number, db: Queryable = pool): Promise<void> {
+  await db.query(`UPDATE parts SET "costCents" = $2, "updatedAt" = NOW() WHERE id = $1`, [id, costCents]);
 }

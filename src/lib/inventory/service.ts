@@ -25,6 +25,8 @@ import {
 } from "@/lib/validation/part";
 import { calculateSalePriceCents, markupPercentForPrice, reaisToCents } from "@/lib/money";
 import { getDefaultMarkupPercent } from "@/lib/settings/service";
+import { registerPurchaseService } from "@/lib/purchases/service";
+import { todayInBrasilia } from "@/lib/expenses/dates";
 import {
   DuplicatePartNameError,
   DuplicatePartSkuError,
@@ -50,6 +52,7 @@ export async function createPartService(rawInput: unknown): Promise<PartRecord> 
     minStock: input.minStock ?? null,
     markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
+    isConsumable: input.isConsumable,
   });
 }
 
@@ -80,6 +83,26 @@ export async function createPurchasedPartService(
       throw new InvalidPurchasedPartError("O preço de venda não pode ser menor que o custo.");
     }
     markupPercent = m;
+  }
+
+  // Com pagamento informado, usa o mesmo caminho da "Registrar compra": peça
+  // nova + entrada + despesa ligada, tudo numa transação só.
+  if (input.payment && input.payment.mode !== "NENHUM") {
+    const purchase = await registerPurchaseService(actorUserId, {
+      purchaseDate: todayInBrasilia(),
+      items: [
+        {
+          newPartName: input.name,
+          newPartPriceReais: input.priceReais,
+          quantity: input.quantity,
+          totalReais: (costCents * input.quantity) / 100,
+        },
+      ],
+      payment: input.payment,
+    });
+    const created = await findPartById(purchase.partIds[0]);
+    if (!created) throw new PartNotFoundError(purchase.partIds[0]);
+    return { part: created, quantity: input.quantity };
   }
 
   return withTransaction(async (client) => {
@@ -121,6 +144,7 @@ export async function updatePartService(partId: string, rawInput: unknown): Prom
     minStock: input.minStock ?? null,
     markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
+    isConsumable: input.isConsumable,
   });
   if (!updated) throw new PartNotFoundError(partId);
   return updated;

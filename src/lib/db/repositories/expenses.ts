@@ -26,6 +26,8 @@ export interface ExpenseRecord {
   paidAt: Date | null;
   paymentMethod: WorkOrderPaymentMethod | null;
   notes: string | null;
+  /** Compra de peças que originou esta despesa (se houver). */
+  purchaseId: string | null;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -34,7 +36,7 @@ export interface ExpenseRecord {
 const COLUMNS = `
   id, category, description, "supplierName", "amountCents",
   to_char("dueDate", 'YYYY-MM-DD') as "dueDate", "paidAt", "paymentMethod",
-  notes, "createdByUserId", "createdAt", "updatedAt"
+  notes, "purchaseId", "createdByUserId", "createdAt", "updatedAt"
 `;
 
 export async function createExpense(
@@ -45,6 +47,7 @@ export async function createExpense(
     amountCents: number;
     dueDate: string;
     notes?: string | null;
+    purchaseId?: string | null;
     createdByUserId: string;
   },
   db: Queryable = pool,
@@ -52,8 +55,8 @@ export async function createExpense(
   const id = createId();
   const result = await db.query<ExpenseRecord>(
     `INSERT INTO expenses
-      (id, category, description, "supplierName", "amountCents", "dueDate", notes, "createdByUserId", "updatedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      (id, category, description, "supplierName", "amountCents", "dueDate", notes, "createdByUserId", "purchaseId", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
      RETURNING ${COLUMNS}`,
     [
       id,
@@ -64,6 +67,7 @@ export async function createExpense(
       input.dueDate,
       input.notes ?? null,
       input.createdByUserId,
+      input.purchaseId ?? null,
     ],
   );
   return result.rows[0];

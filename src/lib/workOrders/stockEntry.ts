@@ -6,6 +6,9 @@ import { createStockMovement } from "@/lib/db/repositories/stockMovements";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { centsToReais, reaisToCents } from "@/lib/money";
 import { parseExecutorValue } from "@/lib/executors/value";
+import { registerPurchaseService } from "@/lib/purchases/service";
+import { purchasePaymentSchema } from "@/lib/validation/purchase";
+import { todayInBrasilia } from "@/lib/expenses/dates";
 import { setWorkOrderItemStatusService } from "./service";
 import {
   InvalidWorkOrderItemTransitionError,
@@ -73,6 +76,8 @@ const entryInputSchema = z.object({
   /** Quanto custou cada unidade comprada. Se informado e diferente do custo
    * cadastrado, passa a ser o novo custo da peça (último preço pago). */
   unitCostReais: z.union([z.string(), z.number()]).optional(),
+  /** Como foi pago (gera a despesa junto). Ausente = não lança despesa. */
+  payment: purchasePaymentSchema.optional(),
 });
 
 /**
@@ -89,20 +94,39 @@ export async function executeItemWithStockEntryService(
   const input = entryInputSchema.parse(rawInput);
   const { workOrder, item, part } = await loadItemAndPart(workOrderId, itemId);
 
-  await createStockMovement({
-    partId: part.id,
-    type: "ENTRADA",
-    quantity: input.entryQuantity,
-    reason: `Entrada na execução da OS ${workOrder.number} — item "${item.description}"`,
-    createdByUserId: actorUserId,
-  });
+  let unitCostCents: number | null = null;
+  if (input.unitCostReais !== undefined && String(input.unitCostReais).trim() !== "") {
+    const c = reaisToCents(input.unitCostReais);
+    if (c > 0) unitCostCents = c;
+  }
+  const costForPurchase = unitCostCents ?? part.costCents;
 
   let costUpdated: { from: number | null; to: number } | null = null;
-  if (input.unitCostReais !== undefined && String(input.unitCostReais).trim() !== "") {
-    const newCost = reaisToCents(input.unitCostReais);
-    if (newCost > 0 && newCost !== part.costCents) {
-      await updatePart(part.id, { costCents: newCost });
-      costUpdated = { from: part.costCents, to: newCost };
+  if (input.payment && input.payment.mode !== "NENHUM" && costForPurchase && costForPurchase > 0) {
+    // Entrada + despesa ligada, pelo mesmo caminho da "Registrar compra".
+    await registerPurchaseService(actorUserId, {
+      purchaseDate: todayInBrasilia(),
+      items: [
+        {
+          partId: part.id,
+          quantity: input.entryQuantity,
+          totalReais: (costForPurchase * input.entryQuantity) / 100,
+        },
+      ],
+      payment: input.payment,
+    });
+    if (costForPurchase !== part.costCents) costUpdated = { from: part.costCents, to: costForPurchase };
+  } else {
+    await createStockMovement({
+      partId: part.id,
+      type: "ENTRADA",
+      quantity: input.entryQuantity,
+      reason: `Entrada na execução da OS ${workOrder.number} — item "${item.description}"`,
+      createdByUserId: actorUserId,
+    });
+    if (unitCostCents !== null && unitCostCents !== part.costCents) {
+      await updatePart(part.id, { costCents: unitCostCents });
+      costUpdated = { from: part.costCents, to: unitCostCents };
     }
   }
 

@@ -3,6 +3,13 @@
 import { useState, useTransition } from "react";
 import { createPurchasedPartAction, type PartPickerOption } from "@/app/dashboard/estoque/actions";
 import { formatBRL, markupPercentForPrice, reaisToCents } from "@/lib/money";
+import {
+  PurchasePaymentFields,
+  defaultQuickPayment,
+  quickPaymentIsValid,
+  quickPaymentToInput,
+  type QuickPayment,
+} from "@/components/PurchasePaymentFields";
 
 const inputClass =
   "h-11 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-accent";
@@ -24,6 +31,7 @@ export function PurchasedPartButton({
   const [quantity, setQuantity] = useState("1");
   const [costReais, setCostReais] = useState("");
   const [priceReais, setPriceReais] = useState("");
+  const [payment, setPayment] = useState<QuickPayment>(defaultQuickPayment());
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -37,13 +45,20 @@ export function PurchasedPartButton({
     setQuantity("1");
     setCostReais("");
     setPriceReais("");
+    setPayment(defaultQuickPayment());
     setError(null);
   }
 
   function handleCreate() {
     setError(null);
     startTransition(async () => {
-      const result = await createPurchasedPartAction({ name, quantity, costReais, priceReais });
+      const result = await createPurchasedPartAction({
+        name,
+        quantity,
+        costReais,
+        priceReais,
+        payment: quickPaymentToInput(payment),
+      });
       if (!result.success || !result.part) {
         setError(result.error ?? "Não foi possível cadastrar a peça.");
         return;
@@ -120,11 +135,12 @@ export function PurchasedPartButton({
         </p>
       ) : null}
       {belowCost ? <p className="text-xs text-danger">O preço de venda está abaixo do custo.</p> : null}
+      <PurchasePaymentFields value={payment} onChange={setPayment} />
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <button
         type="button"
         onClick={handleCreate}
-        disabled={isPending || name.trim().length < 2 || !costReais.trim() || belowCost}
+        disabled={isPending || name.trim().length < 2 || !costReais.trim() || belowCost || !quickPaymentIsValid(payment)}
         className="h-11 rounded-lg bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
       >
         {isPending ? "Cadastrando…" : "Cadastrar peça e usar no item"}

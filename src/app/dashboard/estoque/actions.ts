@@ -20,6 +20,7 @@ import {
   PartNotFoundError,
 } from "@/lib/inventory/errors";
 import { centsToReais } from "@/lib/money";
+import { InvalidPurchaseError } from "@/lib/purchases/errors";
 import type { PartStatus, PartWithStock } from "@/lib/db/repositories/parts";
 
 export interface InventoryActionResult {
@@ -116,7 +117,7 @@ async function toPickerOption(p: PartWithStock): Promise<PartPickerOption> {
 export async function searchActivePartsForPickerAction(query: string): Promise<PartPickerOption[]> {
   await requireUserId();
   const parts = await listPartsWithStockService(query);
-  return Promise.all(parts.filter((p) => p.status === "ATIVO").map(toPickerOption));
+  return Promise.all(parts.filter((p) => p.status === "ATIVO" && !p.isConsumable).map(toPickerOption));
 }
 
 export interface PurchasedPartResult {
@@ -134,10 +135,15 @@ export async function createPurchasedPartAction(input: unknown): Promise<Purchas
     const userId = await requireUserId();
     const { part, quantity } = await createPurchasedPartService(userId, input);
     revalidatePath("/dashboard/estoque");
+    revalidatePath("/dashboard/despesas");
     const option = await toPickerOption({ ...part, currentStock: quantity });
     return { success: true, part: option, quantity };
   } catch (err) {
-    if (err instanceof DuplicatePartNameError || err instanceof InvalidPurchasedPartError) {
+    if (
+      err instanceof DuplicatePartNameError ||
+      err instanceof InvalidPurchasedPartError ||
+      err instanceof InvalidPurchaseError
+    ) {
       return { success: false, error: err.message };
     }
     const base = friendlyError(err, "Não foi possível cadastrar a peça.");

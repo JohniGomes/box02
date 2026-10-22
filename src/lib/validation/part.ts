@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { purchasePaymentSchema } from "./purchase";
 
 const optionalTrimmed = z
   .string()
@@ -34,6 +35,7 @@ export const createPartSchema = z.object({
   minStock: optionalInt,
   markupPercent: optionalPercent,
   notes: optionalTrimmed,
+  isConsumable: z.boolean().optional(),
 });
 
 export const updatePartSchema = createPartSchema;
@@ -51,6 +53,8 @@ export const createPurchasedPartSchema = z.object({
     .pipe(z.number().int("Quantidade deve ser um número inteiro").positive("Quantidade deve ser maior que zero")),
   costReais: z.union([z.string(), z.number()]),
   priceReais: z.union([z.string(), z.number()]).optional(),
+  /** Como foi pago (gera a despesa junto). Ausente = não lança despesa. */
+  payment: purchasePaymentSchema.optional(),
 });
 
 export const createStockMovementSchema = z.object({
