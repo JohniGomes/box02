@@ -249,7 +249,7 @@ export async function getItemStockEntryDefaultsAction(
 export async function executeItemWithStockEntryAction(
   workOrderId: string,
   itemId: string,
-  input: { executedBy: string; entryQuantity: string; unitCostReais?: string },
+  input: { executedBy: string; entryQuantity: string; unitCostReais?: string; payment?: unknown },
 ): Promise<ActionResult> {
   try {
     const userId = await requireUserId();

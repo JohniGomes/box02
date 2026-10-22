@@ -9,6 +9,7 @@ export interface PartFormValues {
   minStock: string;
   markupPercent: string;
   notes: string;
+  isConsumable: boolean;
 }
 
 /** Transformação pura — vive fora do "use client" de propósito, pra
@@ -23,5 +24,6 @@ export function partRecordToFormValues(part: PartRecord): PartFormValues {
     minStock: part.minStock !== null ? String(part.minStock) : "",
     markupPercent: part.markupPercent !== null ? String(part.markupPercent) : "",
     notes: part.notes ?? "",
+    isConsumable: part.isConsumable,
   };
 }

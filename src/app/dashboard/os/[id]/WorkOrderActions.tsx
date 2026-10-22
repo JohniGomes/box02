@@ -14,6 +14,13 @@ import {
 } from "../actions";
 import type { StockEntryDefaults } from "@/lib/workOrders/stockEntry";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
+import {
+  PurchasePaymentFields,
+  defaultQuickPayment,
+  quickPaymentToInput,
+  quickPaymentIsValid,
+  type QuickPayment,
+} from "@/components/PurchasePaymentFields";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 import { WORK_ORDER_STATUS_LABEL } from "../statusLabels";
 
@@ -120,6 +127,7 @@ export function WorkOrderItemActions({
   const [shortage, setShortage] = useState<StockEntryDefaults | null>(null);
   const [entryQty, setEntryQty] = useState("");
   const [entryCost, setEntryCost] = useState("");
+  const [entryPayment, setEntryPayment] = useState<QuickPayment>(defaultQuickPayment());
 
   function markExecuted() {
     setError(null);
@@ -151,6 +159,7 @@ export function WorkOrderItemActions({
         executedBy: executorId,
         entryQuantity: entryQty,
         unitCostReais: entryCost || undefined,
+        payment: quickPaymentToInput(entryPayment),
       });
       if (!result.success) {
         setError(result.error ?? "Falha ao dar entrada e executar.");
@@ -233,10 +242,11 @@ export function WorkOrderItemActions({
         <p className="text-[11px] text-muted">
           Se o custo mudou, ele passa a ser o novo custo da peça. A entrada fica no histórico da peça.
         </p>
+        <PurchasePaymentFields value={entryPayment} onChange={setEntryPayment} />
         <div className="flex gap-2">
           <button
             onClick={confirmEntryAndExecute}
-            disabled={isPending || !entryQty.trim()}
+            disabled={isPending || !entryQty.trim() || !quickPaymentIsValid(entryPayment)}
             className="h-9 flex-1 rounded-lg bg-success/15 text-xs font-semibold text-success disabled:opacity-60"
           >
             Dar entrada e executar

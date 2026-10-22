@@ -20,7 +20,7 @@ export function PartForm({
 }) {
   const router = useRouter();
   const [values, setValues] = useState<PartFormValues>(
-    initialValues ?? { name: "", sku: "", unit: "un", costReais: "", minStock: "", markupPercent: "", notes: "" },
+    initialValues ?? { name: "", sku: "", unit: "un", costReais: "", minStock: "", markupPercent: "", notes: "", isConsumable: false },
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -98,6 +98,7 @@ export function PartForm({
       minStock: values.minStock,
       markupPercent: values.markupPercent,
       notes: values.notes,
+      isConsumable: values.isConsumable,
     };
 
     let result: InventoryActionResult;
@@ -209,6 +210,21 @@ export function PartForm({
           </p>
         </div>
       ) : null}
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
+        <input
+          type="checkbox"
+          checked={values.isConsumable}
+          onChange={(e) => update("isConsumable", e.target.checked)}
+          className="mt-0.5 h-5 w-5 shrink-0"
+        />
+        <span className="text-sm">
+          <span className="block font-medium">Insumo (uso interno da oficina)</span>
+          <span className="block text-xs text-muted">
+            Fica no estoque e entra nas compras, mas não aparece para escolher nos orçamentos. Ex.: óleo, estopa.
+          </span>
+        </span>
+      </label>
 
       <Field label="Observações (opcional)" htmlFor="notes">
         <textarea

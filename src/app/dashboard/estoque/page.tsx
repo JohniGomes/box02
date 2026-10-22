@@ -14,12 +14,20 @@ export default async function EstoquePage({
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight">Estoque</h1>
+        <div className="flex gap-2">
+        <Link
+          href="/dashboard/estoque/compra"
+          className="flex h-9 items-center rounded-lg border border-border px-3 text-sm font-medium"
+        >
+          Registrar compra
+        </Link>
         <Link
           href="/dashboard/estoque/novo"
           className="flex h-9 items-center rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground"
         >
           + Nova peça
         </Link>
+        </div>
       </div>
 
       <form className="flex gap-2">

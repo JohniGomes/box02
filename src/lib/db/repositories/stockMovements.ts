@@ -12,11 +12,12 @@ export interface StockMovementRecord {
   type: StockMovementType;
   quantity: number;
   reason: string | null;
+  purchaseId: string | null;
   createdByUserId: string;
   createdAt: Date;
 }
 
-const COLUMNS = `id, "partId", type, quantity, reason, "createdByUserId", "createdAt"`;
+const COLUMNS = `id, "partId", type, quantity, reason, "purchaseId", "createdByUserId", "createdAt"`;
 
 /** Write-once (sem update/delete) — corrigir um lançamento errado é
  * lançar o movimento inverso, mesmo padrão de WorkOrderPayment. */
@@ -26,16 +27,17 @@ export async function createStockMovement(
     type: StockMovementType;
     quantity: number;
     reason?: string | null;
+    purchaseId?: string | null;
     createdByUserId: string;
   },
   db: Queryable = pool,
 ): Promise<StockMovementRecord> {
   const id = createId();
   const result = await db.query<StockMovementRecord>(
-    `INSERT INTO stock_movements (id, "partId", type, quantity, reason, "createdByUserId")
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO stock_movements (id, "partId", type, quantity, reason, "purchaseId", "createdByUserId")
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${COLUMNS}`,
-    [id, input.partId, input.type, input.quantity, input.reason ?? null, input.createdByUserId],
+    [id, input.partId, input.type, input.quantity, input.reason ?? null, input.purchaseId ?? null, input.createdByUserId],
   );
   return result.rows[0];
 }
