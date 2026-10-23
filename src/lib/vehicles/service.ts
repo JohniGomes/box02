@@ -8,6 +8,7 @@ import {
   setVehicleCustomer,
   setVehicleStatus,
   updateVehicle,
+  updateVehicleMileage,
   type SearchVehiclesFilters,
   type VehicleRecord,
 } from "@/lib/db/repositories/vehicles";
@@ -196,7 +197,7 @@ export async function bumpVehicleMileageIfHigherService(
     return { updated: false, vehicle: existing };
   }
 
-  const updated = await updateVehicle(vehicleId, { mileage: newMileage });
+  const updated = await updateVehicleMileage(vehicleId, newMileage);
   if (!updated) throw new VehicleNotFoundError(vehicleId);
 
   await recordAuditLog({

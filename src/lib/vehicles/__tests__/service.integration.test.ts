@@ -12,6 +12,7 @@ import {
   searchVehiclesService,
   transferVehicleService,
   updateVehicleService,
+  bumpVehicleMileageIfHigherService,
 } from "../service";
 import {
   DuplicateVehiclePlateError,
@@ -266,5 +267,24 @@ describe("busca de veículos", () => {
   it("filtra por cliente específico", async () => {
     const result = await searchVehiclesService({ customerId: customerAId });
     expect(result.items.every((v) => v.customerId === customerAId)).toBe(true);
+  });
+});
+
+describe("bumpVehicleMileageIfHigherService — regressão: não pode apagar os outros campos", () => {
+  it("atualizar o KM mantém placa, marca, modelo, cor e demais campos", async () => {
+    const created = await createVehicleService(actorUserId, {
+      customerId: customerAId,
+      plate: "KMB1A23",
+      brand: "Fiat",
+      model: "Palio",
+      version: "Fire 1.0",
+      color: "Prata",
+    });
+    const result = await bumpVehicleMileageIfHigherService(actorUserId, created.id, 145254);
+    expect(result.updated).toBe(true);
+    expect(result.vehicle.mileage).toBe(145254);
+
+    const row = await pool.query(`SELECT plate, brand, model, version, color, mileage FROM vehicles WHERE id = $1`, [created.id]);
+    expect(row.rows[0]).toMatchObject({ plate: "KMB1A23", brand: "Fiat", model: "Palio", version: "Fire 1.0", color: "Prata", mileage: 145254 });
   });
 });
