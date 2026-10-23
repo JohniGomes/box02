@@ -103,6 +103,7 @@ export async function createQuickVehicleAction(input: {
   customerId: string;
   model?: string;
   plate?: string;
+  year?: string;
 }): Promise<QuickVehicleActionResult> {
   try {
     const userId = await requireUserId();

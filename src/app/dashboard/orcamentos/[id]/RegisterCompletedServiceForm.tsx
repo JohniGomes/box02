@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { registerCompletedServiceAction } from "../actions";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { useRememberedChoice } from "@/lib/useRemembered";
+import { LastMileageHint } from "@/components/LastMileageHint";
 
 type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
 
@@ -38,12 +40,14 @@ export function RegisterCompletedServiceForm({
   quoteId,
   totalCents,
   customerName,
+  lastMileage,
   executors,
   currentUserId,
 }: {
   quoteId: string;
   totalCents: number;
   customerName: string;
+  lastMileage?: number | null;
   executors: { id: string; name: string }[];
   currentUserId: string;
 }) {
@@ -53,7 +57,11 @@ export function RegisterCompletedServiceForm({
   const [mileage, setMileage] = useState("");
   // `executors` = opções do seletor (nomes da lista de executores; se estiver
   // vazia, usuários ativos). O valor escolhido é enviado como `executedBy`.
-  const [executedBy, setExecutedBy] = useState(defaultExecutorOptionId(executors, currentUserId));
+  const [executedBy, setExecutedBy] = useRememberedChoice(
+    "box02.lastExecutor",
+    defaultExecutorOptionId(executors, currentUserId),
+    executors.map((e) => e.id),
+  );
   const [deliveryName, setDeliveryName] = useState(customerName);
   const [rows, setRows] = useState<PaymentRow[]>([newRow(centsToField(totalCents))]);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +154,7 @@ export function RegisterCompletedServiceForm({
             placeholder="Ex.: 45000"
             className={inputClass}
           />
+          <LastMileageHint lastMileage={lastMileage} current={mileage} onUse={setMileage} />
           {fieldErrors.mileageAtEntry ? <p className="text-xs text-danger">{fieldErrors.mileageAtEntry}</p> : null}
         </div>
       </div>

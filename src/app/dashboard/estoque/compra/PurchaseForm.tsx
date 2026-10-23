@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { registerPurchaseAction } from "./actions";
+import { useRememberedChoice } from "@/lib/useRemembered";
 
 type PayMode = "PAGO" | "DEPOIS" | "NENHUM";
 type Method = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
@@ -78,7 +79,8 @@ export function PurchaseForm({
   const [adjustment, setAdjustment] = useState("");
   const [notes, setNotes] = useState("");
   const [mode, setMode] = useState<PayMode>("PAGO");
-  const [method, setMethod] = useState<Method>("PIX");
+  const [method, setMethodState] = useRememberedChoice("box02.lastPayMethod", "PIX", ["DINHEIRO", "PIX", "CARTAO", "OUTRO"]);
+  const setMethod = (m: Method) => setMethodState(m);
   const [paidOn, setPaidOn] = useState(today);
   const [dueDate, setDueDate] = useState("");
   const [installments, setInstallments] = useState("1");

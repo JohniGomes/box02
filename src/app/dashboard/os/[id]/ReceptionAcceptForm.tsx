@@ -7,10 +7,21 @@ import { registerReceptionAcceptanceAction } from "../receptionActions";
 const inputClass =
   "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 
-export function ReceptionAcceptForm({ workOrderId, missing = [] }: { workOrderId: string; missing?: string[] }) {
+export function ReceptionAcceptForm({
+  workOrderId,
+  missing = [],
+  defaultName = "",
+  defaultDocument = "",
+}: {
+  workOrderId: string;
+  missing?: string[];
+  /** Nome e CPF do cliente da OS (editáveis: quem assina pode ser outra pessoa). */
+  defaultName?: string;
+  defaultDocument?: string;
+}) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [document, setDocument] = useState("");
+  const [name, setName] = useState(defaultName);
+  const [document, setDocument] = useState(defaultDocument);
   const [awareness1, setAwareness1] = useState(false);
   const [awareness2, setAwareness2] = useState(false);
   const [awareness3, setAwareness3] = useState(false);

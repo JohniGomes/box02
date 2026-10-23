@@ -11,6 +11,7 @@ import type { ReceptionChecklistSnapshot } from "@/lib/db/repositories/workOrder
 import { PdfStyleHeader } from "@/components/PdfStyleHeader";
 import { PrintButton } from "@/components/PrintButton";
 import { vehicleDisplayName } from "@/lib/vehicles/label";
+import { formatDocument } from "@/lib/validation/document";
 import { DamagesEditor } from "../DamagesEditor";
 import { CheckInEditor } from "../CheckInEditor";
 import { ReceptionAcceptForm } from "../ReceptionAcceptForm";
@@ -164,7 +165,14 @@ export default async function TermoRecepcaoPage({
       ) : null}
 
       {!accepted ? (
-        <ReceptionAcceptForm workOrderId={workOrder.id} missing={missingForAccept} />
+        <ReceptionAcceptForm
+          workOrderId={workOrder.id}
+          missing={missingForAccept}
+          defaultName={customer?.legalName ?? workOrder.customerNameSnapshot}
+          defaultDocument={
+            customer?.document && customer.document.replace(/\D/g, "").length === 11 ? formatDocument(customer.document) : ""
+          }
+        />
       ) : (
         <>
           <div className="rounded-2xl border border-border bg-surface p-6">

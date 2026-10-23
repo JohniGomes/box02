@@ -11,6 +11,7 @@ import {
 } from "./actions";
 import { computeQuoteTotals, formatBRL, lineTotalCents, reaisToCents } from "@/lib/money";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { useRememberedChoice } from "@/lib/useRemembered";
 import type { CustomerLookup, CustomerSuggestion } from "@/lib/quickSale/service";
 
 type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
@@ -70,7 +71,11 @@ export function QuickSaleForm({
   // Fechamento
   const [serviceDate, setServiceDate] = useState(today);
   const [mileage, setMileage] = useState("");
-  const [executedBy, setExecutedBy] = useState(defaultExecutorOptionId(executors, currentUserId));
+  const [executedBy, setExecutedBy] = useRememberedChoice(
+    "box02.lastExecutor",
+    defaultExecutorOptionId(executors, currentUserId),
+    executors.map((e) => e.id),
+  );
   const [deliveryName, setDeliveryName] = useState("");
   const [discountType, setDiscountType] = useState<"" | "PERCENTUAL" | "FIXO">("");
   const [discountValue, setDiscountValue] = useState("");

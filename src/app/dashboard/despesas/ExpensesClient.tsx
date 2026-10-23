@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRememberedChoice } from "@/lib/useRemembered";
 import { useRouter } from "next/navigation";
 import { formatBRL, centsToReais } from "@/lib/money";
 import {
   createExpenseAction,
   deleteExpenseAction,
+  listSupplierNamesAction,
   markExpenseAsPaidAction,
   repeatExpenseNextMonthAction,
   unmarkExpenseAsPaidAction,
@@ -171,7 +173,12 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [payMode, setPayMode] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("DINHEIRO");
+  const [paymentMethod, setPaymentMethod] = useRememberedChoice("box02.lastPayMethod", "DINHEIRO", [
+    "DINHEIRO",
+    "PIX",
+    "CARTAO",
+    "OUTRO",
+  ]);
   const today = todayInBrasilia();
   const [paidOn, setPaidOn] = useState(today);
   const [confirmUndo, setConfirmUndo] = useState(false);
@@ -418,6 +425,10 @@ function ExpenseForm({
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? "OUTROS");
   const [description, setDescription] = useState(expense?.description ?? "");
   const [supplierName, setSupplierName] = useState(expense?.supplierName ?? "");
+  const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
+  useEffect(() => {
+    listSupplierNamesAction().then(setSupplierOptions);
+  }, []);
   const [amountReais, setAmountReais] = useState(expense ? centsToReais(expense.amountCents) : "");
   const [dueDate, setDueDate] = useState(expense?.dueDate ?? "");
   const [notes, setNotes] = useState(expense?.notes ?? "");
@@ -456,9 +467,15 @@ function ExpenseForm({
       <input
         value={supplierName}
         onChange={(e) => setSupplierName(e.target.value)}
-        placeholder="Fornecedor (opcional)"
+        placeholder="Fornecedor (opcional) — escolha da lista ou digite"
+        list="expenseSupplierList"
         className={inputClass}
       />
+      <datalist id="expenseSupplierList">
+        {supplierOptions.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <div className="grid grid-cols-2 gap-2">
         <input
           inputMode="decimal"

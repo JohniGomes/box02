@@ -7,6 +7,7 @@ import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import { QuickCustomerForm } from "@/components/QuickCustomerForm";
+import { LastMileageHint } from "@/components/LastMileageHint";
 import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 import { createWorkOrderWithoutQuoteAction } from "./actions";
 import { searchCustomersForPickerAction } from "../veiculos/actions";
@@ -162,6 +163,11 @@ export function NewWorkOrderWithoutQuoteForm() {
             onChange={(e) => setMileageAtEntry(e.target.value)}
             className={inputClass}
             placeholder="Ex.: 45000"
+          />
+          <LastMileageHint
+            lastMileage={vehicles.find((v) => v.id === vehicleId)?.mileage}
+            current={mileageAtEntry}
+            onUse={setMileageAtEntry}
           />
           {fieldErrors.mileageAtEntry ? <p className="text-xs text-danger">{fieldErrors.mileageAtEntry}</p> : null}
         </div>
