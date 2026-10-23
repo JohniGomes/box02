@@ -28,6 +28,10 @@ export interface ExpenseRecord {
   notes: string | null;
   /** Compra de peças que originou esta despesa (se houver). */
   purchaseId: string | null;
+  /** OS relacionada (ex.: serviço terceirizado), se houver. */
+  workOrderId: string | null;
+  /** Número da OS (só nas listagens). */
+  workOrderNumber?: string | null;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -36,7 +40,7 @@ export interface ExpenseRecord {
 const COLUMNS = `
   id, category, description, "supplierName", "amountCents",
   to_char("dueDate", 'YYYY-MM-DD') as "dueDate", "paidAt", "paymentMethod",
-  notes, "purchaseId", "createdByUserId", "createdAt", "updatedAt"
+  notes, "purchaseId", "workOrderId", "createdByUserId", "createdAt", "updatedAt"
 `;
 
 export async function createExpense(
@@ -48,6 +52,7 @@ export async function createExpense(
     dueDate: string;
     notes?: string | null;
     purchaseId?: string | null;
+    workOrderId?: string | null;
     createdByUserId: string;
   },
   db: Queryable = pool,
@@ -55,8 +60,8 @@ export async function createExpense(
   const id = createId();
   const result = await db.query<ExpenseRecord>(
     `INSERT INTO expenses
-      (id, category, description, "supplierName", "amountCents", "dueDate", notes, "createdByUserId", "purchaseId", "updatedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      (id, category, description, "supplierName", "amountCents", "dueDate", notes, "createdByUserId", "purchaseId", "workOrderId", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
      RETURNING ${COLUMNS}`,
     [
       id,
@@ -68,6 +73,7 @@ export async function createExpense(
       input.notes ?? null,
       input.createdByUserId,
       input.purchaseId ?? null,
+      input.workOrderId ?? null,
     ],
   );
   return result.rows[0];
@@ -87,7 +93,9 @@ export async function lockExpenseById(id: string, db: Queryable): Promise<Expens
 
 export async function listExpenses(db: Queryable = pool): Promise<ExpenseRecord[]> {
   const result = await db.query<ExpenseRecord>(
-    `SELECT ${COLUMNS} FROM expenses ORDER BY "paidAt" IS NULL DESC, "dueDate" ASC, "createdAt" ASC`,
+    `SELECT ${COLUMNS},
+       (SELECT w.number FROM work_orders w WHERE w.id = expenses."workOrderId") AS "workOrderNumber"
+     FROM expenses ORDER BY "paidAt" IS NULL DESC, "dueDate" ASC, "createdAt" ASC`,
   );
   return result.rows;
 }
@@ -154,13 +162,14 @@ export async function updateExpense(
     amountCents: number;
     dueDate: string;
     notes?: string | null;
+    workOrderId?: string | null;
   },
   db: Queryable = pool,
 ): Promise<ExpenseRecord | null> {
   const result = await db.query<ExpenseRecord>(
     `UPDATE expenses SET
       category = $2, description = $3, "supplierName" = $4, "amountCents" = $5,
-      "dueDate" = $6, notes = $7, "updatedAt" = NOW()
+      "dueDate" = $6, notes = $7, "workOrderId" = $8, "updatedAt" = NOW()
      WHERE id = $1
      RETURNING ${COLUMNS}`,
     [
@@ -171,6 +180,7 @@ export async function updateExpense(
       input.amountCents,
       input.dueDate,
       input.notes ?? null,
+      input.workOrderId ?? null,
     ],
   );
   return result.rows[0] ?? null;

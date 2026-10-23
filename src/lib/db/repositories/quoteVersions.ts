@@ -23,6 +23,8 @@ export interface QuoteVersionRecord {
   discountType: QuoteAdjustmentType | null;
   discountValue: number | null;
   discountTotalCents: number;
+  /** Motivo (interno) do desconto. */
+  discountReason: string | null;
   surchargeType: QuoteAdjustmentType | null;
   surchargeValue: number | null;
   surchargeTotalCents: number;
@@ -35,7 +37,7 @@ const COLUMNS = `
   id, "quoteId", "versionNumber", status, "validUntil", "sentAt", "decidedAt",
   "internalNotes", "customerMessage",
   "subtotalServicesCents", "subtotalPartsCents", "subtotalLaborCents",
-  "discountType", "discountValue", "discountTotalCents",
+  "discountType", "discountValue", "discountTotalCents", "discountReason",
   "surchargeType", "surchargeValue", "surchargeTotalCents",
   "totalCents", "createdByUserId", "createdAt"
 `;
@@ -52,6 +54,7 @@ export interface CreateQuoteVersionInput {
   discountType?: QuoteAdjustmentType | null;
   discountValue?: number | null;
   discountTotalCents: number;
+  discountReason?: string | null;
   surchargeType?: QuoteAdjustmentType | null;
   surchargeValue?: number | null;
   surchargeTotalCents: number;
@@ -71,14 +74,14 @@ export async function createQuoteVersion(
       "subtotalServicesCents", "subtotalPartsCents", "subtotalLaborCents",
       "discountType", "discountValue", "discountTotalCents",
       "surchargeType", "surchargeValue", "surchargeTotalCents",
-      "totalCents", "createdByUserId"
+      "totalCents", "createdByUserId", "discountReason"
     ) VALUES (
       $1, $2, $3, 'RASCUNHO', $4,
       $5, $6,
       $7, $8, $9,
       $10, $11, $12,
       $13, $14, $15,
-      $16, $17
+      $16, $17, $18
     ) RETURNING ${COLUMNS}`,
     [
       id,
@@ -98,6 +101,7 @@ export async function createQuoteVersion(
       input.surchargeTotalCents,
       input.totalCents,
       input.createdByUserId,
+      input.discountReason ?? null,
     ],
   );
   return result.rows[0];
@@ -128,7 +132,8 @@ export async function updateQuoteVersionContent(
       "surchargeType" = $11,
       "surchargeValue" = $12,
       "surchargeTotalCents" = $13,
-      "totalCents" = $14
+      "totalCents" = $14,
+      "discountReason" = $15
     WHERE id = $1
     RETURNING ${COLUMNS}`,
     [
@@ -146,6 +151,7 @@ export async function updateQuoteVersionContent(
       input.surchargeValue ?? null,
       input.surchargeTotalCents,
       input.totalCents,
+      input.discountReason ?? null,
     ],
   );
   return result.rows[0] ?? null;

@@ -79,6 +79,7 @@ export function QuickSaleForm({
   const [deliveryName, setDeliveryName] = useState("");
   const [discountType, setDiscountType] = useState<"" | "PERCENTUAL" | "FIXO">("");
   const [discountValue, setDiscountValue] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
   const [rows, setRows] = useState<PaymentRow[]>([{ key: "p1", method: "PIX", amount: "" }]);
 
   const [error, setError] = useState<string | null>(null);
@@ -188,6 +189,7 @@ export function QuickSaleForm({
           })),
         discountType: discountType || undefined,
         discountValue: discountType ? discountValue : undefined,
+        discountReason: discountType && discountReason ? discountReason : undefined,
         serviceDate,
         mileageAtEntry: mileage,
         executedBy,
@@ -412,6 +414,14 @@ export function QuickSaleForm({
               />
             ) : null}
           </div>
+          {discountType ? (
+            <input
+              value={discountReason}
+              onChange={(e) => setDiscountReason(e.target.value)}
+              placeholder="Motivo do desconto (interno, opcional)"
+              className={inputClass}
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-2">

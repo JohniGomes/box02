@@ -182,7 +182,7 @@ export default async function QuoteDetailPage({
                 <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[item.type]}</span>
                 <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
               </div>
-              <p className="text-sm">{item.description}</p>
+              <p className="text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
               {item.notes ? <p className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
               <p className="text-xs text-muted">
                 {Number(item.quantity)} × {formatBRL(item.unitPriceCents)}
@@ -197,6 +197,9 @@ export default async function QuoteDetailPage({
           <Row label="Mão de obra" value={formatBRL(version.subtotalLaborCents)} />
           {version.discountTotalCents > 0 ? (
             <Row label="Desconto" value={`- ${formatBRL(version.discountTotalCents)}`} />
+          ) : null}
+          {version.discountTotalCents > 0 && version.discountReason ? (
+            <p className="py-1 text-xs text-muted print:hidden">Motivo do desconto (interno): {version.discountReason}</p>
           ) : null}
           {version.surchargeTotalCents > 0 ? (
             <Row label="Acréscimo" value={`+ ${formatBRL(version.surchargeTotalCents)}`} />
@@ -216,7 +219,7 @@ export default async function QuoteDetailPage({
       ) : null}
 
       {version.internalNotes ? (
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section className="rounded-2xl border border-border bg-surface p-5 print:hidden">
           <h2 className="mb-2 text-sm font-semibold">Observação interna</h2>
           <p className="whitespace-pre-wrap text-sm">{version.internalNotes}</p>
         </section>

@@ -239,7 +239,7 @@ export default async function WorkOrderDetailsPage({
                   <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[item.type]}</span>
                   <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
                 </div>
-                <p className="text-sm">{item.description}</p>
+                <p className="text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
                 <div className="mt-1 flex items-center justify-between">
                   <p className="text-xs text-muted">
                     {Number(item.quantity)} × {formatBRL(item.unitPriceCents)} ·{" "}

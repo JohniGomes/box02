@@ -53,8 +53,10 @@ export default async function EditQuotePage({
       partId: item.partId ?? undefined,
       category: item.category,
       notes: item.notes ?? undefined,
+      customerSupplied: item.customerSupplied,
     })),
     discountType: version.discountType ?? "",
+    discountReason: version.discountReason ?? "",
     discountValue:
       version.discountType === "PERCENTUAL"
         ? String((version.discountValue ?? 0) / 100)

@@ -36,6 +36,8 @@ export interface WorkOrderRecord {
   discountType: QuoteAdjustmentType | null;
   discountValue: number | null;
   discountTotalCents: number;
+  /** Motivo (interno) do desconto. */
+  discountReason: string | null;
   surchargeType: QuoteAdjustmentType | null;
   surchargeValue: number | null;
   surchargeTotalCents: number;
@@ -84,7 +86,7 @@ const COLUMNS = `
   id, number, status, "customerId", "vehicleId", "sourceQuoteVersionId",
   "entryAt", "startedAt", "completedAt", "deliveredAt", "cancelledAt",
   "mileageAtEntry", "customerComplaint", diagnosis, "technicalNotes",
-  "discountType", "discountValue", "discountTotalCents",
+  "discountType", "discountValue", "discountTotalCents", "discountReason",
   "surchargeType", "surchargeValue", "surchargeTotalCents", "totalCents",
   "customerNameSnapshot", "vehiclePlateSnapshot", "vehicleDescriptionSnapshot",
   "cancelReason", "deliveryAcceptedName", "deliveryAcceptedDocument", "deliveredByUserId",
@@ -108,6 +110,7 @@ export interface CreateWorkOrderInput {
   discountType?: QuoteAdjustmentType | null;
   discountValue?: number | null;
   discountTotalCents?: number;
+  discountReason?: string | null;
   surchargeType?: QuoteAdjustmentType | null;
   surchargeValue?: number | null;
   surchargeTotalCents?: number;
@@ -129,14 +132,14 @@ export async function createWorkOrder(
       "discountType", "discountValue", "discountTotalCents",
       "surchargeType", "surchargeValue", "surchargeTotalCents",
       "customerNameSnapshot", "vehiclePlateSnapshot", "vehicleDescriptionSnapshot",
-      "createdByUserId", "returnOfWorkOrderId", "updatedAt"
+      "createdByUserId", "returnOfWorkOrderId", "discountReason", "updatedAt"
     ) VALUES (
       $1, $2, 'ABERTA', $3, $4, $5,
       $6, $7, $8,
       $9, $10, $11,
       $12, $13, $14,
       $15, $16, $17,
-      $18, $19, NOW()
+      $18, $19, $20, NOW()
     ) RETURNING ${COLUMNS}`,
     [
       id,
@@ -158,6 +161,7 @@ export async function createWorkOrder(
       input.vehicleDescriptionSnapshot ?? null,
       input.createdByUserId,
       input.returnOfWorkOrderId ?? null,
+      input.discountReason ?? null,
     ],
   );
   return result.rows[0];
@@ -512,6 +516,20 @@ export async function listWorkOrdersByCustomer(
      WHERE "customerId" = $1
      ORDER BY "entryAt" DESC`,
     [customerId],
+  );
+  return result.rows;
+}
+
+/** OS que podem ser ligadas a uma despesa (as não canceladas, mais recentes primeiro). */
+export async function listWorkOrdersForExpense(
+  limit = 40,
+  db: Queryable = pool,
+): Promise<{ id: string; number: string; customerName: string; vehicle: string | null }[]> {
+  const result = await db.query<{ id: string; number: string; customerName: string; vehicle: string | null }>(
+    `SELECT id, number, "customerNameSnapshot" AS "customerName",
+            NULLIF(btrim(COALESCE("vehicleDescriptionSnapshot", '') || ' ' || COALESCE("vehiclePlateSnapshot", '')), '') AS vehicle
+     FROM work_orders WHERE status <> 'CANCELADA' ORDER BY "createdAt" DESC LIMIT $1`,
+    [limit],
   );
   return result.rows;
 }

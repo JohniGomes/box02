@@ -12,6 +12,7 @@ interface ItemForApproval {
   type: "SERVICO" | "PECA" | "MAO_DE_OBRA";
   description: string;
   notes?: string | null;
+  customerSupplied?: boolean;
   totalCents: number;
   category: ItemCategory;
 }
@@ -148,7 +149,7 @@ export function QuoteApprovalForm({ token, items }: { token: string; items: Item
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm">{item.description}</p>
+                <p className="mt-1 text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
                 {item.notes ? <p className="mt-1 whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
               </li>
             ))}
@@ -276,7 +277,7 @@ function ItemSection({
               </span>
               <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
             </div>
-            <p className="mt-1 text-sm">{item.description}</p>
+            <p className="mt-1 text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
             {item.notes ? <p className="mt-1 whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
