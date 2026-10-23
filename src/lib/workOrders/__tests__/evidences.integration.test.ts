@@ -14,6 +14,7 @@ import {
 } from "@/lib/workOrders/service";
 import { WorkOrderEvidenceLockedError, WorkOrderEvidenceNotFoundError } from "@/lib/workOrders/errors";
 import type { StorageClient } from "@/lib/storage/supabase";
+import { acceptReceptionForTest } from "./acceptHelper";
 
 function createFakeStorageClient(): StorageClient & { objects: Map<string, Buffer> } {
   const objects = new Map<string, Buffer>();
@@ -86,7 +87,7 @@ describe("criação de evidência — sempre permitida, aceite registrado ou nã
 
   it("permite criar evidência depois do aceite (adicionar nunca é bloqueado)", async () => {
     const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+    await acceptReceptionForTest(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
     const storage = createFakeStorageClient();
     const evidence = await createWorkOrderEvidenceService(
       actorUserId,
@@ -155,7 +156,7 @@ describe("mutabilidade — trava no aceite, adicionar sempre permitido (DEC-J5)"
       fakeFile,
       storage,
     );
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+    await acceptReceptionForTest(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
 
     await expect(
       deleteWorkOrderEvidenceService(actorUserId, os.workOrder.id, evidence.id, storage),
@@ -181,7 +182,7 @@ describe("mutabilidade — trava no aceite, adicionar sempre permitido (DEC-J5)"
         ),
       );
     }
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+    await acceptReceptionForTest(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
 
     const fifth = await createWorkOrderEvidenceService(
       actorUserId,

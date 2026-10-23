@@ -12,6 +12,7 @@ import {
   updateWorkOrderExplanationService,
 } from "@/lib/workOrders/service";
 import { isAtVerificamosBarrier, workOrderStatusToActiveMethodStage } from "@/app/dashboard/os/statusLabels";
+import { acceptReceptionForTest } from "./acceptHelper";
 
 async function cleanAll() {
   await pool.query(
@@ -91,7 +92,7 @@ describe("EXPLICAMOS — independente de orçamento, sem gate, sem write-once", 
 
   it("continua editável mesmo depois do aceite de recepção (sem gate, diferente do Termo)", async () => {
     const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+    await acceptReceptionForTest(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
 
     const updated = await updateWorkOrderExplanationService(actorUserId, os.workOrder.id, {
       diagnosisExplanationNotes: "Explicação registrada depois do aceite",
@@ -103,7 +104,7 @@ describe("EXPLICAMOS — independente de orçamento, sem gate, sem write-once", 
 describe("listagem de OS — indicador de aceite pendente (UX-11)", () => {
   it("searchWorkOrdersService retorna receptionAcceptedAt corretamente", async () => {
     const osA = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
-    await registerWorkOrderReceptionAcceptanceService(actorUserId, osA.workOrder.id, { receptionAcceptedName: "Cliente A", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+    await acceptReceptionForTest(actorUserId, osA.workOrder.id, { receptionAcceptedName: "Cliente A", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
 
     const c2 = await createCustomerService(actorUserId, { type: "PF", legalName: "Cliente Método 2" });
     const v2 = await createVehicleService(actorUserId, { customerId: c2.id, plate: "MET1002" });

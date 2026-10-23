@@ -28,6 +28,12 @@ export const workOrderCheckInSchema = z.object({
   diagnosis: optionalTrimmed,
 });
 
+/** Correção de queixa e KM depois da criação da OS (até o aceite do Termo). */
+export const updateWorkOrderCheckInSchema = workOrderCheckInSchema.pick({
+  mileageAtEntry: true,
+  customerComplaint: true,
+});
+
 export const createWorkOrderWithoutQuoteSchema = workOrderCheckInSchema.extend({
   customerId: z.string().min(1, "Selecione o cliente"),
   vehicleId: z.string().min(1, "Selecione o veículo"),

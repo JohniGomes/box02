@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
@@ -11,6 +12,8 @@ import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 import {
   createQuoteAction,
   listCustomerVehiclesAction,
+  listOpenQuotesForVehicleAction,
+  type OpenQuoteRef,
   searchCustomersForQuoteAction,
   updateQuoteVersionAction,
   type ActionResult,
@@ -87,6 +90,7 @@ export function QuoteForm({
   const [customer, setCustomer] = useState<EntityPickerOption | null>(initialValues?.customer ?? null);
   const [vehicle, setVehicle] = useState<VehicleOption | null>(initialValues?.vehicle ?? null);
   const [vehicleOptions, setVehicleOptions] = useState<VehicleOption[]>([]);
+  const [openQuotes, setOpenQuotes] = useState<OpenQuoteRef[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
 
   const [items, setItems] = useState<ItemDraft[]>(initialValues?.items ?? [newItem()]);
@@ -192,6 +196,21 @@ export function QuoteForm({
     router.refresh();
   }
 
+  // Avisa se já existe orçamento em aberto para o mesmo cliente e veículo (só ao criar).
+  useEffect(() => {
+    if (mode !== "create" || !customer || !vehicle) {
+      setOpenQuotes([]);
+      return;
+    }
+    let cancelled = false;
+    listOpenQuotesForVehicleAction(customer.id, vehicle.id).then((rows) => {
+      if (!cancelled) setOpenQuotes(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, customer, vehicle]);
+
   const isLastStep = step === STEPS.length - 1;
   const canLeaveCliente = mode === "edit" || !!customer;
   const canLeaveVeiculo = mode === "edit" || !!vehicle;
@@ -279,6 +298,25 @@ export function QuoteForm({
             </div>
           )}
           {fieldErrors.vehicleId ? <p className="text-xs text-danger">{fieldErrors.vehicleId}</p> : null}
+          {openQuotes.length > 0 ? (
+            <div className="flex flex-col gap-1 rounded-xl border border-accent/40 bg-accent/5 p-3 text-sm">
+              <p className="font-medium">Já existe orçamento em aberto para este carro:</p>
+              <ul className="flex flex-col gap-0.5">
+                {openQuotes.map((q) => (
+                  <li key={q.id}>
+                    <Link href={`/dashboard/orcamentos/${q.id}`} className="font-mono font-semibold text-accent underline">
+                      {q.number}
+                    </Link>{" "}
+                    <span className="text-xs text-muted">({q.status === "RASCUNHO" ? "rascunho" : "enviado ao cliente"})</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted">
+                Abra o existente se for o <strong>mesmo serviço</strong> — assim você edita em vez de repetir. Crie um novo
+                só se for <strong>outro serviço</strong> ou outro pedido do cliente.
+              </p>
+            </div>
+          ) : null}
         </FieldGroup>
       ) : null}
 

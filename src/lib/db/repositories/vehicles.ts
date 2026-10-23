@@ -119,6 +119,18 @@ export async function updateVehicle(
   return result.rows[0] ?? null;
 }
 
+/**
+ * Atualiza SÓ o KM do veículo. (O `updateVehicle` acima regrava todos os campos
+ * a partir do que for passado — usar ele só com o KM apagava placa, marca e modelo.)
+ */
+export async function updateVehicleMileage(id: string, mileage: number): Promise<VehicleRecord | null> {
+  const result = await pool.query<VehicleRecord>(
+    `UPDATE vehicles SET mileage = $2, "updatedAt" = NOW() WHERE id = $1 RETURNING ${VEHICLE_COLUMNS}`,
+    [id, mileage],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function setVehicleStatus(
   id: string,
   status: VehicleStatus,

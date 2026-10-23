@@ -10,10 +10,12 @@ import {
   createWorkOrderWithoutQuoteService,
   registerWorkOrderReceptionAcceptanceService,
   setWorkOrderStatusService,
+  updateWorkOrderCheckInSettingsService,
   updateWorkOrderReceptionInfoService,
 } from "@/lib/workOrders/service";
 import {
   WorkOrderReceptionAlreadyAcceptedError,
+  WorkOrderReceptionIncompleteError,
   WorkOrderReceptionNotAcceptedError,
 } from "@/lib/workOrders/errors";
 
@@ -62,7 +64,7 @@ afterAll(async () => {
 
 describe("informações de recepção (avarias) — livres antes do aceite", () => {
   it("atualiza avarias livremente, mais de uma vez, antes do aceite", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     const first = await updateWorkOrderReceptionInfoService(actorUserId, os.workOrder.id, {
       preExistingDamagesDescription: "Risco na porta",
     });
@@ -75,7 +77,7 @@ describe("informações de recepção (avarias) — livres antes do aceite", () 
   });
 
   it("rejeita atualizar avarias depois do aceite já registrado", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
       receptionAwareness1: true,
@@ -91,7 +93,7 @@ describe("informações de recepção (avarias) — livres antes do aceite", () 
 
 describe("aceite de recepção — write-once", () => {
   it("registra aceite com receivedByUserId independente de createdByUserId", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     expect(os.workOrder.createdByUserId).toBe(actorUserId);
 
     const accepted = await registerWorkOrderReceptionAcceptanceService(secondUserId, os.workOrder.id, {
@@ -109,7 +111,7 @@ describe("aceite de recepção — write-once", () => {
   });
 
   it("rejeita CPF inválido no aceite", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     await expect(
       registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
         receptionAcceptedName: "Cliente Teste",
@@ -119,7 +121,7 @@ describe("aceite de recepção — write-once", () => {
   });
 
   it("segunda tentativa de aceite é rejeitada, nenhum campo é sobrescrito", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Primeiro Aceite",
       receptionAwareness1: true,
@@ -174,7 +176,7 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
     await addChecklistItemService(actorUserId, checklist.id, { description: "Item 1", required: true, sortOrder: 0 });
     await addChecklistItemService(actorUserId, checklist.id, { description: "Item 2", required: false, sortOrder: 1 });
 
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     const started = await startWorkOrderChecklistService(actorUserId, os.workOrder.id, "ENTRADA");
     const item1 = started.items.find((i) => i.description === "Item 1")!;
     await checkWorkOrderChecklistItemService(actorUserId, started.checklist.id, item1.id, true);
@@ -200,7 +202,7 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
     const checklist = await createChecklistService(actorUserId, { code: "CHK-F02", name: "Entrada Teste 2", type: "ENTRADA" });
     await addChecklistItemService(actorUserId, checklist.id, { description: "Item A", required: true, sortOrder: 0 });
 
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     const started = await startWorkOrderChecklistService(actorUserId, os.workOrder.id, "ENTRADA");
 
     const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
@@ -220,7 +222,7 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
   });
 
   it("sem checklist de entrada iniciado: aceite funciona normalmente, snapshot fica null", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
       receptionAwareness1: true,
@@ -233,26 +235,26 @@ describe("snapshot do CHK-001 — menor arquitetura, autossuficiente", () => {
 
 describe("GATE — transição para EM_EXECUCAO exige aceite (DEC-1)", () => {
   it("bloqueia EM_EXECUCAO sem aceite", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     await expect(setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_EXECUCAO")).rejects.toThrow(
       WorkOrderReceptionNotAcceptedError,
     );
   });
 
   it("permite EM_DIAGNOSTICO sem aceite", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     const updated = await setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_DIAGNOSTICO");
     expect(updated.status).toBe("EM_DIAGNOSTICO");
   });
 
   it("permite CANCELADA sem aceite", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     const updated = await setWorkOrderStatusService(actorUserId, os.workOrder.id, "CANCELADA");
     expect(updated.status).toBe("CANCELADA");
   });
 
   it("permite EM_EXECUCAO depois de registrar o aceite", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
       receptionAcceptedName: "Cliente Teste",
       receptionAwareness1: true,
@@ -264,7 +266,7 @@ describe("GATE — transição para EM_EXECUCAO exige aceite (DEC-1)", () => {
   });
 
   it("EM_DIAGNOSTICO -> EM_EXECUCAO ainda exige aceite (não é liberado só por já ter passado pelo diagnóstico)", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     await setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_DIAGNOSTICO");
     await expect(setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_EXECUCAO")).rejects.toThrow(
       WorkOrderReceptionNotAcceptedError,
@@ -274,9 +276,53 @@ describe("GATE — transição para EM_EXECUCAO exige aceite (DEC-1)", () => {
 
 describe("regressão — criação de OS continua sem exigir aceite nem avarias", () => {
   it("cria OS normalmente, sem nenhum campo do Ciclo F preenchido", async () => {
-    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Queixa de teste" });
     expect(os.workOrder.receptionAcceptedAt).toBeNull();
     expect(os.workOrder.preExistingDamagesDescription).toBeNull();
     expect(os.workOrder.status).toBe("ABERTA");
+  });
+});
+
+describe("aceite exige queixa e KM; correção livre até o aceite", () => {
+  const awareness = { receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true };
+
+  it("recusa o aceite sem queixa", async () => {
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+    await expect(
+      registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente", ...awareness }),
+    ).rejects.toThrow(WorkOrderReceptionIncompleteError);
+    const row = await pool.query(`SELECT "receptionAcceptedAt" FROM work_orders WHERE id = $1`, [os.workOrder.id]);
+    expect(row.rows[0].receptionAcceptedAt).toBeNull();
+  });
+
+  it("recusa o aceite sem KM", async () => {
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, customerComplaint: "Barulho" });
+    await expect(
+      registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente", ...awareness }),
+    ).rejects.toThrow(/KM do painel/);
+  });
+
+  it("corrige queixa e KM antes do aceite e então aceita", async () => {
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId });
+    const fixed = await updateWorkOrderCheckInSettingsService(actorUserId, os.workOrder.id, {
+      customerComplaint: "Luz do freio acesa",
+      mileageAtEntry: "98000",
+    });
+    expect(fixed.customerComplaint).toBe("Luz do freio acesa");
+    expect(fixed.mileageAtEntry).toBe(98000);
+
+    const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, {
+      receptionAcceptedName: "Cliente",
+      ...awareness,
+    });
+    expect(accepted.receptionComplaintSnapshot).toBe("Luz do freio acesa");
+  });
+
+  it("não permite corrigir queixa e KM depois do aceite", async () => {
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Ruído" });
+    await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente", ...awareness });
+    await expect(
+      updateWorkOrderCheckInSettingsService(actorUserId, os.workOrder.id, { customerComplaint: "Outra", mileageAtEntry: "2000" }),
+    ).rejects.toThrow(WorkOrderReceptionAlreadyAcceptedError);
   });
 });

@@ -92,6 +92,21 @@ export async function listWorkOrdersByQuote(quoteId: string, db: Queryable = poo
  * orçamento? work_orders.sourceQuoteVersionId é ON DELETE SET NULL,
  * então o banco sozinho deixaria apagar e silenciosamente desvincular
  * a OS do orçamento de origem — checagem explícita evita isso. */
+/** Orçamentos ainda em andamento (rascunho ou enviado) do mesmo cliente e veículo. */
+export async function listOpenQuotesForVehicle(
+  customerId: string,
+  vehicleId: string,
+  db: Queryable = pool,
+): Promise<{ id: string; number: string; status: QuoteStatus }[]> {
+  const result = await db.query<{ id: string; number: string; status: QuoteStatus }>(
+    `SELECT id, number, status FROM quotes
+     WHERE "customerId" = $1 AND "vehicleId" = $2 AND status IN ('RASCUNHO', 'ENVIADO')
+     ORDER BY "createdAt" DESC`,
+    [customerId, vehicleId],
+  );
+  return result.rows;
+}
+
 export async function quoteHasWorkOrder(quoteId: string, db: Queryable = pool): Promise<boolean> {
   const result = await db.query(
     `SELECT 1 FROM work_orders wo

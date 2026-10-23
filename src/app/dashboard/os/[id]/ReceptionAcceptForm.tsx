@@ -7,7 +7,7 @@ import { registerReceptionAcceptanceAction } from "../receptionActions";
 const inputClass =
   "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 
-export function ReceptionAcceptForm({ workOrderId }: { workOrderId: string }) {
+export function ReceptionAcceptForm({ workOrderId, missing = [] }: { workOrderId: string; missing?: string[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [document, setDocument] = useState("");
@@ -75,11 +75,16 @@ export function ReceptionAcceptForm({ workOrderId }: { workOrderId: string }) {
           inputMode="numeric"
           className={inputClass}
         />
+        {missing.length > 0 ? (
+          <p className="rounded-lg bg-accent/10 p-3 text-xs font-medium">
+            Para aceitar o Termo, informe {missing.join(" e ")} (campo acima, em &quot;Queixa relatada pelo cliente&quot;).
+          </p>
+        ) : null}
         {acceptError ? <p className="text-xs text-danger">{acceptError}</p> : null}
         <button
           type="button"
           onClick={handleAccept}
-          disabled={accepting || name.trim().length < 2 || !awareness1 || !awareness2 || !awareness3}
+          disabled={accepting || missing.length > 0 || name.trim().length < 2 || !awareness1 || !awareness2 || !awareness3}
           className="h-12 rounded-xl bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
         >
           {accepting ? "Registrando…" : "Confirmar aceite"}
