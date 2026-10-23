@@ -20,6 +20,7 @@ export function QuickVehicleForm({
   const [open, setOpen] = useState(false);
   const [model, setModel] = useState("");
   const [plate, setPlate] = useState("");
+  const [year, setYear] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -30,6 +31,7 @@ export function QuickVehicleForm({
         customerId,
         model: model || undefined,
         plate: plate || undefined,
+        year: year || undefined,
       });
       if (!result.success || !result.vehicle) {
         setError(result.error ?? "Não foi possível cadastrar o veículo.");
@@ -38,6 +40,7 @@ export function QuickVehicleForm({
       onCreated(result.vehicle, Boolean(result.reused));
       setModel("");
       setPlate("");
+      setYear("");
       setOpen(false);
     });
   }
@@ -72,6 +75,13 @@ export function QuickVehicleForm({
         value={plate}
         onChange={(e) => setPlate(e.target.value)}
         placeholder="Placa (opcional)"
+        className={inputClass}
+      />
+      <input
+        value={year}
+        onChange={(e) => setYear(e.target.value)}
+        inputMode="numeric"
+        placeholder="Ano do modelo (opcional, ex.: 2012)"
         className={inputClass}
       />
       {error ? <p className="text-xs text-danger">{error}</p> : null}

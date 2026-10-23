@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
+import { useRememberedChoice } from "@/lib/useRemembered";
 import { refundWorkOrderPaymentAction, registerWorkOrderPaymentsAction } from "../paymentActions";
 
 const METHOD_LABEL: Record<string, string> = {
@@ -72,6 +73,12 @@ export function WorkOrderPaymentsSection({
   const [showForm, setShowForm] = useState(false);
   // Uma ou mais formas de pagamento no mesmo lançamento (ex.: Pix + cartão).
   const [rows, setRows] = useState([{ key: "p1", method: "DINHEIRO", amount: "" }]);
+  const [lastMethod, setLastMethod] = useRememberedChoice("box02.lastPayMethod", "DINHEIRO", [
+    "DINHEIRO",
+    "PIX",
+    "CARTAO",
+    "OUTRO",
+  ]);
   const [notes, setNotes] = useState("");
   // Data do recebimento: padrão hoje (horário de Brasília); pode ser um dia
   // anterior para lançar um pagamento que já aconteceu.
@@ -98,6 +105,7 @@ export function WorkOrderPaymentsSection({
         setError(result.error ?? "Falha ao registrar recebimento.");
         return;
       }
+      setLastMethod(rows[0]?.method ?? lastMethod);
       setRows([{ key: "p1", method: "DINHEIRO", amount: "" }]);
       setNotes("");
       setReceivedOn(today);
@@ -176,7 +184,17 @@ export function WorkOrderPaymentsSection({
       {summary.status !== "QUITADO" ? (
         !showForm ? (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              // Já abre com o saldo da OS e a última forma de pagamento usada.
+              setRows([
+                {
+                  key: "p1",
+                  method: lastMethod,
+                  amount: summary.remainingCents > 0 ? (summary.remainingCents / 100).toFixed(2).replace(".", ",") : "",
+                },
+              ]);
+              setShowForm(true);
+            }}
             className="h-11 w-full rounded-xl border border-border text-sm font-semibold"
           >
             Registrar recebimento

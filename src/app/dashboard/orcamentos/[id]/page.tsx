@@ -295,12 +295,13 @@ export default async function QuoteDetailPage({
               }))}
           />
         ) : null}
-        {isApprovedForConversion && !hasActiveWorkOrder ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} /> : null}
+        {isApprovedForConversion && !hasActiveWorkOrder ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} lastMileage={vehicle?.mileage ?? null} /> : null}
         {canRegisterCompleted && completedTotals.totalCents > 0 ? (
           <RegisterCompletedServiceForm
             quoteId={quote.id}
             totalCents={completedTotals.totalCents}
             customerName={customer?.legalName ?? ""}
+            lastMileage={vehicle?.mileage ?? null}
             executors={executors}
             currentUserId={session?.user?.id ?? ""}
           />

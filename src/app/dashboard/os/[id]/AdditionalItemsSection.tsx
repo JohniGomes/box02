@@ -14,6 +14,7 @@ import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { useRememberedChoice } from "@/lib/useRemembered";
 import { WorkOrderItemExecutorInfo, type ActiveUserOption } from "./WorkOrderActions";
 
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
@@ -44,12 +45,15 @@ const DECISION_CLASS: Record<string, string> = {
 
 export function AdditionalItemsSection({
   workOrderId,
+  customerName = "",
   items,
   canManage,
   users,
   currentUserId,
 }: {
   workOrderId: string;
+  /** Cliente da OS: já vem como quem autorizou (editável). */
+  customerName?: string;
   items: AdditionalItemView[];
   canManage: boolean;
   /** Ciclo L */
@@ -83,6 +87,7 @@ export function AdditionalItemsSection({
             <AdditionalItemCard
               key={item.id}
               workOrderId={workOrderId}
+              customerName={customerName}
               item={item}
               canManage={canManage}
               users={users}
@@ -192,12 +197,14 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
 
 function AdditionalItemCard({
   workOrderId,
+  customerName,
   item,
   canManage,
   users,
   currentUserId,
 }: {
   workOrderId: string;
+  customerName: string;
   item: AdditionalItemView;
   canManage: boolean;
   users: ActiveUserOption[];
@@ -288,6 +295,7 @@ function AdditionalItemCard({
           {mode === "direct" ? (
             <DirectAuthorizationForm
               workOrderId={workOrderId}
+              defaultAuthorizedBy={customerName}
               itemId={item.id}
               onCancel={() => setMode(null)}
               onDone={() => {
@@ -361,18 +369,20 @@ function AdditionalItemCard({
 
 function DirectAuthorizationForm({
   workOrderId,
+  defaultAuthorizedBy = "",
   itemId,
   onCancel,
   onDone,
 }: {
   workOrderId: string;
+  defaultAuthorizedBy?: string;
   itemId: string;
   onCancel: () => void;
   onDone: () => void;
 }) {
   const [decision, setDecision] = useState<"APROVADO" | "RECUSADO">("APROVADO");
   const [channel, setChannel] = useState<"PRESENCIAL" | "TELEFONE">("PRESENCIAL");
-  const [authorizedBy, setAuthorizedBy] = useState("");
+  const [authorizedBy, setAuthorizedBy] = useState(defaultAuthorizedBy);
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -518,7 +528,11 @@ function ExecuteOrCancelButtons({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [executorId, setExecutorId] = useState(defaultExecutorOptionId(users, currentUserId));
+  const [executorId, setExecutorId] = useRememberedChoice(
+    "box02.lastExecutor",
+    defaultExecutorOptionId(users, currentUserId),
+    users.map((u) => u.id),
+  );
   const [error, setError] = useState<string | null>(null);
 
   function markExecuted() {

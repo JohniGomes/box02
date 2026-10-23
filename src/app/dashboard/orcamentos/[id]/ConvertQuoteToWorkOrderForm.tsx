@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createWorkOrderFromQuoteAction } from "../../os/actions";
+import { LastMileageHint } from "@/components/LastMileageHint";
 
-export function ConvertQuoteToWorkOrderForm({ quoteId }: { quoteId: string }) {
+export function ConvertQuoteToWorkOrderForm({ quoteId, lastMileage }: { quoteId: string; lastMileage?: number | null }) {
   const router = useRouter();
   const [mileageAtEntry, setMileageAtEntry] = useState("");
   const [customerComplaint, setCustomerComplaint] = useState("");
@@ -48,6 +49,7 @@ export function ConvertQuoteToWorkOrderForm({ quoteId }: { quoteId: string }) {
           className={inputClass}
           placeholder="Ex.: 45000"
         />
+        <LastMileageHint lastMileage={lastMileage} current={mileageAtEntry} onUse={setMileageAtEntry} />
         {fieldErrors.mileageAtEntry ? <p className="text-xs text-danger">{fieldErrors.mileageAtEntry}</p> : null}
       </div>
       <div className="flex flex-col gap-1.5">

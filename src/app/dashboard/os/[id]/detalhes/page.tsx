@@ -289,6 +289,7 @@ export default async function WorkOrderDetailsPage({
       <CollapsibleSection title="Adicionais" defaultOpen={additionalItems.length <= 2}>
         <AdditionalItemsSection
           workOrderId={workOrder.id}
+          customerName={customer?.legalName ?? workOrder.customerNameSnapshot}
           canManage={canManageAdditionals}
           users={activeUsers}
           currentUserId={currentUserId}
@@ -392,6 +393,10 @@ export default async function WorkOrderDetailsPage({
             workOrderId={workOrder.id}
             deliveryChecklistPendingCount={deliveryChecklistPendingCount}
             deliveryChecklistRequired={deliveryChecklistRequired}
+            customerName={customer?.legalName ?? workOrder.customerNameSnapshot}
+            customerDocument={
+              customer?.document && customer.document.replace(/\D/g, "").length === 11 ? formatDocument(customer.document) : ""
+            }
           />
         ) : null}
         {isOpenForCancel ? <CancelWorkOrderForm workOrderId={workOrder.id} /> : null}

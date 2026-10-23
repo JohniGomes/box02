@@ -14,6 +14,7 @@ import {
 } from "../actions";
 import type { StockEntryDefaults } from "@/lib/workOrders/stockEntry";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { useRememberedChoice } from "@/lib/useRemembered";
 import {
   PurchasePaymentFields,
   defaultQuickPayment,
@@ -121,7 +122,11 @@ export function WorkOrderItemActions({
   const [isPending, startTransition] = useTransition();
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
-  const [executorId, setExecutorId] = useState(defaultExecutorOptionId(users, currentUserId));
+  const [executorId, setExecutorId] = useRememberedChoice(
+    "box02.lastExecutor",
+    defaultExecutorOptionId(users, currentUserId),
+    users.map((u) => u.id),
+  );
   const [error, setError] = useState<string | null>(null);
   // Falta de estoque: em vez de só travar, oferece dar a entrada e executar.
   const [shortage, setShortage] = useState<StockEntryDefaults | null>(null);
@@ -394,6 +399,8 @@ export function CloseWorkOrderForm({
   workOrderId,
   deliveryChecklistPendingCount,
   deliveryChecklistRequired = true,
+  customerName = "",
+  customerDocument = "",
 }: {
   workOrderId: string;
   /** Regra ligada/desligada em Configurações → Regras (padrão: ligada). */
@@ -404,11 +411,14 @@ export function CloseWorkOrderForm({
    * servidor. 0 = sem pendência conhecida (pode não haver checklist
    * nenhum, o que também é 0 — ausência nunca bloqueia, EX-2). */
   deliveryChecklistPendingCount: number;
+  /** Cliente da OS: já vem como quem retira (editável). */
+  customerName?: string;
+  customerDocument?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [document, setDocumentValue] = useState("");
+  const [name, setName] = useState(customerName);
+  const [document, setDocumentValue] = useState(customerDocument);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const hasPending = deliveryChecklistPendingCount > 0;

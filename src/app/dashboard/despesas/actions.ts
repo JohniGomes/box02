@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
+import { listSuppliersService } from "@/lib/purchases/service";
 import {
   createExpenseService,
   deleteExpenseService,
@@ -53,6 +54,13 @@ function friendlyError(err: unknown, fallback: string): ExpenseActionResult {
     return { success: false, error: err.message };
   }
   return { success: false, error: fallback };
+}
+
+/** Nomes dos fornecedores cadastrados (para sugerir ao digitar o fornecedor da despesa). */
+export async function listSupplierNamesAction(): Promise<string[]> {
+  await requireUserId();
+  const suppliers = await listSuppliersService(true);
+  return suppliers.map((s) => s.name);
 }
 
 export async function createExpenseAction(input: unknown): Promise<ExpenseActionResult> {

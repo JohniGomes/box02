@@ -128,6 +128,7 @@ const quickVehicleSchema = z.object({
   customerId: z.string().min(1, "Selecione o cliente"),
   model: z.string().trim().optional(),
   plate: z.string().trim().optional(),
+  year: z.string().trim().optional(),
 });
 
 export interface QuickVehicleResult {
@@ -169,7 +170,15 @@ export async function createQuickVehicleService(actorUserId: string, rawInput: u
     if (same) return { vehicle: same, reused: true };
   }
 
-  const vehicle = await createVehicleService(actorUserId, { customerId: customer.id, plate, model });
+  let yearModel: number | undefined;
+  if (input.year) {
+    const y = Number(input.year);
+    if (!Number.isInteger(y) || y < 1950 || y > new Date().getFullYear() + 1) {
+      throw new QuickRegistrationError("Ano do modelo inválido (use 4 dígitos, ex.: 2012).");
+    }
+    yearModel = y;
+  }
+  const vehicle = await createVehicleService(actorUserId, { customerId: customer.id, plate, model, yearModel });
   return { vehicle, reused: false };
 }
 

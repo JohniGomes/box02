@@ -253,6 +253,8 @@ export async function searchCustomersForQuoteAction(query: string): Promise<Pick
 export interface VehicleOption {
   id: string;
   label: string;
+  /** Último KM registrado no cadastro do veículo (sugestão para o check-in). */
+  mileage?: number | null;
 }
 
 /** Usado no passo 2 do formulário (escolher veículo do cliente já selecionado). */
@@ -263,6 +265,7 @@ export async function listCustomerVehiclesAction(customerId: string): Promise<Ve
     .filter((v) => v.status === "ATIVO")
     .map((v) => ({
       id: v.id,
+      mileage: v.mileage,
       label: [
         v.plate ? formatPlate(v.plate) : "Sem placa",
         [v.brand, v.model].filter(Boolean).join(" "),
