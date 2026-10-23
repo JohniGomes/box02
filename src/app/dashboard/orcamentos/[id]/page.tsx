@@ -26,6 +26,7 @@ import {
   SendQuoteButton,
 } from "./QuoteActions";
 import { ConvertQuoteToWorkOrderForm } from "./ConvertQuoteToWorkOrderForm";
+import { QuoteCheckInEditor } from "./QuoteCheckInEditor";
 import { RegisterApprovalForm } from "./RegisterApprovalForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { PrintButton } from "@/components/PrintButton";
@@ -218,6 +219,15 @@ export default async function QuoteDetailPage({
         </section>
       ) : null}
 
+      {!hasActiveWorkOrder && version.status !== "CANCELADO" ? (
+        <QuoteCheckInEditor
+          quoteId={quote.id}
+          initialComplaint={quote.customerComplaint}
+          initialMileage={quote.mileageAtEntry}
+          lastMileage={vehicle?.mileage ?? null}
+        />
+      ) : null}
+
       {version.internalNotes ? (
         <section className="rounded-2xl border border-border bg-surface p-5 print:hidden">
           <h2 className="mb-2 text-sm font-semibold">Observação interna</h2>
@@ -298,13 +308,19 @@ export default async function QuoteDetailPage({
               }))}
           />
         ) : null}
-        {isApprovedForConversion && !hasActiveWorkOrder ? <ConvertQuoteToWorkOrderForm quoteId={quote.id} lastMileage={vehicle?.mileage ?? null} /> : null}
+        {isApprovedForConversion && !hasActiveWorkOrder ? <ConvertQuoteToWorkOrderForm
+            quoteId={quote.id}
+            lastMileage={vehicle?.mileage ?? null}
+            defaultComplaint={quote.customerComplaint ?? ""}
+            defaultMileage={quote.mileageAtEntry !== null ? String(quote.mileageAtEntry) : ""}
+          /> : null}
         {canRegisterCompleted && completedTotals.totalCents > 0 ? (
           <RegisterCompletedServiceForm
             quoteId={quote.id}
             totalCents={completedTotals.totalCents}
             customerName={customer?.legalName ?? ""}
             lastMileage={vehicle?.mileage ?? null}
+            defaultMileage={quote.mileageAtEntry !== null ? String(quote.mileageAtEntry) : ""}
             executors={executors}
             currentUserId={session?.user?.id ?? ""}
           />

@@ -9,6 +9,8 @@ import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import { QuickCustomerForm } from "@/components/QuickCustomerForm";
 import { QuickVehicleForm } from "@/components/QuickVehicleForm";
+import { LastMileageHint } from "@/components/LastMileageHint";
+import { DraftBar, useDraft } from "@/components/DraftControls";
 import {
   createQuoteAction,
   listCustomerVehiclesAction,
@@ -100,6 +102,8 @@ export function QuoteForm({
   const [discountType, setDiscountType] = useState(initialValues?.discountType ?? "");
   const [discountValue, setDiscountValue] = useState(initialValues?.discountValue ?? "");
   const [discountReason, setDiscountReason] = useState(initialValues?.discountReason ?? "");
+  const [customerComplaint, setCustomerComplaint] = useState("");
+  const [mileageAtEntry, setMileageAtEntry] = useState("");
   const [surchargeType, setSurchargeType] = useState(initialValues?.surchargeType ?? "");
   const [surchargeValue, setSurchargeValue] = useState(initialValues?.surchargeValue ?? "");
   const [validUntil, setValidUntil] = useState(initialValues?.validUntil ?? "");
@@ -160,6 +164,8 @@ export function QuoteForm({
     const payload = {
       customerId: customer?.id ?? "",
       vehicleId: vehicle?.id ?? "",
+      customerComplaint: customerComplaint || undefined,
+      mileageAtEntry: mileageAtEntry || undefined,
       items: items
         .filter((i) => i.description.trim() !== "")
         .map((i) => ({
@@ -197,9 +203,62 @@ export function QuoteForm({
       return;
     }
 
+    if (mode === "create") void draft.finish();
     router.push(`/dashboard/orcamentos/${result.quoteId}`);
     router.refresh();
   }
+
+  const draft = useDraft({
+    kind: "QUOTE",
+    getTitle: () => `Orçamento${customer ? ` — ${customer.label}` : ""}`,
+    getPayload: () => ({
+      step,
+      customer,
+      vehicle,
+      items,
+      discountType,
+      discountValue,
+      discountReason,
+      surchargeType,
+      surchargeValue,
+      validUntil,
+      internalNotes,
+      customerMessage,
+      customerComplaint,
+      mileageAtEntry,
+    }),
+    applyPayload: (p: {
+      step: number;
+      customer: EntityPickerOption | null;
+      vehicle: VehicleOption | null;
+      items: ItemDraft[];
+      discountType: "PERCENTUAL" | "FIXO" | "";
+      discountValue: string;
+      discountReason: string;
+      surchargeType: "PERCENTUAL" | "FIXO" | "";
+      surchargeValue: string;
+      validUntil: string;
+      internalNotes: string;
+      customerMessage: string;
+      customerComplaint: string;
+      mileageAtEntry: string;
+    }) => {
+      setCustomer(p.customer ?? null);
+      setVehicle(p.vehicle ?? null);
+      setItems(p.items?.length ? p.items : [newItem()]);
+      setDiscountType(p.discountType ?? "");
+      setDiscountValue(p.discountValue ?? "");
+      setDiscountReason(p.discountReason ?? "");
+      setSurchargeType(p.surchargeType ?? "");
+      setSurchargeValue(p.surchargeValue ?? "");
+      setValidUntil(p.validUntil ?? "");
+      setInternalNotes(p.internalNotes ?? "");
+      setCustomerMessage(p.customerMessage ?? "");
+      setCustomerComplaint(p.customerComplaint ?? "");
+      setMileageAtEntry(p.mileageAtEntry ?? "");
+      setStep(Math.min(Math.max(p.step ?? 0, 0), STEPS.length - 1));
+    },
+  });
 
   // Avisa se já existe orçamento em aberto para o mesmo cliente e veículo (só ao criar).
   useEffect(() => {
@@ -303,6 +362,30 @@ export function QuoteForm({
             </div>
           )}
           {fieldErrors.vehicleId ? <p className="text-xs text-danger">{fieldErrors.vehicleId}</p> : null}
+          {mode === "create" && vehicle ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3">
+              <span className="text-sm font-medium">Queixa e KM (opcional — passam para a OS)</span>
+              <textarea
+                value={customerComplaint}
+                onChange={(e) => setCustomerComplaint(e.target.value)}
+                rows={2}
+                placeholder="O que o cliente relatou (ex.: barulho na frente ao frear)"
+                className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent"
+              />
+              <input
+                value={mileageAtEntry}
+                onChange={(e) => setMileageAtEntry(e.target.value)}
+                inputMode="numeric"
+                placeholder="KM do painel (ex.: 98000)"
+                className="h-11 rounded-xl border border-border bg-surface px-4 text-sm outline-none focus:border-accent"
+              />
+              <LastMileageHint
+                lastMileage={vehicleOptions.find((v) => v.id === vehicle.id)?.mileage}
+                current={mileageAtEntry}
+                onUse={setMileageAtEntry}
+              />
+            </div>
+          ) : null}
           {openQuotes.length > 0 ? (
             <div className="flex flex-col gap-1 rounded-xl border border-accent/40 bg-accent/5 p-3 text-sm">
               <p className="font-medium">Já existe orçamento em aberto para este carro:</p>
@@ -364,6 +447,8 @@ export function QuoteForm({
           {formError}
         </p>
       ) : null}
+
+      {mode === "create" ? <DraftBar draft={draft} /> : null}
 
       <div className="flex gap-3">
         {step > 0 ? (

@@ -8,6 +8,7 @@ import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
 import { QuickCustomerForm } from "@/components/QuickCustomerForm";
 import { LastMileageHint } from "@/components/LastMileageHint";
+import { DraftBar, useDraft } from "@/components/DraftControls";
 import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 import { createWorkOrderWithoutQuoteAction } from "./actions";
 import { searchCustomersForPickerAction } from "../veiculos/actions";
@@ -48,6 +49,32 @@ export function NewWorkOrderWithoutQuoteForm() {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  const draft = useDraft({
+    kind: "WORK_ORDER",
+    getTitle: () => `OS sem orçamento${customer ? ` — ${customer.label}` : ""}`,
+    getPayload: () => ({ customer, vehicleId, mileageAtEntry, customerComplaint, diagnosis, items }),
+    applyPayload: (p: {
+      customer: EntityPickerOption | null;
+      vehicleId: string;
+      mileageAtEntry: string;
+      customerComplaint: string;
+      diagnosis: string;
+      items: DraftItem[];
+    }) => {
+      setCustomer(p.customer ?? null);
+      if (p.customer) {
+        listCustomerVehiclesAction(p.customer.id).then((list) => {
+          setVehicles(list);
+          setVehicleId(p.vehicleId ?? "");
+        });
+      }
+      setMileageAtEntry(p.mileageAtEntry ?? "");
+      setCustomerComplaint(p.customerComplaint ?? "");
+      setDiagnosis(p.diagnosis ?? "");
+      setItems(p.items ?? []);
+    },
+  });
 
   async function handleCustomerChange(c: EntityPickerOption | null) {
     setCustomer(c);
@@ -93,6 +120,7 @@ export function NewWorkOrderWithoutQuoteForm() {
       setFieldErrors(result.fieldErrors ?? {});
       return;
     }
+    void draft.finish();
     router.push(`/dashboard/os/${result.workOrderId}`);
     router.refresh();
   }
@@ -290,6 +318,8 @@ export function NewWorkOrderWithoutQuoteForm() {
       </div>
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
+
+      <DraftBar draft={draft} />
 
       <button
         type="button"

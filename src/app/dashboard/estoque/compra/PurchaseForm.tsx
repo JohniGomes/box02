@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { registerPurchaseAction } from "./actions";
+import { DraftBar, useDraft } from "@/components/DraftControls";
 import { useRememberedChoice } from "@/lib/useRemembered";
 
 type PayMode = "PAGO" | "DEPOIS" | "NENHUM";
@@ -97,6 +98,40 @@ export function PurchaseForm({
   const totalCents = itemsTotalCents + adjustmentCents;
   const n = Math.min(24, Math.max(1, Math.round(Number(installments) || 1)));
 
+  const draft = useDraft({
+    kind: "PURCHASE",
+    getTitle: () => {
+      const supplier = suppliers.find((s) => s.id === supplierChoice)?.name ?? newSupplier.trim();
+      return `Compra${supplier ? ` — ${supplier}` : ""} (${rows.length} ${rows.length === 1 ? "item" : "itens"})`;
+    },
+    getPayload: () => ({ supplierChoice, newSupplier, purchaseDate, rows, adjustment, notes, mode, method: method as Method, paidOn, dueDate, installments }),
+    applyPayload: (p: {
+      supplierChoice: string;
+      newSupplier: string;
+      purchaseDate: string;
+      rows: Row[];
+      adjustment: string;
+      notes: string;
+      mode: PayMode;
+      method: Method;
+      paidOn: string;
+      dueDate: string;
+      installments: string;
+    }) => {
+      setSupplierChoice(p.supplierChoice ?? "");
+      setNewSupplier(p.newSupplier ?? "");
+      setPurchaseDate(p.purchaseDate ?? today);
+      setRows(p.rows?.length ? p.rows : [newRow()]);
+      setAdjustment(p.adjustment ?? "");
+      setNotes(p.notes ?? "");
+      setMode(p.mode ?? "PAGO");
+      setMethod(p.method ?? "PIX");
+      setPaidOn(p.paidOn ?? today);
+      setDueDate(p.dueDate ?? "");
+      setInstallments(p.installments ?? "1");
+    },
+  });
+
   function updateRow(key: string, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
@@ -133,6 +168,7 @@ export function PurchaseForm({
         setError(result.error ?? "Não foi possível registrar a compra.");
         return;
       }
+      void draft.finish();
       setDone(result.summary);
       router.refresh();
     });
@@ -426,6 +462,8 @@ export function PurchaseForm({
           {error}
         </p>
       ) : null}
+
+      <DraftBar draft={draft} />
 
       <button
         type="button"
