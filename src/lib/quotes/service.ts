@@ -7,6 +7,7 @@ import {
   listWorkOrdersByQuote,
   quoteHasWorkOrder,
   searchQuotes,
+  updateQuoteCheckIn,
   updateQuoteStatusAndVersion,
   type QuoteRecord,
   type SearchQuotesFilters,
@@ -49,7 +50,7 @@ import { assertServiceIsActive } from "@/lib/services/service";
 import { assertPartIsActive } from "@/lib/inventory/service";
 import { getQuoteDefaultValidityDays } from "@/lib/settings/service";
 import { computeQuoteTotals, lineTotalCents, reaisToCents } from "@/lib/money";
-import { quoteInputSchema, type QuoteInput } from "@/lib/validation/quote";
+import { quoteCheckInSchema, quoteInputSchema, type QuoteInput } from "@/lib/validation/quote";
 import { quoteDecisionInputSchema, type QuoteDecisionInput } from "@/lib/validation/quoteApproval";
 import {
   InvalidQuoteTransitionError,
@@ -172,7 +173,14 @@ export async function createQuoteService(
 
   const result = await withTransaction(async (client) => {
     const quote = await createQuote(
-      { number, customerId: input.customerId, vehicleId: input.vehicleId, createdByUserId: actorUserId },
+      {
+        number,
+        customerId: input.customerId,
+        vehicleId: input.vehicleId,
+        createdByUserId: actorUserId,
+        customerComplaint: input.customerComplaint ?? null,
+        mileageAtEntry: input.mileageAtEntry ?? null,
+      },
       client,
     );
     const version = await createQuoteVersion(
@@ -227,6 +235,36 @@ export async function createQuoteService(
   });
 
   return { ...result, allVersions: [result.version] };
+}
+
+/**
+ * Corrige a queixa e o KM do orçamento. Vale para todas as versões e é
+ * copiado para a OS na hora de criá-la; depois que a OS existe, a correção é
+ * feita na própria OS (até o aceite do Termo).
+ */
+export async function updateQuoteCheckInService(
+  actorUserId: string,
+  quoteId: string,
+  rawInput: unknown,
+): Promise<QuoteRecord> {
+  const input = quoteCheckInSchema.parse(rawInput);
+  const quote = await findQuoteById(quoteId);
+  if (!quote) throw new QuoteNotFoundError(quoteId);
+
+  const updated = await updateQuoteCheckIn(quoteId, {
+    customerComplaint: input.customerComplaint ?? null,
+    mileageAtEntry: input.mileageAtEntry ?? null,
+  });
+  if (!updated) throw new QuoteNotFoundError(quoteId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "QUOTE_CHECKIN_UPDATED",
+    entityType: "quote",
+    entityId: quoteId,
+    metadata: { previousComplaint: quote.customerComplaint, previousMileage: quote.mileageAtEntry },
+  });
+  return updated;
 }
 
 export async function updateQuoteVersionService(

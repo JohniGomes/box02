@@ -12,6 +12,7 @@ import {
 import { computeQuoteTotals, formatBRL, lineTotalCents, reaisToCents } from "@/lib/money";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
 import { useRememberedChoice } from "@/lib/useRemembered";
+import { DraftBar, useDraft } from "@/components/DraftControls";
 import type { CustomerLookup, CustomerSuggestion } from "@/lib/quickSale/service";
 
 type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
@@ -110,6 +111,64 @@ export function QuickSaleForm({
   const paidCents = rows.reduce((sum, r) => sum + reaisToCents(r.amount || "0"), 0);
   const remainingCents = totalCents - paidCents;
 
+  const draft = useDraft({
+    kind: "QUICK_SALE",
+    getTitle: () => `Venda rápida${customerName ? ` — ${customerName}` : ""}`,
+    getPayload: () => ({
+      phone,
+      lookup,
+      lookedUp,
+      customerName,
+      existingVehicleId,
+      vehicleModel,
+      vehiclePlate,
+      items,
+      serviceDate,
+      mileage,
+      executedBy,
+      deliveryName,
+      discountType,
+      discountValue,
+      discountReason,
+      rows,
+    }),
+    applyPayload: (p: {
+      phone: string;
+      lookup: CustomerLookup | null;
+      lookedUp: boolean;
+      customerName: string;
+      existingVehicleId: string;
+      vehicleModel: string;
+      vehiclePlate: string;
+      items: ItemDraft[];
+      serviceDate: string;
+      mileage: string;
+      executedBy: string;
+      deliveryName: string;
+      discountType: "" | "PERCENTUAL" | "FIXO";
+      discountValue: string;
+      discountReason: string;
+      rows: PaymentRow[];
+    }) => {
+      setPhone(p.phone ?? "");
+      setLookup(p.lookup ?? null);
+      setLookedUp(Boolean(p.lookedUp));
+      setCustomerName(p.customerName ?? "");
+      setExistingVehicleId(p.existingVehicleId ?? "");
+      setVehicleModel(p.vehicleModel ?? "");
+      setVehiclePlate(p.vehiclePlate ?? "");
+      setItems(p.items?.length ? p.items : [newItem()]);
+      setServiceDate(p.serviceDate ?? today);
+      setMileage(p.mileage ?? "");
+      if (p.executedBy) setExecutedBy(p.executedBy);
+      setDeliveryName(p.deliveryName ?? "");
+      setDiscountType(p.discountType ?? "");
+      setDiscountValue(p.discountValue ?? "");
+      setDiscountReason(p.discountReason ?? "");
+      setRows(p.rows?.length ? p.rows : [{ key: "p1", method: "PIX", amount: "" }]);
+    },
+  });
+
   function doLookup() {
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 10) {
@@ -203,6 +262,7 @@ export function QuickSaleForm({
         setFieldErrors(result.fieldErrors ?? {});
         return;
       }
+      void draft.finish();
       router.push(`/dashboard/os/${result.workOrderId}/recibo`);
       router.refresh();
     });
@@ -513,6 +573,8 @@ export function QuickSaleForm({
           {error}
         </p>
       ) : null}
+
+      <DraftBar draft={draft} />
 
       <button
         type="button"

@@ -4,6 +4,7 @@ import { listAppointmentsWithNamesBetweenService } from "@/lib/appointments/serv
 import { formatBRL } from "@/lib/money";
 import { CalendarWidget } from "@/components/CalendarWidget";
 import { HomeAlerts } from "@/components/HomeAlerts";
+import { DraftsCard } from "@/components/DraftsCard";
 
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -94,6 +95,7 @@ export default async function DashboardHomePage() {
       </div>
 
       <HomeAlerts />
+      <DraftsCard />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CalendarWidget

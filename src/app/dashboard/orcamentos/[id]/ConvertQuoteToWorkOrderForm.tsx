@@ -5,10 +5,21 @@ import { useRouter } from "next/navigation";
 import { createWorkOrderFromQuoteAction } from "../../os/actions";
 import { LastMileageHint } from "@/components/LastMileageHint";
 
-export function ConvertQuoteToWorkOrderForm({ quoteId, lastMileage }: { quoteId: string; lastMileage?: number | null }) {
+export function ConvertQuoteToWorkOrderForm({
+  quoteId,
+  lastMileage,
+  defaultComplaint = "",
+  defaultMileage = "",
+}: {
+  quoteId: string;
+  lastMileage?: number | null;
+  /** Queixa e KM já registrados no orçamento (editáveis aqui). */
+  defaultComplaint?: string;
+  defaultMileage?: string;
+}) {
   const router = useRouter();
-  const [mileageAtEntry, setMileageAtEntry] = useState("");
-  const [customerComplaint, setCustomerComplaint] = useState("");
+  const [mileageAtEntry, setMileageAtEntry] = useState(defaultMileage);
+  const [customerComplaint, setCustomerComplaint] = useState(defaultComplaint);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);

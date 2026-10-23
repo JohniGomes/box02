@@ -12,6 +12,7 @@ import {
   registerInternalQuoteDecisionService,
   restorePreviousQuoteVersionService,
   sendQuoteVersionService,
+  updateQuoteCheckInService,
   updateQuoteVersionService,
 } from "@/lib/quotes/service";
 import {
@@ -93,6 +94,21 @@ export async function listOpenQuotesForVehicleAction(customerId: string, vehicle
   await requireUserId();
   const rows = await listOpenQuotesForVehicle(customerId, vehicleId);
   return rows as OpenQuoteRef[];
+}
+
+/** Corrige a queixa e o KM do orçamento (parte fixa; passam para a OS). */
+export async function updateQuoteCheckInAction(
+  quoteId: string,
+  input: { customerComplaint: string; mileageAtEntry: string },
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await updateQuoteCheckInService(userId, quoteId, input);
+    revalidatePath(`/dashboard/orcamentos/${quoteId}`);
+    return { success: true, quoteId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível salvar a queixa e o KM.");
+  }
 }
 
 export async function deleteQuoteAction(quoteId: string): Promise<ActionResult> {

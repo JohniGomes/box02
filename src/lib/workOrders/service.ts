@@ -195,6 +195,10 @@ export async function createWorkOrderFromQuoteService(
 
   const number = await generateWorkOrderNumber();
 
+  // Queixa e KM: o que foi digitado agora vale; se vier vazio, usa o do orçamento.
+  const customerComplaint = checkIn.customerComplaint ?? quote.customerComplaint ?? undefined;
+  const mileageAtEntry = checkIn.mileageAtEntry ?? quote.mileageAtEntry ?? undefined;
+
   return withTransaction(async (client) => {
     const workOrder = await createWorkOrder(
       {
@@ -202,8 +206,8 @@ export async function createWorkOrderFromQuoteService(
         customerId: quote.customerId,
         vehicleId: quote.vehicleId,
         sourceQuoteVersionId: version.id,
-        mileageAtEntry: checkIn.mileageAtEntry,
-        customerComplaint: checkIn.customerComplaint,
+        mileageAtEntry: mileageAtEntry,
+        customerComplaint: customerComplaint,
         diagnosis: checkIn.diagnosis,
         discountType: version.discountType,
         discountValue: version.discountValue,
@@ -255,8 +259,8 @@ export async function createWorkOrderFromQuoteService(
 
     return { workOrder, items };
   }).then(async (result) => {
-    if (checkIn.mileageAtEntry !== undefined) {
-      await bumpVehicleMileageIfHigherService(actorUserId, quote.vehicleId, checkIn.mileageAtEntry);
+    if (mileageAtEntry !== undefined) {
+      await bumpVehicleMileageIfHigherService(actorUserId, quote.vehicleId, mileageAtEntry);
     }
     return result;
   });

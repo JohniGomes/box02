@@ -41,6 +41,7 @@ export function RegisterCompletedServiceForm({
   totalCents,
   customerName,
   lastMileage,
+  defaultMileage = "",
   executors,
   currentUserId,
 }: {
@@ -48,13 +49,15 @@ export function RegisterCompletedServiceForm({
   totalCents: number;
   customerName: string;
   lastMileage?: number | null;
+  /** KM já registrado no orçamento. */
+  defaultMileage?: string;
   executors: { id: string; name: string }[];
   currentUserId: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [serviceDate, setServiceDate] = useState("");
-  const [mileage, setMileage] = useState("");
+  const [mileage, setMileage] = useState(defaultMileage);
   // `executors` = opções do seletor (nomes da lista de executores; se estiver
   // vazia, usuários ativos). O valor escolhido é enviado como `executedBy`.
   const [executedBy, setExecutedBy] = useRememberedChoice(

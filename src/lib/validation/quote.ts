@@ -66,9 +66,26 @@ const adjustmentSchema = z
   })
   .optional();
 
+/** Queixa e KM do painel: opcionais no orçamento (valem para a OS). */
+export const quoteCheckInSchema = z.object({
+  customerComplaint: z
+    .string()
+    .trim()
+    .max(2000, "A queixa aceita até 2000 caracteres")
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  mileageAtEntry: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((v) => (v === undefined || (typeof v === "string" && v.trim() === "") ? undefined : Number(v)))
+    .pipe(z.number().int().min(0, "Quilometragem inválida").max(2_000_000, "Quilometragem inválida").optional()),
+});
+
 export const quoteInputSchema = z.object({
   customerId: z.string().min(1, "Selecione o cliente"),
   vehicleId: z.string().min(1, "Selecione o veículo"),
+  customerComplaint: quoteCheckInSchema.shape.customerComplaint,
+  mileageAtEntry: quoteCheckInSchema.shape.mileageAtEntry,
   items: z.array(quoteItemInputSchema).min(1, "Adicione pelo menos um item"),
   discount: adjustmentSchema,
   surcharge: adjustmentSchema,

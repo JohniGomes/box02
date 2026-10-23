@@ -20,6 +20,9 @@ export interface QuoteRecord {
   customerId: string;
   vehicleId: string;
   currentVersionNumber: number;
+  /** Queixa e KM do painel (parte fixa do orçamento; vão para a OS). */
+  customerComplaint: string | null;
+  mileageAtEntry: number | null;
   createdByUserId: string | null;
   createdAt: Date;
 }
@@ -30,18 +33,25 @@ export interface QuoteWithNames extends QuoteRecord {
   vehicleLabel: string;
 }
 
-const COLUMNS = `id, number, status, "customerId", "vehicleId", "currentVersionNumber", "createdByUserId", "createdAt"`;
+const COLUMNS = `id, number, status, "customerId", "vehicleId", "currentVersionNumber", "customerComplaint", "mileageAtEntry", "createdByUserId", "createdAt"`;
 
 export async function createQuote(
-  input: { number: string; customerId: string; vehicleId: string; createdByUserId: string },
+  input: {
+    number: string;
+    customerId: string;
+    vehicleId: string;
+    createdByUserId: string;
+    customerComplaint?: string | null;
+    mileageAtEntry?: number | null;
+  },
   db: Queryable = pool,
 ): Promise<QuoteRecord> {
   const id = createId();
   const result = await db.query<QuoteRecord>(
-    `INSERT INTO quotes (id, number, status, "customerId", "vehicleId", "currentVersionNumber", "createdByUserId")
-     VALUES ($1, $2, 'RASCUNHO', $3, $4, 1, $5)
+    `INSERT INTO quotes (id, number, status, "customerId", "vehicleId", "currentVersionNumber", "createdByUserId", "customerComplaint", "mileageAtEntry")
+     VALUES ($1, $2, 'RASCUNHO', $3, $4, 1, $5, $6, $7)
      RETURNING ${COLUMNS}`,
-    [id, input.number, input.customerId, input.vehicleId, input.createdByUserId],
+    [id, input.number, input.customerId, input.vehicleId, input.createdByUserId, input.customerComplaint ?? null, input.mileageAtEntry ?? null],
   );
   return result.rows[0];
 }
@@ -63,6 +73,19 @@ export async function updateQuoteStatusAndVersion(
  * chama precisa já ter confirmado que nenhuma OS foi gerada a partir
  * de uma versão deste orçamento (essa FK é SET NULL, não bloqueia
  * sozinha — ver checkQuoteHasWorkOrder). */
+/** Corrige a queixa e o KM do orçamento (parte fixa — vale para todas as versões). */
+export async function updateQuoteCheckIn(
+  id: string,
+  input: { customerComplaint: string | null; mileageAtEntry: number | null },
+  db: Queryable = pool,
+): Promise<QuoteRecord | null> {
+  const result = await db.query<QuoteRecord>(
+    `UPDATE quotes SET "customerComplaint" = $2, "mileageAtEntry" = $3 WHERE id = $1 RETURNING ${COLUMNS}`,
+    [id, input.customerComplaint, input.mileageAtEntry],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function deleteQuote(id: string, db: Queryable = pool): Promise<void> {
   await db.query(`DELETE FROM quotes WHERE id = $1`, [id]);
 }
