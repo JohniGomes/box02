@@ -65,10 +65,10 @@ export default async function ChecklistEntradaPage({
             workOrderChecklistId={entrada.checklist.id}
             items={entrada.items}
             variant="tri"
-            locked={locked || Boolean(entrada.checklist.completedAt)}
+            locked={Boolean(entrada.checklist.completedAt)}
           />
 
-          {!locked && !entrada.checklist.completedAt ? (
+          {!entrada.checklist.completedAt ? (
             <div className="flex justify-end print:hidden">
               <CompleteChecklistButton
                 workOrderId={workOrder.id}

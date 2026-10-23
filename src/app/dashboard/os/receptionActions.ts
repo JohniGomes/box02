@@ -5,11 +5,13 @@ import { ZodError } from "zod";
 import { auth } from "@/auth";
 import {
   registerWorkOrderReceptionAcceptanceService,
+  updateWorkOrderCheckInSettingsService,
   updateWorkOrderReceptionInfoService,
 } from "@/lib/workOrders/service";
 import {
   WorkOrderNotFoundError,
   WorkOrderReceptionAlreadyAcceptedError,
+  WorkOrderReceptionIncompleteError,
 } from "@/lib/workOrders/errors";
 
 export interface ReceptionActionResult {
@@ -33,7 +35,11 @@ function friendlyError(err: unknown, fallback: string): ReceptionActionResult {
     }
     return { success: false, error: "Existem campos inválidos.", fieldErrors };
   }
-  if (err instanceof WorkOrderNotFoundError || err instanceof WorkOrderReceptionAlreadyAcceptedError) {
+  if (
+    err instanceof WorkOrderNotFoundError ||
+    err instanceof WorkOrderReceptionAlreadyAcceptedError ||
+    err instanceof WorkOrderReceptionIncompleteError
+  ) {
     return { success: false, error: err.message };
   }
   return { success: false, error: fallback };
@@ -51,6 +57,23 @@ export async function updateReceptionInfoAction(
     return { success: true };
   } catch (err) {
     return friendlyError(err, "Não foi possível salvar as avarias.");
+  }
+}
+
+/** Corrige queixa e KM (livre até o aceite do Termo). */
+export async function updateCheckInAction(
+  workOrderId: string,
+  input: { customerComplaint: string; mileageAtEntry: string },
+): Promise<ReceptionActionResult> {
+  try {
+    const userId = await requireUserId();
+    await updateWorkOrderCheckInSettingsService(userId, workOrderId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath(`/dashboard/os/${workOrderId}/termo-recepcao`);
+    revalidatePath(`/dashboard/os/${workOrderId}/detalhes`);
+    return { success: true };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível salvar a queixa e o KM.");
   }
 }
 

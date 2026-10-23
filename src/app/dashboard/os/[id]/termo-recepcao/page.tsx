@@ -10,7 +10,9 @@ import { formatPhone } from "@/lib/validation/phone";
 import type { ReceptionChecklistSnapshot } from "@/lib/db/repositories/workOrders";
 import { PdfStyleHeader } from "@/components/PdfStyleHeader";
 import { PrintButton } from "@/components/PrintButton";
+import { vehicleDisplayName } from "@/lib/vehicles/label";
 import { DamagesEditor } from "../DamagesEditor";
+import { CheckInEditor } from "../CheckInEditor";
 import { ReceptionAcceptForm } from "../ReceptionAcceptForm";
 
 export default async function TermoRecepcaoPage({
@@ -57,6 +59,10 @@ export default async function TermoRecepcaoPage({
     }
   }
 
+  const missingForAccept: string[] = [];
+  if (!workOrder.customerComplaint || workOrder.customerComplaint.trim() === "") missingForAccept.push("a queixa do cliente");
+  if (workOrder.mileageAtEntry === null) missingForAccept.push("o KM do painel");
+
   const complaint = accepted ? workOrder.receptionComplaintSnapshot : workOrder.customerComplaint;
   const damages = accepted ? workOrder.receptionDamagesSnapshot : workOrder.preExistingDamagesDescription;
   const phone = customer?.whatsapp ?? customer?.phone ?? null;
@@ -92,9 +98,8 @@ export default async function TermoRecepcaoPage({
         <Field
           label="Veículo (marca / modelo)"
           value={
-            vehicle
-              ? `${vehicle.brand ?? ""} ${vehicle.model ?? ""}`.trim() || "—"
-              : workOrder.vehicleDescriptionSnapshot ?? "—"
+            vehicleDisplayName(vehicle, workOrder.vehicleDescriptionSnapshot) ??
+            (workOrder.vehiclePlateSnapshot ? `Placa ${formatPlate(workOrder.vehiclePlateSnapshot)}` : "—")
           }
         />
         <Field label="Km (painel)" value={workOrder.mileageAtEntry != null ? `${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : "Não informado"} />
@@ -102,7 +107,15 @@ export default async function TermoRecepcaoPage({
 
       <div className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="mb-2 text-sm font-bold uppercase">Queixa relatada pelo cliente</h2>
-        <p className="whitespace-pre-wrap text-sm">{complaint ?? "Nenhuma queixa registrada."}</p>
+        {accepted ? (
+          <p className="whitespace-pre-wrap text-sm">{complaint ?? "Nenhuma queixa registrada."}</p>
+        ) : (
+          <CheckInEditor
+            workOrderId={workOrder.id}
+            initialComplaint={workOrder.customerComplaint}
+            initialMileage={workOrder.mileageAtEntry}
+          />
+        )}
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-6">
@@ -151,7 +164,7 @@ export default async function TermoRecepcaoPage({
       ) : null}
 
       {!accepted ? (
-        <ReceptionAcceptForm workOrderId={workOrder.id} />
+        <ReceptionAcceptForm workOrderId={workOrder.id} missing={missingForAccept} />
       ) : (
         <>
           <div className="rounded-2xl border border-border bg-surface p-6">

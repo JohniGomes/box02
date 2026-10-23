@@ -20,6 +20,7 @@ import {
   WorkOrderPaymentNotFoundError,
   WorkOrderPaymentRefundExceedsAmountError,
 } from "@/lib/workOrders/errors";
+import { acceptReceptionForTest } from "./acceptHelper";
 
 async function cleanAll() {
   await pool.query(
@@ -63,7 +64,7 @@ async function createDeliveredWorkOrder(totalReais = "200,00") {
     mileageAtEntry: 1000,
     items: [{ type: "SERVICO", description: "Serviço Ciclo I", quantity: 1, unitPriceReais: totalReais }],
   });
-  await registerWorkOrderReceptionAcceptanceService(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+  await acceptReceptionForTest(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
   await setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_EXECUCAO");
   await setWorkOrderItemStatusService(actorUserId, os.workOrder.id, os.items[0].id, "EXECUTADO");
   await setWorkOrderStatusService(actorUserId, os.workOrder.id, "TESTE_FINAL");

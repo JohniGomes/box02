@@ -11,6 +11,7 @@ import {
   setWorkOrderStatus,
   updateDiagnosisExplanationNotes,
   updatePreExistingDamagesDescription,
+  updateWorkOrderCheckIn,
   updateWorkOrderTechnicalNotes,
   type ReceptionChecklistSnapshot,
   type SearchWorkOrdersFilters,
@@ -85,6 +86,7 @@ import {
   registerWorkOrderPaymentsSchema,
   updateDiagnosisExplanationSchema,
   updatePreExistingDamagesSchema,
+  updateWorkOrderCheckInSchema,
   updateTechnicalNotesSchema,
   workOrderCheckInSchema,
   workOrderDeliverySchema,
@@ -112,6 +114,7 @@ import {
   WorkOrderPaymentRefundExceedsAmountError,
   WorkOrderReceptionAlreadyAcceptedError,
   WorkOrderReceptionNotAcceptedError,
+  WorkOrderReceptionIncompleteError,
   WorkOrderReturnNotDeliveredError,
   WorkOrderNotCancelledError,
 } from "./errors";
@@ -1200,6 +1203,47 @@ export async function updateWorkOrderReceptionInfoService(
 }
 
 /**
+ * Corrige a queixa e o KM de entrada da OS. Livre enquanto o Termo de
+ * Recepção não foi aceito; depois do aceite o Termo guarda o que valia na
+ * hora e esta correção deixa de ser permitida.
+ */
+export async function updateWorkOrderCheckInSettingsService(
+  actorUserId: string,
+  workOrderId: string,
+  rawInput: unknown,
+): Promise<WorkOrderRecord> {
+  const input = updateWorkOrderCheckInSchema.parse(rawInput);
+
+  const existing = await findWorkOrderById(workOrderId);
+  if (!existing) throw new WorkOrderNotFoundError(workOrderId);
+  if (existing.receptionAcceptedAt) throw new WorkOrderReceptionAlreadyAcceptedError();
+
+  const updated = await updateWorkOrderCheckIn(workOrderId, {
+    customerComplaint: input.customerComplaint ?? null,
+    mileageAtEntry: input.mileageAtEntry ?? null,
+  });
+  if (!updated) throw new WorkOrderNotFoundError(workOrderId);
+
+  if (input.mileageAtEntry !== undefined) {
+    await bumpVehicleMileageIfHigherService(actorUserId, existing.vehicleId, input.mileageAtEntry);
+  }
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_CHECKIN_UPDATED",
+    entityType: "work_order",
+    entityId: workOrderId,
+    metadata: {
+      previousComplaint: existing.customerComplaint,
+      previousMileage: existing.mileageAtEntry,
+      newMileage: updated.mileageAtEntry,
+    },
+  });
+
+  return updated;
+}
+
+/**
  * Registra o aceite de recepção — write-once. Numa única transação:
  * confirma que ainda não existe aceite, congela queixa + avarias (o que
  * estiver gravado em `customerComplaint`/`preExistingDamagesDescription`
@@ -1220,6 +1264,12 @@ export async function registerWorkOrderReceptionAcceptanceService(
     const existing = await lockWorkOrderById(workOrderId, client);
     if (!existing) throw new WorkOrderNotFoundError(workOrderId);
     if (existing.receptionAcceptedAt) throw new WorkOrderReceptionAlreadyAcceptedError();
+
+    // O Termo congela o que estiver gravado: sem queixa e KM ele nasceria vazio.
+    const missing: string[] = [];
+    if (!existing.customerComplaint || existing.customerComplaint.trim() === "") missing.push("a queixa do cliente");
+    if (existing.mileageAtEntry === null || existing.mileageAtEntry === undefined) missing.push("o KM do painel");
+    if (missing.length > 0) throw new WorkOrderReceptionIncompleteError(missing);
 
     let checklistSnapshot: ReceptionChecklistSnapshot | null = null;
     const entradaChecklist = await findWorkOrderChecklist({ workOrderId, type: "ENTRADA" }, client);

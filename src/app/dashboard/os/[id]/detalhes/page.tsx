@@ -349,6 +349,7 @@ export default async function WorkOrderDetailsPage({
       {paymentsSummary ? (
         <WorkOrderPaymentsSection
           workOrderId={workOrder.id}
+          entryDate={workOrder.entryAt.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })}
           summary={{
             dueCents: paymentsSummary.dueCents,
             paidCents: paymentsSummary.paidCents,

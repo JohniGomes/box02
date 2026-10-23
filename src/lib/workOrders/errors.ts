@@ -233,3 +233,11 @@ export class WorkOrderNotCancelledError extends Error {
     this.name = "WorkOrderNotCancelledError";
   }
 }
+
+/** O aceite do Termo exige queixa e KM já preenchidos. */
+export class WorkOrderReceptionIncompleteError extends Error {
+  constructor(public readonly missing: string[]) {
+    super(`Para registrar o aceite, informe ${missing.join(" e ")}.`);
+    this.name = "WorkOrderReceptionIncompleteError";
+  }
+}

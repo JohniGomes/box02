@@ -61,9 +61,12 @@ export interface WorkOrderPaymentsSummaryView {
 export function WorkOrderPaymentsSection({
   workOrderId,
   summary,
+  entryDate,
 }: {
   workOrderId: string;
   summary: WorkOrderPaymentsSummaryView;
+  /** Data de entrada da OS (AAAA-MM-DD, horário de Brasília), para avisar de recebimento anterior. */
+  entryDate?: string;
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -261,6 +264,11 @@ export function WorkOrderPaymentsSection({
               onChange={(e) => setReceivedOn(e.target.value)}
               className={inputClass}
             />
+            {entryDate && receivedOn && receivedOn < entryDate ? (
+              <p className="rounded-lg bg-accent/10 p-2 text-xs">
+                Atenção: esta data é anterior à entrada da OS ({entryDate.split("-").reverse().join("/")}). Confira se está certa.
+              </p>
+            ) : null}
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

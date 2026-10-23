@@ -30,6 +30,7 @@ import {
 } from "@/lib/workOrders/retroactive";
 import { InvalidExecutorUserError, QuoteNotApprovedError } from "@/lib/workOrders/errors";
 import { listVehiclesByCustomerService } from "@/lib/vehicles/service";
+import { listOpenQuotesForVehicle } from "@/lib/db/repositories/quotes";
 import { searchCustomersService } from "@/lib/customers/service";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
@@ -79,6 +80,19 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
   console.error(`[orcamentos] ${fallback}`, err);
   const detail = err instanceof Error && err.message ? ` (${err.message.slice(0, 200)})` : "";
   return { success: false, error: `${fallback}${detail}` };
+}
+
+export interface OpenQuoteRef {
+  id: string;
+  number: string;
+  status: "RASCUNHO" | "ENVIADO";
+}
+
+/** Orçamentos em aberto do mesmo cliente e veículo — para avisar antes de criar um duplicado. */
+export async function listOpenQuotesForVehicleAction(customerId: string, vehicleId: string): Promise<OpenQuoteRef[]> {
+  await requireUserId();
+  const rows = await listOpenQuotesForVehicle(customerId, vehicleId);
+  return rows as OpenQuoteRef[];
 }
 
 export async function deleteQuoteAction(quoteId: string): Promise<ActionResult> {

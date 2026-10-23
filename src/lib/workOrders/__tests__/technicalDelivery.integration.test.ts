@@ -15,6 +15,7 @@ import {
   updateWorkOrderTechnicalNotesService,
 } from "@/lib/workOrders/service";
 import { WorkOrderDeliveryChecklistPendingError, WorkOrderReceptionNotAcceptedError } from "@/lib/workOrders/errors";
+import { acceptReceptionForTest } from "./acceptHelper";
 
 async function cleanAll() {
   await pool.query(
@@ -57,7 +58,7 @@ afterAll(async () => {
 });
 
 async function moveToPronta(workOrderId: string) {
-  await registerWorkOrderReceptionAcceptanceService(actorUserId, workOrderId, {
+  await acceptReceptionForTest(actorUserId, workOrderId, {
     receptionAcceptedName: "Aceite Teste",
     receptionAwareness1: true,
     receptionAwareness2: true,

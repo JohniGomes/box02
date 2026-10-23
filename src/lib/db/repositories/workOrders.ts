@@ -304,6 +304,21 @@ export async function updatePreExistingDamagesDescription(
   return result.rows[0] ?? null;
 }
 
+/** Corrige queixa e KM de entrada da OS (livre até o aceite do Termo). */
+export async function updateWorkOrderCheckIn(
+  id: string,
+  input: { customerComplaint: string | null; mileageAtEntry: number | null },
+  db: Queryable = pool,
+): Promise<WorkOrderRecord | null> {
+  const result = await db.query<WorkOrderRecord>(
+    `UPDATE work_orders SET "customerComplaint" = $2, "mileageAtEntry" = $3, "updatedAt" = NOW()
+     WHERE id = $1
+     RETURNING ${COLUMNS}`,
+    [id, input.customerComplaint, input.mileageAtEntry],
+  );
+  return result.rows[0] ?? null;
+}
+
 /** UI do Método BOX 02 — atualiza o registro de EXPLICAMOS. Livre a
  * qualquer momento, sem gate, sem write-once — mesmo padrão de
  * `updatePreExistingDamagesDescription`. */

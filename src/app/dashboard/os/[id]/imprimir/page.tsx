@@ -8,6 +8,8 @@ import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { WORK_ORDER_STATUS_LABEL } from "../../statusLabels";
 import { PrintButton } from "@/components/PrintButton";
+import { vehicleDisplayName } from "@/lib/vehicles/label";
+import { computeQuoteTotals } from "@/lib/money";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -37,10 +39,27 @@ export default async function PrintWorkOrderPage({
     workOrder.status === "ENTREGUE" ? getWorkOrderPaymentsSummaryService(workOrder.id) : Promise.resolve(null),
   ]);
 
-  const activeItems = items.filter((i) => i.status !== "CANCELADO");
+  const delivered = workOrder.status === "ENTREGUE";
+  // Antes da entrega o total ainda não foi fechado (fica 0): calcula o "Total aprovado"
+  // com o que o cliente aprovou e não foi cancelado. Depois da entrega vale o Total fechado.
+  const activeItems = delivered
+    ? items.filter((i) => i.status !== "CANCELADO")
+    : items.filter(
+        (i) => i.status !== "CANCELADO" && (i.origin !== "ADICIONAL_DURANTE_EXECUCAO" || i.clientDecision === "APROVADO"),
+      );
   const servicesCents = sumByType(activeItems, "SERVICO");
   const partsCents = sumByType(activeItems, "PECA");
   const laborCents = sumByType(activeItems, "MAO_DE_OBRA");
+  const liveTotals = computeQuoteTotals({
+    items: activeItems.map((i) => ({ type: i.type, totalCents: i.totalCents })),
+    discountType: workOrder.discountType,
+    discountValue: workOrder.discountValue,
+    surchargeType: workOrder.surchargeType,
+    surchargeValue: workOrder.surchargeValue,
+  });
+  const discountCents = delivered ? workOrder.discountTotalCents : liveTotals.discountTotalCents;
+  const surchargeCents = delivered ? workOrder.surchargeTotalCents : liveTotals.surchargeTotalCents;
+  const totalCents = delivered ? workOrder.totalCents : liveTotals.totalCents;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 print:gap-3">
@@ -70,7 +89,7 @@ export default async function PrintWorkOrderPage({
           <div>
             <dt className="text-xs text-muted">Veículo</dt>
             <dd>
-              {vehicle ? `${vehicle.brand ?? ""} ${vehicle.model ?? ""}`.trim() || "—" : workOrder.vehicleDescriptionSnapshot ?? "—"}
+              {vehicleDisplayName(vehicle, workOrder.vehicleDescriptionSnapshot) ?? "—"}
               {workOrder.vehiclePlateSnapshot ? ` · ${formatPlate(workOrder.vehiclePlateSnapshot)}` : ""}
             </dd>
           </div>
@@ -119,15 +138,15 @@ export default async function PrintWorkOrderPage({
           <Row label="Serviços" value={formatBRL(servicesCents)} />
           <Row label="Peças" value={formatBRL(partsCents)} />
           <Row label="Mão de obra" value={formatBRL(laborCents)} />
-          {workOrder.discountTotalCents > 0 ? (
-            <Row label="Desconto" value={`- ${formatBRL(workOrder.discountTotalCents)}`} />
+          {discountCents > 0 ? (
+            <Row label="Desconto" value={`- ${formatBRL(discountCents)}`} />
           ) : null}
-          {workOrder.surchargeTotalCents > 0 ? (
-            <Row label="Acréscimo" value={`+ ${formatBRL(workOrder.surchargeTotalCents)}`} />
+          {surchargeCents > 0 ? (
+            <Row label="Acréscimo" value={`+ ${formatBRL(surchargeCents)}`} />
           ) : null}
           <div className="mt-2 flex justify-between border-t border-border pt-2 font-semibold">
-            <span>Total</span>
-            <span>{formatBRL(workOrder.totalCents)}</span>
+            <span>{delivered ? "Total" : "Total aprovado"}</span>
+            <span>{formatBRL(totalCents)}</span>
           </div>
         </div>
       </div>
