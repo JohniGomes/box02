@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRememberedChoice } from "@/lib/useRemembered";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL, centsToReais } from "@/lib/money";
 import {
   createExpenseAction,
   deleteExpenseAction,
   listSupplierNamesAction,
+  listWorkOrdersForExpenseAction,
   markExpenseAsPaidAction,
   repeatExpenseNextMonthAction,
   unmarkExpenseAsPaidAction,
@@ -65,6 +67,8 @@ export interface ExpenseView {
   paidAt: string | null;
   paymentMethod: string | null;
   notes: string | null;
+  workOrderId: string | null;
+  workOrderNumber: string | null;
   status: "PENDENTE" | "PAGA" | "ATRASADA";
 }
 
@@ -262,6 +266,14 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
           <span className="text-xs font-medium text-muted">{CATEGORY_LABEL[expense.category]}</span>
           <p className="text-sm font-medium">{expense.description}</p>
           {expense.supplierName ? <p className="text-xs text-muted">{expense.supplierName}</p> : null}
+          {expense.workOrderNumber ? (
+            <p className="text-xs text-muted">
+              Relacionada à{" "}
+              <Link href={`/dashboard/os/${expense.workOrderId}`} className="font-mono font-semibold text-accent">
+                {expense.workOrderNumber}
+              </Link>
+            </p>
+          ) : null}
         </div>
         <span className="text-sm font-semibold">{formatBRL(expense.amountCents)}</span>
       </div>
@@ -432,13 +444,26 @@ function ExpenseForm({
   const [amountReais, setAmountReais] = useState(expense ? centsToReais(expense.amountCents) : "");
   const [dueDate, setDueDate] = useState(expense?.dueDate ?? "");
   const [notes, setNotes] = useState(expense?.notes ?? "");
+  const [workOrderId, setWorkOrderId] = useState(expense?.workOrderId ?? "");
+  const [workOrderOptions, setWorkOrderOptions] = useState<{ id: string; label: string }[]>([]);
+  useEffect(() => {
+    listWorkOrdersForExpenseAction().then(setWorkOrderOptions);
+  }, []);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit() {
     setError(null);
     startTransition(async () => {
-      const input = { category, description, supplierName: supplierName || undefined, amountReais, dueDate, notes: notes || undefined };
+      const input = {
+        category,
+        description,
+        supplierName: supplierName || undefined,
+        amountReais,
+        dueDate,
+        notes: notes || undefined,
+        workOrderId: workOrderId || undefined,
+      };
       const result = expense ? await updateExpenseAction(expense.id, input) : await createExpenseAction(input);
       if (!result.success) {
         setError(result.error ?? "Falha ao salvar.");
@@ -471,6 +496,14 @@ function ExpenseForm({
         list="expenseSupplierList"
         className={inputClass}
       />
+      <select value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)} className={inputClass}>
+        <option value="">OS relacionada (opcional) — ex.: serviço de terceiro</option>
+        {workOrderOptions.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
       <datalist id="expenseSupplierList">
         {supplierOptions.map((n) => (
           <option key={n} value={n} />

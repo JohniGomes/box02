@@ -35,6 +35,8 @@ export interface ItemDraft {
   partId?: string;
   category: ItemCategory;
   notes?: string;
+  /** Peça fornecida pelo cliente: sem cobrança e sem baixa de estoque. */
+  customerSupplied?: boolean;
 }
 
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
@@ -66,6 +68,7 @@ export interface QuoteFormInitialValues {
   items: ItemDraft[];
   discountType: "PERCENTUAL" | "FIXO" | "";
   discountValue: string;
+  discountReason?: string;
   surchargeType: "PERCENTUAL" | "FIXO" | "";
   surchargeValue: string;
   validUntil: string;
@@ -96,6 +99,7 @@ export function QuoteForm({
   const [items, setItems] = useState<ItemDraft[]>(initialValues?.items ?? [newItem()]);
   const [discountType, setDiscountType] = useState(initialValues?.discountType ?? "");
   const [discountValue, setDiscountValue] = useState(initialValues?.discountValue ?? "");
+  const [discountReason, setDiscountReason] = useState(initialValues?.discountReason ?? "");
   const [surchargeType, setSurchargeType] = useState(initialValues?.surchargeType ?? "");
   const [surchargeValue, setSurchargeValue] = useState(initialValues?.surchargeValue ?? "");
   const [validUntil, setValidUntil] = useState(initialValues?.validUntil ?? "");
@@ -169,8 +173,9 @@ export function QuoteForm({
           // Observações só valem para Mão de obra; texto deixado em outro
           // tipo (ao trocar de aba) não deve ir junto.
           notes: i.type === "MAO_DE_OBRA" ? i.notes : undefined,
+          customerSupplied: i.type === "PECA" ? Boolean(i.customerSupplied) : false,
         })),
-      discount: discountType ? { type: discountType, value: discountValue } : undefined,
+      discount: discountType ? { type: discountType, value: discountValue, reason: discountReason || undefined } : undefined,
       surcharge: surchargeType ? { type: surchargeType, value: surchargeValue } : undefined,
       validUntil: validUntil ? fromDateOnlyLocal(validUntil).toISOString() : undefined,
       internalNotes,
@@ -334,6 +339,7 @@ export function QuoteForm({
         <QuoteAdjustments
           discountType={discountType}
           discountValue={discountValue}
+          discountReason={discountReason}
           surchargeType={surchargeType}
           surchargeValue={surchargeValue}
           validUntil={validUntil}
@@ -342,6 +348,7 @@ export function QuoteForm({
           onChange={{
             discountType: setDiscountType,
             discountValue: setDiscountValue,
+            discountReason: setDiscountReason,
             surchargeType: setSurchargeType,
             surchargeValue: setSurchargeValue,
             validUntil: setValidUntil,
@@ -571,14 +578,31 @@ export function QuoteItemsEditor({
             <div>
               <label className="text-xs text-muted">Preço unitário (R$)</label>
               <input
-                value={item.unitPriceReais}
+                value={item.customerSupplied ? "0" : item.unitPriceReais}
                 onChange={(e) => onUpdate(item.key, { unitPriceReais: e.target.value })}
+                disabled={Boolean(item.customerSupplied)}
                 inputMode="decimal"
                 placeholder="0,00"
-                className={`${inputClass} mt-1 w-full`}
+                className={`${inputClass} mt-1 w-full disabled:opacity-60`}
               />
             </div>
           </div>
+          {item.type === "PECA" ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(item.customerSupplied)}
+                onChange={(e) =>
+                  onUpdate(item.key, { customerSupplied: e.target.checked, unitPriceReais: e.target.checked ? "0" : "" })
+                }
+                className="mt-0.5 h-5 w-5 shrink-0"
+              />
+              <span>
+                Peça fornecida pelo cliente
+                <span className="block text-xs text-muted">Fica registrada na OS, sem cobrança e sem baixa de estoque.</span>
+              </span>
+            </label>
+          ) : null}
 
           <p className="text-right text-sm font-medium">
             {formatBRL(
@@ -607,6 +631,7 @@ export function QuoteItemsEditor({
 function QuoteAdjustments({
   discountType,
   discountValue,
+  discountReason,
   surchargeType,
   surchargeValue,
   validUntil,
@@ -617,6 +642,7 @@ function QuoteAdjustments({
 }: {
   discountType: "PERCENTUAL" | "FIXO" | "";
   discountValue: string;
+  discountReason: string;
   surchargeType: "PERCENTUAL" | "FIXO" | "";
   surchargeValue: string;
   validUntil: string;
@@ -625,6 +651,7 @@ function QuoteAdjustments({
   onChange: {
     discountType: (v: "PERCENTUAL" | "FIXO" | "") => void;
     discountValue: (v: string) => void;
+    discountReason: (v: string) => void;
     surchargeType: (v: "PERCENTUAL" | "FIXO" | "") => void;
     surchargeValue: (v: string) => void;
     validUntil: (v: string) => void;
@@ -642,6 +669,20 @@ function QuoteAdjustments({
         onTypeChange={onChange.discountType}
         onValueChange={onChange.discountValue}
       />
+      {discountType ? (
+        <div>
+          <label className="text-xs text-muted" htmlFor="discountReason">
+            Motivo do desconto (interno — não aparece para o cliente)
+          </label>
+          <input
+            id="discountReason"
+            value={discountReason}
+            onChange={(e) => onChange.discountReason(e.target.value)}
+            placeholder="Ex.: cliente antigo, fechou mais de um serviço"
+            className={`${inputClass} mt-1 w-full`}
+          />
+        </div>
+      ) : null}
       <AdjustmentRow
         label="Acréscimo"
         type={surchargeType}

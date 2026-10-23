@@ -89,7 +89,8 @@ function itemsForTotals(
 
 function preparedItems(input: QuoteInput["items"]) {
   return input.map((item) => {
-    const unitPriceCents = reaisToCents(item.unitPriceReais);
+    // Peça do cliente nunca é cobrada: o valor é zerado aqui, no servidor.
+    const unitPriceCents = item.customerSupplied ? 0 : reaisToCents(item.unitPriceReais);
     const totalCents = lineTotalCents(item.quantity, unitPriceCents);
     return { ...item, unitPriceCents, totalCents };
   });
@@ -184,6 +185,7 @@ export async function createQuoteService(
         ...totals,
         discountType: input.discount?.type ?? null,
         discountValue: input.discount?.value != null ? reaisOrPercentToInternal(input.discount) : null,
+        discountReason: input.discount?.value != null ? (input.discount?.reason ?? null) : null,
         surchargeType: input.surcharge?.type ?? null,
         surchargeValue: input.surcharge?.value != null ? reaisOrPercentToInternal(input.surcharge) : null,
         createdByUserId: actorUserId,
@@ -202,6 +204,7 @@ export async function createQuoteService(
         partId: item.partId ?? null,
         category: item.category,
         notes: item.notes ?? null,
+        customerSupplied: item.customerSupplied ?? false,
       })),
       client,
     );
@@ -267,6 +270,7 @@ export async function updateQuoteVersionService(
         partId: item.partId ?? null,
         category: item.category,
         notes: item.notes ?? null,
+        customerSupplied: item.customerSupplied ?? false,
       })),
       client,
     );
@@ -279,6 +283,7 @@ export async function updateQuoteVersionService(
         ...totals,
         discountType: input.discount?.type ?? null,
         discountValue: input.discount?.value != null ? reaisOrPercentToInternal(input.discount) : null,
+        discountReason: input.discount?.value != null ? (input.discount?.reason ?? null) : null,
         surchargeType: input.surcharge?.type ?? null,
         surchargeValue: input.surcharge?.value != null ? reaisOrPercentToInternal(input.surcharge) : null,
       },
@@ -370,6 +375,7 @@ export async function createNewQuoteVersionService(
         discountType: currentVersion.discountType,
         discountValue: currentVersion.discountValue,
         discountTotalCents: currentVersion.discountTotalCents,
+        discountReason: currentVersion.discountReason,
         surchargeType: currentVersion.surchargeType,
         surchargeValue: currentVersion.surchargeValue,
         surchargeTotalCents: currentVersion.surchargeTotalCents,
@@ -392,6 +398,7 @@ export async function createNewQuoteVersionService(
         partId: item.partId,
         category: item.category,
         notes: item.notes,
+        customerSupplied: item.customerSupplied,
       })),
       client,
     );

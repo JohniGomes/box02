@@ -40,6 +40,9 @@ export interface WorkOrderItemRecord {
   catalogItemId: string | null;
   serviceId: string | null;
   partId: string | null;
+  /** Custo unitário no momento da execução (base do lucro). Só a partir de 2026-10. */
+  unitCostCents: number | null;
+  customerSupplied: boolean;
   cancelReason: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -50,7 +53,7 @@ const COLUMNS = `
   origin, "sourceQuoteItemId", status, "executedAt", "executedByUserId", "executedByName",
   "clientAuthorizedBy", "clientAuthorizedAt", "authorizationChannel", "authorizationNotes", "authorizationIpAddress",
   "clientDecision", "createdByUserId", "accessToken", "accessTokenExpiresAt", "accessTokenRevokedAt",
-  "supersedesItemId", "catalogItemType", "catalogItemId", "serviceId", "partId", "cancelReason", "createdAt", "updatedAt"
+  "supersedesItemId", "catalogItemType", "catalogItemId", "serviceId", "partId", "unitCostCents", "customerSupplied", "cancelReason", "createdAt", "updatedAt"
 `;
 
 export interface InsertWorkOrderItemInput {
@@ -68,6 +71,7 @@ export interface InsertWorkOrderItemInput {
   partId?: string | null;
   createdByUserId?: string | null;
   supersedesItemId?: string | null;
+  customerSupplied?: boolean;
 }
 
 export async function insertWorkOrderItems(
@@ -81,8 +85,8 @@ export async function insertWorkOrderItems(
       `INSERT INTO work_order_items (
         id, "workOrderId", type, description, quantity, "unitPriceCents", "totalCents",
         origin, "sourceQuoteItemId", status, "catalogItemType", "catalogItemId", "serviceId", "partId",
-        "createdByUserId", "supersedesItemId", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PLANEJADO', $10, $11, $12, $13, $14, $15, NOW())
+        "createdByUserId", "supersedesItemId", "customerSupplied", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PLANEJADO', $10, $11, $12, $13, $14, $15, $16, NOW())
       RETURNING ${COLUMNS}`,
       [
         id,
@@ -100,6 +104,7 @@ export async function insertWorkOrderItems(
         item.partId ?? null,
         item.createdByUserId ?? null,
         item.supersedesItemId ?? null,
+        item.customerSupplied ?? false,
       ],
     );
     inserted.push(result.rows[0]);
@@ -163,6 +168,8 @@ export async function setWorkOrderItemStatus(
     executedByUserId?: string;
     /** `undefined` = não mexe; `null` = limpa; texto = grava o nome do executor. */
     executedByName?: string | null;
+    /** Custo unitário no momento da execução (undefined = não mexe). */
+    unitCostCents?: number | null;
     cancelReason?: string;
   } = {},
   db: Queryable = pool,
@@ -175,6 +182,7 @@ export async function setWorkOrderItemStatus(
       "executedByUserId" = COALESCE($4, "executedByUserId"),
       "executedByName" = CASE WHEN $6::boolean THEN $7 ELSE "executedByName" END,
       "cancelReason" = COALESCE($5, "cancelReason"),
+      "unitCostCents" = CASE WHEN $8::boolean THEN $9 ELSE "unitCostCents" END,
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
@@ -186,6 +194,8 @@ export async function setWorkOrderItemStatus(
       extra.cancelReason ?? null,
       touchName,
       extra.executedByName ?? null,
+      extra.unitCostCents !== undefined,
+      extra.unitCostCents ?? null,
     ],
   );
   return result.rows[0] ?? null;

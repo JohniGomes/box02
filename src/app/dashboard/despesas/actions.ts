@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
 import { listSuppliersService } from "@/lib/purchases/service";
+import { listWorkOrdersForExpense } from "@/lib/db/repositories/workOrders";
 import {
   createExpenseService,
   deleteExpenseService,
@@ -57,6 +58,16 @@ function friendlyError(err: unknown, fallback: string): ExpenseActionResult {
 }
 
 /** Nomes dos fornecedores cadastrados (para sugerir ao digitar o fornecedor da despesa). */
+/** OS recentes para ligar a uma despesa (campo opcional "OS relacionada"). */
+export async function listWorkOrdersForExpenseAction(): Promise<{ id: string; label: string }[]> {
+  await requireUserId();
+  const rows = await listWorkOrdersForExpense();
+  return rows.map((r) => ({
+    id: r.id,
+    label: [r.number, r.vehicle, r.customerName].filter(Boolean).join(" · "),
+  }));
+}
+
 export async function listSupplierNamesAction(): Promise<string[]> {
   await requireUserId();
   const suppliers = await listSuppliersService(true);

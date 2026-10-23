@@ -85,6 +85,7 @@ export default async function PublicQuotePage({
                 type: i.type,
                 description: i.description,
                 notes: i.notes,
+                customerSupplied: i.customerSupplied,
                 totalCents: i.totalCents,
                 category: i.category,
               }))}
@@ -144,7 +145,7 @@ export default async function PublicQuotePage({
                 >
                   <div>
                     <p className="text-xs text-muted">{ITEM_TYPE_LABEL[item.type]}</p>
-                    <p>{item.description}</p>
+                    <p>{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
                     {item.notes ? <p className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
                   </div>
                   <div className="text-right">

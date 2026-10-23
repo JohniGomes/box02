@@ -199,6 +199,7 @@ const quickSaleSchema = z.object({
   /** Desconto opcional: percentual (ex.: 10) ou valor fixo em reais. */
   discountType: z.enum(["PERCENTUAL", "FIXO"]).optional(),
   discountValue: z.union([z.string(), z.number()]).optional(),
+  discountReason: z.string().trim().optional(),
   serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do serviço"),
   mileageAtEntry: z.union([z.string(), z.number()]).optional(),
   executedBy: z.string().trim().min(1, "Selecione quem executou"),
@@ -303,7 +304,7 @@ export async function quickSaleService(actorUserId: string, rawInput: unknown): 
     customerId: customer.id,
     vehicleId: vehicle.id,
     items: input.items,
-    discount: hasDiscount ? { type: input.discountType, value: discountNumber } : undefined,
+    discount: hasDiscount ? { type: input.discountType, value: discountNumber, reason: input.discountReason || undefined } : undefined,
   });
 
   // 4) Aprova, cria a OS, executa, entrega, recebe e ajusta as datas

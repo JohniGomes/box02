@@ -62,7 +62,8 @@ import { findVehicleById } from "@/lib/db/repositories/vehicles";
 import { bumpVehicleMileageIfHigherService } from "@/lib/vehicles/service";
 import { assertServiceIsActive } from "@/lib/services/service";
 import { assertPartIsActive } from "@/lib/inventory/service";
-import { findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
+import { findPartById, findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
+import { findServiceById } from "@/lib/db/repositories/services";
 import { createStockMovement } from "@/lib/db/repositories/stockMovements";
 import { InsufficientStockError } from "@/lib/inventory/errors";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
@@ -206,6 +207,7 @@ export async function createWorkOrderFromQuoteService(
         diagnosis: checkIn.diagnosis,
         discountType: version.discountType,
         discountValue: version.discountValue,
+        discountReason: version.discountReason,
         surchargeType: version.surchargeType,
         surchargeValue: version.surchargeValue,
         customerNameSnapshot: customer.legalName,
@@ -237,6 +239,7 @@ export async function createWorkOrderFromQuoteService(
             // Ciclo B).
             serviceId: qi.serviceId,
             partId: qi.partId,
+            customerSupplied: qi.customerSupplied,
           })),
           client,
         )
@@ -574,6 +577,17 @@ export async function setWorkOrderItemStatusService(
       throw new AdditionalItemNotAuthorizedError();
     }
 
+    // Custo unitário no momento da execução (base do lucro por serviço):
+    // peça do estoque = custo atual da peça; serviço do catálogo = custo estimado;
+    // peça do cliente = zero. Item digitado à mão fica sem custo (null).
+    let unitCostCents: number | null | undefined;
+    if (status === "EXECUTADO") {
+      if (item.customerSupplied) unitCostCents = 0;
+      else if (item.partId) unitCostCents = (await findPartById(item.partId))?.costCents ?? null;
+      else if (item.serviceId) unitCostCents = (await findServiceById(item.serviceId))?.costCents ?? null;
+      else unitCostCents = null;
+    }
+
     const updated = await setWorkOrderItemStatus(
       itemId,
       status,
@@ -581,6 +595,7 @@ export async function setWorkOrderItemStatusService(
         executedAt: status === "EXECUTADO" ? new Date() : undefined,
         executedByUserId,
         executedByName,
+        unitCostCents,
         cancelReason,
       },
       client,
@@ -593,7 +608,7 @@ export async function setWorkOrderItemStatusService(
     // Trava a linha da PEÇA (não só do item) para impedir que duas
     // execuções concorrentes da mesma peça leiam o mesmo saldo "antigo" e
     // ambas passem na checagem de estoque suficiente.
-    if (status === "EXECUTADO" && item.partId) {
+    if (status === "EXECUTADO" && item.partId && !item.customerSupplied) {
       const part = await findPartByIdForUpdate(item.partId, client);
       if (part) {
         const quantity = Math.max(1, Math.round(Number(item.quantity)));

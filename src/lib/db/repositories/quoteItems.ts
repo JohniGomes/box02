@@ -23,11 +23,13 @@ export interface QuoteItemRecord {
   serviceId: string | null;
   partId: string | null;
   notes: string | null;
+  /** Peça fornecida pelo cliente: valor zero e sem baixa de estoque. */
+  customerSupplied: boolean;
 }
 
 const COLUMNS = `
   id, "quoteVersionId", type, description, quantity, "unitPriceCents", "totalCents",
-  "clientDecision", category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes
+  "clientDecision", category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes, "customerSupplied"
 `;
 
 export interface CreateQuoteItemInput {
@@ -43,6 +45,7 @@ export interface CreateQuoteItemInput {
   serviceId?: string | null;
   partId?: string | null;
   notes?: string | null;
+  customerSupplied?: boolean;
 }
 
 export async function insertQuoteItems(
@@ -55,8 +58,8 @@ export async function insertQuoteItems(
     const result = await db.query<QuoteItemRecord>(
       `INSERT INTO quote_items (
         id, "quoteVersionId", type, description, quantity, "unitPriceCents", "totalCents",
-        category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes, "customerSupplied"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING ${COLUMNS}`,
       [
         id,
@@ -72,6 +75,7 @@ export async function insertQuoteItems(
         item.serviceId ?? null,
         item.partId ?? null,
         item.notes ?? null,
+        item.customerSupplied ?? false,
       ],
     );
     inserted.push(result.rows[0]);

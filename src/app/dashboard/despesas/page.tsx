@@ -22,6 +22,8 @@ export default async function DespesasPage() {
           paidAt: e.paidAt ? e.paidAt.toISOString() : null,
           paymentMethod: e.paymentMethod,
           notes: e.notes,
+          workOrderId: e.workOrderId,
+          workOrderNumber: e.workOrderNumber ?? null,
           status: e.status,
         }))}
       />

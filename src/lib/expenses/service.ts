@@ -1,4 +1,5 @@
 import { withTransaction } from "@/lib/db/transaction";
+import { findWorkOrderById } from "@/lib/db/repositories/workOrders";
 import {
   createExpense,
   deleteUnpaidExpense,
@@ -54,6 +55,10 @@ export async function createExpenseService(actorUserId: string, rawInput: unknow
     throw new Error("O valor da despesa precisa ser maior que zero.");
   }
 
+  if (input.workOrderId && !(await findWorkOrderById(input.workOrderId))) {
+    throw new Error("A OS escolhida não foi encontrada.");
+  }
+
   const expense = await createExpense({
     category: input.category,
     description: input.description,
@@ -61,6 +66,7 @@ export async function createExpenseService(actorUserId: string, rawInput: unknow
     amountCents,
     dueDate: input.dueDate,
     notes: input.notes ?? null,
+    workOrderId: input.workOrderId ?? null,
     createdByUserId: actorUserId,
   });
 
@@ -102,6 +108,7 @@ export async function updateExpenseService(
         amountCents,
         dueDate: input.dueDate,
         notes: input.notes ?? null,
+        workOrderId: input.workOrderId ?? null,
       },
       client,
     );

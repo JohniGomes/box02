@@ -42,6 +42,8 @@ export const createExpenseSchema = z
   amountReais: z.union([z.string(), z.number()]),
   dueDate: z.string().trim().min(1, "Informe o vencimento"),
   notes: optionalTrimmed,
+  /** OS relacionada (opcional). */
+  workOrderId: optionalTrimmed,
   })
   .transform((data) => ({
     ...data,

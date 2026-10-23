@@ -40,6 +40,8 @@ export const quoteItemInputSchema = z.object({
   category: z.enum(["NECESSARIO", "RECOMENDADO", "INFORMATIVO"], {
     message: "Selecione a categoria do item (Necessário, Recomendado ou Informativo)",
   }),
+  /// Peça fornecida pelo cliente: o servidor zera o valor e a OS não dá baixa de estoque.
+  customerSupplied: z.boolean().optional(),
 });
 
 const adjustmentSchema = z
@@ -54,6 +56,13 @@ const adjustmentSchema = z
         const n = typeof v === "string" ? Number(v.replace(",", ".")) : v;
         return Number.isFinite(n) ? n : null;
       }),
+    /// Motivo (interno) — usado só no desconto.
+    reason: z
+      .string()
+      .trim()
+      .max(500, "Motivo aceita até 500 caracteres")
+      .optional()
+      .transform((v) => (v ? v : undefined)),
   })
   .optional();
 
