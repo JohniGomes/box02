@@ -15,6 +15,7 @@ import { formatDocument } from "@/lib/validation/document";
 import { DamagesEditor } from "../DamagesEditor";
 import { CheckInEditor } from "../CheckInEditor";
 import { ReceptionAcceptForm } from "../ReceptionAcceptForm";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 export default async function TermoRecepcaoPage({
   params,
@@ -91,7 +92,7 @@ export default async function TermoRecepcaoPage({
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm">
         <Field label="Nº da OS / PROV" value={workOrder.number} />
-        <Field label="Data / hora" value={new Date(workOrder.entryAt).toLocaleString("pt-BR")} />
+        <Field label="Data / hora" value={formatDateTimeBR(workOrder.entryAt)} />
         <Field label="Placa" value={workOrder.vehiclePlateSnapshot ? formatPlate(workOrder.vehiclePlateSnapshot) : "—"} />
         <Field label="Recebido por" value={receivedBy?.name ?? "—"} />
         <Field label="Cliente" value={customer?.legalName ?? workOrder.customerNameSnapshot} />
@@ -212,7 +213,7 @@ export default async function TermoRecepcaoPage({
               <Field label="CPF" value={workOrder.receptionAcceptedDocument ?? "—"} />
               <Field
                 label="Data / hora"
-                value={workOrder.receptionAcceptedAt ? new Date(workOrder.receptionAcceptedAt).toLocaleString("pt-BR") : "—"}
+                value={workOrder.receptionAcceptedAt ? formatDateTimeBR(workOrder.receptionAcceptedAt) : "—"}
               />
               <Field label="Recebido por" value={receivedBy?.name ?? "—"} />
             </div>

@@ -7,6 +7,7 @@ import { formatBRL } from "@/lib/money";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { PrintButton } from "@/components/PrintButton";
+import { formatDateBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -28,7 +29,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function formatDate(d: Date | string): string {
-  return new Date(d).toLocaleDateString("pt-BR");
+  return formatDateBR(d);
 }
 
 /**

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 /** Resumo compacto na ficha da OS — o Termo de Recepção (avarias,
  * ciência do cliente, aceite) agora é preenchido na própria tela
@@ -28,7 +29,7 @@ export function WorkOrderReceptionSection({
         <div className="mt-2 rounded-xl border border-success/30 bg-success/5 p-3">
           <p className="text-sm font-medium text-success">Aceite de recepção registrado</p>
           <p className="text-xs text-muted">
-            Por {receptionAcceptedName} em {new Date(receptionAcceptedAt).toLocaleString("pt-BR")}
+            Por {receptionAcceptedName} em {formatDateTimeBR(receptionAcceptedAt)}
           </p>
         </div>
       ) : (

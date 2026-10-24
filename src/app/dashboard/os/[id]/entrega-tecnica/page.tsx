@@ -9,6 +9,7 @@ import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { WORK_ORDER_STATUS_LABEL } from "../../statusLabels";
 import { PrintButton } from "@/components/PrintButton";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -156,7 +157,7 @@ export default async function EntregaTecnicaPage({
           <dl className="flex flex-col gap-1 text-sm">
             <div>
               <dt className="inline text-xs text-muted">Data/hora: </dt>
-              <dd className="inline">{workOrder.deliveredAt ? new Date(workOrder.deliveredAt).toLocaleString("pt-BR") : "—"}</dd>
+              <dd className="inline">{workOrder.deliveredAt ? formatDateTimeBR(workOrder.deliveredAt) : "—"}</dd>
             </div>
             <div>
               <dt className="inline text-xs text-muted">Recebido por: </dt>

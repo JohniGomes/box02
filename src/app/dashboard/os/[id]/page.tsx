@@ -9,6 +9,7 @@ import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL } from "../statusLabel
 import { WorkOrderReceptionSection } from "./WorkOrderReceptionSection";
 import { OpenReturnButton } from "./OpenReturnButton";
 import type { WorkOrderChecklistView } from "./WorkOrderChecklistPanel";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 /**
  * Tela principal da OS — enxuta por pedido explícito: cliente/veículo
@@ -83,7 +84,7 @@ export default async function WorkOrderDetailPage({
           </span>
         </div>
         <p className="text-sm text-muted">
-          Entrada em {new Date(workOrder.entryAt).toLocaleString("pt-BR")}{workOrder.mileageAtEntry != null ? ` · ${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : ""}
+          Entrada em {formatDateTimeBR(workOrder.entryAt)}{workOrder.mileageAtEntry != null ? ` · ${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : ""}
         </p>
       </div>
 

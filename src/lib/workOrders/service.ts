@@ -60,6 +60,7 @@ import { listQuoteItemsByVersion } from "@/lib/db/repositories/quoteItems";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findVehicleById } from "@/lib/db/repositories/vehicles";
 import { bumpVehicleMileageIfHigherService } from "@/lib/vehicles/service";
+import { resolveEventInstant } from "@/lib/dateBr";
 import { assertServiceIsActive } from "@/lib/services/service";
 import { assertPartIsActive } from "@/lib/inventory/service";
 import { findPartById, findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
@@ -945,7 +946,7 @@ export async function registerWorkOrderPaymentService(
     if (input.receivedOn) {
       const todayBr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
       if (input.receivedOn > todayBr) throw new WorkOrderPaymentDateError();
-      receivedAt = new Date(`${input.receivedOn}T12:00:00-03:00`);
+      receivedAt = resolveEventInstant(input.receivedOn);
     }
 
     const payment = await createWorkOrderPayment(
@@ -1008,7 +1009,7 @@ export async function registerWorkOrderPaymentsService(
     if (input.receivedOn) {
       const todayBr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
       if (input.receivedOn > todayBr) throw new WorkOrderPaymentDateError();
-      receivedAt = new Date(`${input.receivedOn}T12:00:00-03:00`);
+      receivedAt = resolveEventInstant(input.receivedOn);
     }
 
     const created: WorkOrderPaymentRecord[] = [];

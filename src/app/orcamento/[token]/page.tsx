@@ -3,6 +3,7 @@ import { formatBRL } from "@/lib/money";
 import { formatPlate } from "@/lib/validation/plate";
 import { QuoteApprovalForm } from "./QuoteApprovalForm";
 import { QuoteFinancialSummary } from "./QuoteFinancialSummary";
+import { formatDateBR, formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -48,7 +49,7 @@ export default async function PublicQuotePage({
         {resolution.kind === "expired" ? (
           <MessageCard
             title="Este orçamento expirou"
-            description={`A validade encerrou em ${resolution.validUntil.toLocaleDateString("pt-BR")}. Entre em contato com a oficina.`}
+            description={`A validade encerrou em ${formatDateBR(resolution.validUntil)}. Entre em contato com a oficina.`}
           />
         ) : null}
 
@@ -133,7 +134,7 @@ export default async function PublicQuotePage({
                 Decisão já registrada por {resolution.approval.approverName}
               </p>
               <p className="text-xs text-muted">
-                {new Date(resolution.approval.decidedAt).toLocaleString("pt-BR")}
+                {formatDateTimeBR(resolution.approval.decidedAt)}
               </p>
             </div>
 
@@ -197,7 +198,7 @@ function QuoteSummary({
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm font-bold">{number}</span>
         <span className="text-xs text-muted">
-          Válido até {new Date(validUntil).toLocaleDateString("pt-BR")}
+          Válido até {formatDateBR(validUntil)}
         </span>
       </div>
       <p className="mt-1 text-sm">

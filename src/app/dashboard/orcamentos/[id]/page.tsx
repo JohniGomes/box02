@@ -30,6 +30,7 @@ import { QuoteCheckInEditor } from "./QuoteCheckInEditor";
 import { RegisterApprovalForm } from "./RegisterApprovalForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { PrintButton } from "@/components/PrintButton";
+import { formatDateBR, formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -119,8 +120,8 @@ export default async function QuoteDetailPage({
           <span className="text-xs text-muted">versão {version.versionNumber}</span>
         </div>
         <p className="text-sm text-muted">
-          Válido até {new Date(version.validUntil).toLocaleDateString("pt-BR")}
-          {version.sentAt ? ` · enviado em ${new Date(version.sentAt).toLocaleDateString("pt-BR")}` : ""}
+          Válido até {formatDateBR(version.validUntil)}
+          {version.sentAt ? ` · enviado em ${formatDateBR(version.sentAt)}` : ""}
         </p>
       </div>
 
@@ -241,7 +242,7 @@ export default async function QuoteDetailPage({
           <div className="mt-2 flex flex-col gap-1 text-sm">
             <p>
               Decidido por <span className="font-medium">{approval.approverName}</span> em{" "}
-              {new Date(approval.decidedAt).toLocaleString("pt-BR")}
+              {formatDateTimeBR(approval.decidedAt)}
               {approval.channel === "PRESENCIAL" ? " (registrado pela oficina)" : ""}
             </p>
             <p className="text-muted">
@@ -255,7 +256,7 @@ export default async function QuoteDetailPage({
           <div className="mt-2 flex flex-col gap-2">
             <p className="text-sm text-muted">
               Link ativo — repasse ao cliente (WhatsApp, ligação, presencialmente). Válido até{" "}
-              {new Date(activeLink.expiresAt).toLocaleDateString("pt-BR")}.
+              {formatDateBR(activeLink.expiresAt)}.
             </p>
             <CopyLinkButton token={activeLink.token} />
           </div>

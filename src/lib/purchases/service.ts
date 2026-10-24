@@ -19,6 +19,7 @@ import {
 } from "@/lib/db/repositories/suppliers";
 import { noonInBrasilia, todayInBrasilia } from "@/lib/expenses/dates";
 import { DuplicatePartNameError, PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
+import { resolveEventInstant } from "@/lib/dateBr";
 import { markupPercentForPrice, reaisToCents } from "@/lib/money";
 import { registerPurchaseSchema } from "@/lib/validation/purchase";
 import { InvalidPurchaseError, SupplierNotFoundError } from "./errors";
@@ -183,7 +184,7 @@ export async function registerPurchaseService(actorUserId: string, rawInput: unk
       );
       await markExpenseAsPaid(
         expense.id,
-        { paidAt: noonInBrasilia(paidOn), paymentMethod: payment.method! },
+        { paidAt: resolveEventInstant(paidOn), paymentMethod: payment.method! },
         client,
       );
       expenseCount = 1;

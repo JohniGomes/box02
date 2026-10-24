@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { useRememberedChoice } from "@/lib/useRemembered";
 import { refundWorkOrderPaymentAction, registerWorkOrderPaymentsAction } from "../paymentActions";
+import { formatDateBR } from "@/lib/dateBr";
 
 const METHOD_LABEL: Record<string, string> = {
   DINHEIRO: "Dinheiro",
@@ -173,7 +174,7 @@ export function WorkOrderPaymentsSection({
             <div key={r.id} className="rounded-xl border border-danger/20 bg-danger/5 p-2.5 text-sm">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-danger">-{formatBRL(r.refundCents)}</span>
-                <span className="text-xs text-muted">{new Date(r.createdAt).toLocaleDateString("pt-BR")}</span>
+                <span className="text-xs text-muted">{formatDateBR(r.createdAt)}</span>
               </div>
               <p className="text-xs text-muted">{r.reason}</p>
             </div>
@@ -402,7 +403,7 @@ function PaymentRow({
         {payment.notes ? <p className="text-xs text-muted">{payment.notes}</p> : null}
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted">{new Date(payment.receivedAt).toLocaleDateString("pt-BR")}</span>
+        <span className="text-xs text-muted">{formatDateBR(payment.receivedAt)}</span>
         {availableCents > 0 ? (
           <button onClick={() => setRefunding(true)} className="text-xs font-medium text-danger">
             Estornar
