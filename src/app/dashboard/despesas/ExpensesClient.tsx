@@ -585,6 +585,13 @@ function ExpenseForm({
           </option>
         ))}
       </select>
+      <p className="-mt-1 text-xs text-muted">
+        Fornecedor novo? Cadastre em{" "}
+        <Link href="/dashboard/configuracoes/fornecedores" className="font-medium text-accent">
+          Configurações → Fornecedores
+        </Link>{" "}
+        para ele aparecer na lista.
+      </p>
       <datalist id="expenseSupplierList">
         {supplierOptions.map((n) => (
           <option key={n} value={n} />

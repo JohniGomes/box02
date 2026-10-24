@@ -1306,6 +1306,8 @@ model ServiceRequest {
 model Supplier {
   id        String   @id @default(cuid())
   name      String
+  phone     String?
+  notes     String?
   status    String   @default("ATIVO")
   createdAt DateTime @default(now())
 
