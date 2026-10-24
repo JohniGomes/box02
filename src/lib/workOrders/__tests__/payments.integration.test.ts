@@ -10,6 +10,7 @@ import {
   getWorkOrderPaymentsSummaryService,
   refundWorkOrderPaymentService,
   registerWorkOrderPaymentService,
+  registerWorkOrderPaymentsService,
   registerWorkOrderReceptionAcceptanceService,
   setWorkOrderItemStatusService,
   setWorkOrderStatusService,
@@ -313,5 +314,38 @@ describe("regressão — Ciclos D/E/F/G/H continuam intocados", () => {
     ]);
     expect(closures.rows).toHaveLength(1);
     expect(closures.rows[0].totalAtClosureCents).toBe(10000);
+  });
+});
+
+describe("desconto no recebimento (Etapa 3.3)", () => {
+  it("abate do saldo, quita a OS e não conta como dinheiro recebido", async () => {
+    const workOrderId = await createDeliveredWorkOrder("200,00");
+
+    await registerWorkOrderPaymentsService(actorUserId, workOrderId, {
+      payments: [{ amountReais: "197,00", method: "PIX" }],
+      discountReais: "3,00",
+    });
+
+    const summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    expect(summary!.paidCents).toBe(19700);
+    expect(summary!.discountCents).toBe(300);
+    expect(summary!.remainingCents).toBe(0);
+    expect(summary!.status).toBe("QUITADO");
+    expect(summary!.payments).toHaveLength(1);
+  });
+
+  it("recusa pagamento + desconto acima do saldo e aceita só desconto", async () => {
+    const workOrderId = await createDeliveredWorkOrder("200,00");
+    await expect(
+      registerWorkOrderPaymentsService(actorUserId, workOrderId, {
+        payments: [{ amountReais: "199,00", method: "PIX" }],
+        discountReais: "5,00",
+      }),
+    ).rejects.toThrow(WorkOrderPaymentExceedsBalanceError);
+
+    await registerWorkOrderPaymentsService(actorUserId, workOrderId, { payments: [], discountReais: "10,00" });
+    const summary = await getWorkOrderPaymentsSummaryService(workOrderId);
+    expect(summary!.paidCents).toBe(0);
+    expect(summary!.remainingCents).toBe(19000);
   });
 });

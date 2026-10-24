@@ -265,7 +265,9 @@ export const registerWorkOrderPaymentsSchema = z.object({
         method: z.enum(["DINHEIRO", "PIX", "CARTAO", "OUTRO"], { message: "Selecione a forma de pagamento" }),
       }),
     )
-    .min(1, "Informe pelo menos um pagamento"),
+    .default([]),
+  /** Desconto dado neste recebimento (R$). Abate o saldo; não é dinheiro recebido. */
+  discountReais: z.union([z.string(), z.number()]).optional(),
   notes: optionalTrimmed,
   receivedOn: registerWorkOrderPaymentSchema.shape.receivedOn,
 });

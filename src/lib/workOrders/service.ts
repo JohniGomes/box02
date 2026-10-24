@@ -63,6 +63,12 @@ import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findVehicleById } from "@/lib/db/repositories/vehicles";
 import { bumpVehicleMileageIfHigherService } from "@/lib/vehicles/service";
 import { InvalidEventDateError, formatDateTimeBR, resolveEventInstant } from "@/lib/dateBr";
+import {
+  createWorkOrderDiscount,
+  listWorkOrderDiscounts,
+  sumWorkOrderDiscounts,
+  type WorkOrderDiscountRecord,
+} from "@/lib/db/repositories/workOrderDiscounts";
 import { assertServiceIsActive } from "@/lib/services/service";
 import { assertPartIsActive } from "@/lib/inventory/service";
 import { findPartById, findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
@@ -1020,6 +1026,9 @@ export interface WorkOrderPaymentsSummary {
   /** Ciclo M — estornos já registrados nesta OS (histórico, não afeta o
    * recebimento original, que continua write-once). */
   refunds: WorkOrderPaymentRefundRecord[];
+  /** Etapa 3.3 — descontos dados no recebimento (já abatidos de remainingCents). */
+  discountCents: number;
+  discounts: WorkOrderDiscountRecord[];
 }
 
 /**
@@ -1033,18 +1042,20 @@ export async function getWorkOrderPaymentsSummaryService(workOrderId: string): P
   const latestClosure = closures[0] ?? null;
   if (!latestClosure) return null;
 
-  const [payments, paidCents, refunds] = await Promise.all([
+  const [payments, paidCents, refunds, discounts] = await Promise.all([
     listWorkOrderPayments(workOrderId),
     sumWorkOrderPayments(workOrderId),
     listWorkOrderPaymentRefundsByWorkOrder(workOrderId),
+    listWorkOrderDiscounts(workOrderId),
   ]);
 
   const dueCents = latestClosure.totalAtClosureCents;
-  const remainingCents = dueCents - paidCents;
+  const discountCents = discounts.reduce((sum, d) => sum + d.amountCents, 0);
+  const remainingCents = dueCents - paidCents - discountCents;
   const status: WorkOrderPaymentsSummary["status"] =
-    remainingCents <= 0 ? "QUITADO" : paidCents > 0 ? "PARCIALMENTE_PAGO" : "EM_ABERTO";
+    remainingCents <= 0 ? "QUITADO" : paidCents + discountCents > 0 ? "PARCIALMENTE_PAGO" : "EM_ABERTO";
 
-  return { dueCents, paidCents, remainingCents, status, payments, refunds };
+  return { dueCents, paidCents, remainingCents, status, payments, refunds, discountCents, discounts };
 }
 
 /**
@@ -1074,7 +1085,8 @@ export async function registerWorkOrderPaymentService(
     if (!latestClosure) throw new WorkOrderNotDeliveredError();
 
     const paidSoFar = await sumWorkOrderPayments(workOrderId, client);
-    const remaining = latestClosure.totalAtClosureCents - paidSoFar;
+    const discountedSoFar = await sumWorkOrderDiscounts(workOrderId, client);
+    const remaining = latestClosure.totalAtClosureCents - paidSoFar - discountedSoFar;
     if (amountCents > remaining) {
       throw new WorkOrderPaymentExceedsBalanceError(remaining);
     }
@@ -1126,7 +1138,8 @@ export async function registerWorkOrderPaymentsService(
   const lines = input.payments
     .map((p) => ({ method: p.method, amountCents: reaisToCents(p.amountReais) }))
     .filter((p) => p.amountCents !== 0);
-  if (lines.length === 0 || lines.some((l) => l.amountCents < 0)) {
+  const discountCents = input.discountReais ? reaisToCents(input.discountReais) : 0;
+  if ((lines.length === 0 && discountCents <= 0) || lines.some((l) => l.amountCents < 0) || discountCents < 0) {
     throw new Error("O valor do recebimento precisa ser maior que zero.");
   }
   const totalCents = lines.reduce((sum, l) => sum + l.amountCents, 0);
@@ -1141,14 +1154,29 @@ export async function registerWorkOrderPaymentsService(
     if (!latestClosure) throw new WorkOrderNotDeliveredError();
 
     const paidSoFar = await sumWorkOrderPayments(workOrderId, client);
-    const remaining = latestClosure.totalAtClosureCents - paidSoFar;
-    if (totalCents > remaining) throw new WorkOrderPaymentExceedsBalanceError(remaining);
+    const discountedSoFar = await sumWorkOrderDiscounts(workOrderId, client);
+    const remaining = latestClosure.totalAtClosureCents - paidSoFar - discountedSoFar;
+    if (totalCents + discountCents > remaining) throw new WorkOrderPaymentExceedsBalanceError(remaining);
 
     let receivedAt: Date | null = null;
     if (input.receivedOn) {
       const todayBr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
       if (input.receivedOn > todayBr) throw new WorkOrderPaymentDateError();
       receivedAt = resolveEventInstant(input.receivedOn);
+    }
+
+    if (discountCents > 0) {
+      const discount = await createWorkOrderDiscount(
+        { workOrderId, amountCents: discountCents, reason: input.notes ?? null, createdByUserId: actorUserId },
+        client,
+      );
+      await recordAuditLog({
+        userId: actorUserId,
+        action: "WORK_ORDER_DISCOUNT_REGISTERED",
+        entityType: "work_order",
+        entityId: workOrderId,
+        metadata: { amountCents: discountCents, discountId: discount.id, reason: input.notes ?? null },
+      });
     }
 
     const created: WorkOrderPaymentRecord[] = [];

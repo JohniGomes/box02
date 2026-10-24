@@ -61,7 +61,7 @@ export async function registerWorkOrderPaymentAction(
 
 export async function registerWorkOrderPaymentsAction(
   workOrderId: string,
-  input: { payments: { amountReais: string; method: string }[]; notes?: string; receivedOn?: string },
+  input: { payments: { amountReais: string; method: string }[]; discountReais?: string; notes?: string; receivedOn?: string },
 ): Promise<PaymentActionResult> {
   try {
     const userId = await requireUserId();

@@ -371,6 +371,7 @@ export default async function WorkOrderDetailsPage({
             dueCents: paymentsSummary.dueCents,
             paidCents: paymentsSummary.paidCents,
             remainingCents: paymentsSummary.remainingCents,
+            discountCents: paymentsSummary.discountCents,
             status: paymentsSummary.status,
             payments: paymentsSummary.payments.map((p) => ({
               id: p.id,
