@@ -33,3 +33,27 @@ export async function findLastStatusChangeTarget(workOrderId: string): Promise<s
   );
   return result.rows[0]?.to ?? null;
 }
+
+export interface EntityAuditEntry {
+  id: string;
+  action: string;
+  createdAt: Date;
+  userName: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/** Registros de auditoria de uma entidade, só das ações pedidas (mais recentes primeiro). */
+export async function listAuditLogsForEntity(
+  entityType: string,
+  entityId: string,
+  actions: string[],
+): Promise<EntityAuditEntry[]> {
+  const result = await pool.query<EntityAuditEntry>(
+    `SELECT a.id, a.action, a."createdAt", u.name AS "userName", a.metadata
+     FROM audit_logs a LEFT JOIN users u ON u.id = a."userId"
+     WHERE a."entityType" = $1 AND a."entityId" = $2 AND a.action = ANY($3::text[])
+     ORDER BY a."createdAt" DESC`,
+    [entityType, entityId, actions],
+  );
+  return result.rows;
+}

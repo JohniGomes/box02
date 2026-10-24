@@ -5,6 +5,8 @@ import {
   findWorkOrderById,
   listReturnsOfWorkOrder,
   reactivateCancelledWorkOrder,
+  reopenDeliveredWorkOrder,
+  setWorkOrderServiceDates,
   lockWorkOrderById,
   registerWorkOrderReceptionAcceptance,
   searchWorkOrders,
@@ -31,7 +33,7 @@ import {
   type WorkOrderItemRecord,
   type WorkOrderItemStatus,
 } from "@/lib/db/repositories/workOrderItems";
-import { createClosure, listClosuresByWorkOrder } from "@/lib/db/repositories/workOrderClosures";
+import { createClosure, listClosuresByWorkOrder, markLatestClosureReopened } from "@/lib/db/repositories/workOrderClosures";
 import {
   createWorkOrderEvidence,
   deleteWorkOrderEvidence,
@@ -60,7 +62,13 @@ import { listQuoteItemsByVersion } from "@/lib/db/repositories/quoteItems";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findVehicleById } from "@/lib/db/repositories/vehicles";
 import { bumpVehicleMileageIfHigherService } from "@/lib/vehicles/service";
-import { resolveEventInstant } from "@/lib/dateBr";
+import { InvalidEventDateError, formatDateTimeBR, resolveEventInstant } from "@/lib/dateBr";
+import {
+  createWorkOrderDiscount,
+  listWorkOrderDiscounts,
+  sumWorkOrderDiscounts,
+  type WorkOrderDiscountRecord,
+} from "@/lib/db/repositories/workOrderDiscounts";
 import { assertServiceIsActive } from "@/lib/services/service";
 import { assertPartIsActive } from "@/lib/inventory/service";
 import { findPartById, findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
@@ -78,6 +86,8 @@ import {
   cancelWorkOrderItemSchema,
   cancelWorkOrderSchema,
   reactivateWorkOrderSchema,
+  correctServiceDateSchema,
+  reopenWorkOrderSchema,
   correctWorkOrderItemExecutorSchema,
   createAdditionalItemSchema,
   createWorkOrderEvidenceMetadataSchema,
@@ -119,11 +129,12 @@ import {
   WorkOrderReceptionIncompleteError,
   WorkOrderReturnNotDeliveredError,
   WorkOrderNotCancelledError,
+  WorkOrderNotDeliveredForCorrectionError,
 } from "./errors";
 import { findWorkOrderChecklist, listWorkOrderChecklistItems } from "@/lib/db/repositories/workOrderChecklists";
 import { VehicleCustomerNotFoundError } from "@/lib/vehicles/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
-import { findLastStatusChangeTarget } from "@/lib/db/repositories/auditLog";
+import { findLastStatusChangeTarget, listAuditLogsForEntity } from "@/lib/db/repositories/auditLog";
 import { findUserById } from "@/lib/db/repositories/users";
 import { findExecutorById } from "@/lib/db/repositories/executors";
 import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
@@ -498,6 +509,140 @@ const REACTIVATABLE_STATUSES: WorkOrderStatus[] = [
  * antigos, o último status do histórico; sem nada disso, "Aberta"). Exige
  * motivo e fica registrado quem reativou e o motivo do cancelamento anterior.
  */
+export class WorkOrderCorrectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkOrderCorrectionError";
+  }
+}
+
+/**
+ * Corrige a data (e horário, opcional) do atendimento de uma OS ENTREGUE.
+ * Muda só `deliveredAt` (e puxa a entrada para trás se ela ficaria depois).
+ * Pagamentos, itens, estoque e fechamento NÃO mudam. Fica registrado quem
+ * corrigiu, por quê, e o valor antigo e o novo.
+ */
+export async function correctWorkOrderServiceDateService(
+  actorUserId: string,
+  workOrderId: string,
+  rawInput: unknown,
+): Promise<WorkOrderRecord> {
+  const input = correctServiceDateSchema.parse(rawInput);
+  const existing = await findWorkOrderById(workOrderId);
+  if (!existing) throw new WorkOrderNotFoundError(workOrderId);
+  if (existing.status !== "ENTREGUE") throw new WorkOrderNotDeliveredForCorrectionError();
+
+  let instant: Date;
+  try {
+    instant = resolveEventInstant(input.serviceDate, input.serviceTime);
+  } catch (err) {
+    if (err instanceof InvalidEventDateError) throw new WorkOrderCorrectionError(err.message);
+    throw err;
+  }
+
+  const updated = await setWorkOrderServiceDates(workOrderId, { deliveredAt: instant });
+  if (!updated) throw new WorkOrderNotDeliveredForCorrectionError();
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_SERVICE_DATE_CORRECTED",
+    entityType: "work_order",
+    entityId: workOrderId,
+    metadata: {
+      reason: input.reason,
+      previousDeliveredAt: existing.deliveredAt,
+      newDeliveredAt: updated.deliveredAt,
+      previousEntryAt: existing.entryAt,
+      newEntryAt: updated.entryAt,
+    },
+  });
+  return updated;
+}
+
+/**
+ * Reabre uma OS ENTREGUE: volta para "Pronta" e limpa a data de entrega, com
+ * motivo. Pagamentos recebidos, itens e baixas de estoque são MANTIDOS — nada
+ * é apagado; para desfazer um pagamento use o estorno, que continua separado.
+ * O fechamento anterior fica marcado como reaberto (quem, quando, por quê).
+ */
+export async function reopenWorkOrderService(
+  actorUserId: string,
+  workOrderId: string,
+  rawInput: unknown,
+): Promise<WorkOrderRecord> {
+  const input = reopenWorkOrderSchema.parse(rawInput);
+
+  return withTransaction(async (client) => {
+    const existing = await lockWorkOrderById(workOrderId, client);
+    if (!existing) throw new WorkOrderNotFoundError(workOrderId);
+    if (existing.status !== "ENTREGUE") throw new WorkOrderNotDeliveredForCorrectionError();
+
+    const paidCents = await sumWorkOrderPayments(workOrderId, client);
+
+    const updated = await reopenDeliveredWorkOrder(workOrderId, client);
+    if (!updated) throw new WorkOrderNotDeliveredForCorrectionError();
+    await markLatestClosureReopened(workOrderId, { reopenedByUserId: actorUserId, reason: input.reason }, client);
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "WORK_ORDER_REOPENED",
+      entityType: "work_order",
+      entityId: workOrderId,
+      metadata: {
+        reason: input.reason,
+        previousStatus: existing.status,
+        previousDeliveredAt: existing.deliveredAt,
+        previousTotalCents: existing.totalCents,
+        paidCentsKept: paidCents,
+        deliveryAcceptedName: existing.deliveryAcceptedName,
+      },
+    });
+    return updated;
+  });
+}
+
+export interface WorkOrderCorrectionEntry {
+  id: string;
+  kind: "DATA" | "REABERTURA";
+  at: Date;
+  by: string | null;
+  reason: string | null;
+  from: string | null;
+  to: string | null;
+}
+
+/** Histórico das correções de data e reaberturas de uma OS. */
+export async function listWorkOrderCorrectionsService(workOrderId: string): Promise<WorkOrderCorrectionEntry[]> {
+  const rows = await listAuditLogsForEntity("work_order", workOrderId, [
+    "WORK_ORDER_SERVICE_DATE_CORRECTED",
+    "WORK_ORDER_REOPENED",
+  ]);
+  const fmt = (v: unknown) => (typeof v === "string" || v instanceof Date ? formatDateTimeBR(v) : null);
+  return rows.map((r) => {
+    const m = r.metadata ?? {};
+    if (r.action === "WORK_ORDER_REOPENED") {
+      return {
+        id: r.id,
+        kind: "REABERTURA" as const,
+        at: r.createdAt,
+        by: r.userName,
+        reason: (m.reason as string) ?? null,
+        from: `Entregue em ${fmt(m.previousDeliveredAt) ?? "—"}`,
+        to: "Reaberta (Pronta)",
+      };
+    }
+    return {
+      id: r.id,
+      kind: "DATA" as const,
+      at: r.createdAt,
+      by: r.userName,
+      reason: (m.reason as string) ?? null,
+      from: fmt(m.previousDeliveredAt),
+      to: fmt(m.newDeliveredAt),
+    };
+  });
+}
+
 export async function reactivateWorkOrderService(
   actorUserId: string,
   workOrderId: string,
@@ -881,6 +1026,9 @@ export interface WorkOrderPaymentsSummary {
   /** Ciclo M — estornos já registrados nesta OS (histórico, não afeta o
    * recebimento original, que continua write-once). */
   refunds: WorkOrderPaymentRefundRecord[];
+  /** Etapa 3.3 — descontos dados no recebimento (já abatidos de remainingCents). */
+  discountCents: number;
+  discounts: WorkOrderDiscountRecord[];
 }
 
 /**
@@ -894,18 +1042,20 @@ export async function getWorkOrderPaymentsSummaryService(workOrderId: string): P
   const latestClosure = closures[0] ?? null;
   if (!latestClosure) return null;
 
-  const [payments, paidCents, refunds] = await Promise.all([
+  const [payments, paidCents, refunds, discounts] = await Promise.all([
     listWorkOrderPayments(workOrderId),
     sumWorkOrderPayments(workOrderId),
     listWorkOrderPaymentRefundsByWorkOrder(workOrderId),
+    listWorkOrderDiscounts(workOrderId),
   ]);
 
   const dueCents = latestClosure.totalAtClosureCents;
-  const remainingCents = dueCents - paidCents;
+  const discountCents = discounts.reduce((sum, d) => sum + d.amountCents, 0);
+  const remainingCents = dueCents - paidCents - discountCents;
   const status: WorkOrderPaymentsSummary["status"] =
-    remainingCents <= 0 ? "QUITADO" : paidCents > 0 ? "PARCIALMENTE_PAGO" : "EM_ABERTO";
+    remainingCents <= 0 ? "QUITADO" : paidCents + discountCents > 0 ? "PARCIALMENTE_PAGO" : "EM_ABERTO";
 
-  return { dueCents, paidCents, remainingCents, status, payments, refunds };
+  return { dueCents, paidCents, remainingCents, status, payments, refunds, discountCents, discounts };
 }
 
 /**
@@ -935,7 +1085,8 @@ export async function registerWorkOrderPaymentService(
     if (!latestClosure) throw new WorkOrderNotDeliveredError();
 
     const paidSoFar = await sumWorkOrderPayments(workOrderId, client);
-    const remaining = latestClosure.totalAtClosureCents - paidSoFar;
+    const discountedSoFar = await sumWorkOrderDiscounts(workOrderId, client);
+    const remaining = latestClosure.totalAtClosureCents - paidSoFar - discountedSoFar;
     if (amountCents > remaining) {
       throw new WorkOrderPaymentExceedsBalanceError(remaining);
     }
@@ -987,7 +1138,8 @@ export async function registerWorkOrderPaymentsService(
   const lines = input.payments
     .map((p) => ({ method: p.method, amountCents: reaisToCents(p.amountReais) }))
     .filter((p) => p.amountCents !== 0);
-  if (lines.length === 0 || lines.some((l) => l.amountCents < 0)) {
+  const discountCents = input.discountReais ? reaisToCents(input.discountReais) : 0;
+  if ((lines.length === 0 && discountCents <= 0) || lines.some((l) => l.amountCents < 0) || discountCents < 0) {
     throw new Error("O valor do recebimento precisa ser maior que zero.");
   }
   const totalCents = lines.reduce((sum, l) => sum + l.amountCents, 0);
@@ -1002,14 +1154,29 @@ export async function registerWorkOrderPaymentsService(
     if (!latestClosure) throw new WorkOrderNotDeliveredError();
 
     const paidSoFar = await sumWorkOrderPayments(workOrderId, client);
-    const remaining = latestClosure.totalAtClosureCents - paidSoFar;
-    if (totalCents > remaining) throw new WorkOrderPaymentExceedsBalanceError(remaining);
+    const discountedSoFar = await sumWorkOrderDiscounts(workOrderId, client);
+    const remaining = latestClosure.totalAtClosureCents - paidSoFar - discountedSoFar;
+    if (totalCents + discountCents > remaining) throw new WorkOrderPaymentExceedsBalanceError(remaining);
 
     let receivedAt: Date | null = null;
     if (input.receivedOn) {
       const todayBr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
       if (input.receivedOn > todayBr) throw new WorkOrderPaymentDateError();
       receivedAt = resolveEventInstant(input.receivedOn);
+    }
+
+    if (discountCents > 0) {
+      const discount = await createWorkOrderDiscount(
+        { workOrderId, amountCents: discountCents, reason: input.notes ?? null, createdByUserId: actorUserId },
+        client,
+      );
+      await recordAuditLog({
+        userId: actorUserId,
+        action: "WORK_ORDER_DISCOUNT_REGISTERED",
+        entityType: "work_order",
+        entityId: workOrderId,
+        metadata: { amountCents: discountCents, discountId: discount.id, reason: input.notes ?? null },
+      });
     }
 
     const created: WorkOrderPaymentRecord[] = [];

@@ -11,6 +11,9 @@ import {
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
   openWorkOrderReturnService,
+  correctWorkOrderServiceDateService,
+  reopenWorkOrderService,
+  WorkOrderCorrectionError,
   reactivateWorkOrderService,
   authorizeAdditionalItemDirectlyService,
   adjustAdditionalItemService,
@@ -28,6 +31,7 @@ import {
   QuoteNotApprovedError,
   WorkOrderReturnNotDeliveredError,
   WorkOrderNotCancelledError,
+  WorkOrderNotDeliveredForCorrectionError,
   WorkOrderHasPendingItemsError,
 } from "@/lib/workOrders/errors";
 import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
@@ -81,6 +85,8 @@ function friendlyError(err: unknown, fallback: string): ActionResult {
     err instanceof QuoteNotApprovedError ||
     err instanceof WorkOrderReturnNotDeliveredError ||
     err instanceof WorkOrderNotCancelledError ||
+    err instanceof WorkOrderNotDeliveredForCorrectionError ||
+    err instanceof WorkOrderCorrectionError ||
     err instanceof InvalidWorkOrderTransitionError ||
     err instanceof InvalidWorkOrderItemTransitionError ||
     err instanceof WorkOrderHasPendingItemsError ||
@@ -215,6 +221,37 @@ export async function cancelWorkOrderAction(workOrderId: string, reason: string)
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível cancelar a OS.");
+  }
+}
+
+/** Corrige a data de atendimento de uma OS entregue (com motivo; fica no histórico). */
+export async function correctServiceDateAction(
+  workOrderId: string,
+  input: { serviceDate: string; serviceTime?: string; reason: string },
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await correctWorkOrderServiceDateService(userId, workOrderId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/os");
+    revalidatePath("/dashboard");
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível corrigir a data de atendimento.");
+  }
+}
+
+/** Reabre uma OS entregue (volta para Pronta), com motivo. Não apaga pagamentos nem estoque. */
+export async function reopenWorkOrderAction(workOrderId: string, reason: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await reopenWorkOrderService(userId, workOrderId, { reason });
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/os");
+    revalidatePath("/dashboard");
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível reabrir a OS.");
   }
 }
 

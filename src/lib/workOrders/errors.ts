@@ -241,3 +241,11 @@ export class WorkOrderReceptionIncompleteError extends Error {
     this.name = "WorkOrderReceptionIncompleteError";
   }
 }
+
+/** Corrigir data / reabrir só vale para OS já entregue. */
+export class WorkOrderNotDeliveredForCorrectionError extends Error {
+  constructor() {
+    super("Esta correção só vale para uma OS que está entregue.");
+    this.name = "WorkOrderNotDeliveredForCorrectionError";
+  }
+}

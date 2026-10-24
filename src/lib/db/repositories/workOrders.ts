@@ -256,6 +256,37 @@ export async function reactivateCancelledWorkOrder(
   return result.rows[0] ?? null;
 }
 
+/** Corrige as datas do atendimento. A entrada só é puxada para trás se ficaria depois da nova data. */
+export async function setWorkOrderServiceDates(
+  id: string,
+  input: { deliveredAt: Date },
+  db: Queryable = pool,
+): Promise<WorkOrderRecord | null> {
+  const result = await db.query<WorkOrderRecord>(
+    `UPDATE work_orders SET
+      "deliveredAt" = $2,
+      "entryAt" = LEAST("entryAt", $2),
+      "startedAt" = CASE WHEN "startedAt" IS NULL THEN NULL ELSE LEAST("startedAt", $2) END,
+      "completedAt" = CASE WHEN "completedAt" IS NULL THEN NULL ELSE LEAST("completedAt", $2) END,
+      "updatedAt" = NOW()
+     WHERE id = $1 AND status = 'ENTREGUE'
+     RETURNING ${COLUMNS}`,
+    [id, input.deliveredAt],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Reabre uma OS entregue: volta para PRONTA e limpa a data de entrega. Não mexe em pagamentos, itens nem estoque. */
+export async function reopenDeliveredWorkOrder(id: string, db: Queryable = pool): Promise<WorkOrderRecord | null> {
+  const result = await db.query<WorkOrderRecord>(
+    `UPDATE work_orders SET status = 'PRONTA', "deliveredAt" = NULL, "updatedAt" = NOW()
+     WHERE id = $1 AND status = 'ENTREGUE'
+     RETURNING ${COLUMNS}`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function closeWorkOrder(
   id: string,
   input: {

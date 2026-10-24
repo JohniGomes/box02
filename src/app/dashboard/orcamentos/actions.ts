@@ -111,8 +111,11 @@ export async function updateQuoteCheckInAction(
   }
 }
 
-export async function deleteQuoteAction(quoteId: string): Promise<ActionResult> {
+export async function deleteQuoteAction(quoteId: string, confirmation?: string): Promise<ActionResult> {
   try {
+    if (confirmation?.trim().toUpperCase() !== "EXCLUIR") {
+      return { success: false, error: "Digite EXCLUIR para confirmar a exclusão." };
+    }
     const userId = await requireUserId();
     await deleteQuoteService(userId, quoteId);
     revalidatePath("/dashboard/orcamentos");
@@ -239,10 +242,10 @@ export async function restorePreviousQuoteVersionAction(quoteId: string): Promis
   }
 }
 
-export async function cancelQuoteVersionAction(quoteId: string): Promise<ActionResult> {
+export async function cancelQuoteVersionAction(quoteId: string, reason?: string): Promise<ActionResult> {
   try {
     const userId = await requireUserId();
-    await cancelQuoteVersionService(userId, quoteId);
+    await cancelQuoteVersionService(userId, quoteId, { reason });
     revalidatePath("/dashboard/orcamentos");
     revalidatePath(`/dashboard/orcamentos/${quoteId}`);
     return { success: true, quoteId };

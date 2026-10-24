@@ -57,15 +57,31 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const plate = workOrder.vehiclePlateSnapshot ? formatPlate(workOrder.vehiclePlateSnapshot) : null;
   const serviceDate = workOrder.deliveredAt ?? workOrder.entryAt;
 
+  // Pagamento estornado não aparece como pagamento: some se foi estornado por
+  // inteiro e mostra só o líquido se foi em parte. A soma das linhas = total pago.
+  const receiptPayments = (summary?.payments ?? [])
+    .map((p) => ({
+      ...p,
+      netCents: p.amountCents - (summary?.refunds ?? []).filter((r) => r.paymentId === p.id).reduce((s, r) => s + r.refundCents, 0),
+    }))
+    .filter((p) => p.netCents > 0);
+  // Rodapé: data do último pagamento (a do recibo de fato), senão a do atendimento.
+  const lastPaymentAt = receiptPayments.reduce<Date | null>(
+    (acc, p) => (!acc || p.receivedAt > acc ? p.receivedAt : acc),
+    null,
+  );
+  const footerDate = lastPaymentAt ?? serviceDate;
+
   const customerPhone = customer?.whatsapp ?? customer?.phone ?? null;
   let whatsappHref: string | null = null;
   if (customerPhone && summary && summary.paidCents > 0) {
     const digits = customerPhone.replace(/\D/g, "");
     const withCountry = digits.startsWith("55") ? digits : `55${digits}`;
-    const methods = summary.payments.map((p) => `${METHOD_LABEL[p.method] ?? p.method} ${formatBRL(p.amountCents)}`).join(" + ");
+    const methods = receiptPayments.map((p) => `${METHOD_LABEL[p.method] ?? p.method} ${formatBRL(p.netCents)}`).join(" + ");
     const text = encodeURIComponent(
       `Olá! Segue o resumo do seu atendimento na BOX 02 — OS ${workOrder.number}, veículo ${vehicleText}${plate ? ` (${plate})` : ""}, em ${formatDate(serviceDate)}.\n` +
         `Total: ${formatBRL(summary.dueCents)}. Pago: ${formatBRL(summary.paidCents)} (${methods}). ` +
+        `${summary.discountCents > 0 ? `Desconto: ${formatBRL(summary.discountCents)}. ` : ""}` +
         `${summary.status === "QUITADO" ? "Serviço quitado. " : ""}` +
         `Obrigado pela confiança! Qualquer dúvida, estamos à disposição.`,
     );
@@ -172,17 +188,17 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
 
           <div className="rounded-2xl border border-border bg-surface p-6">
             <h2 className="mb-3 text-sm font-semibold">Pagamento</h2>
-            {summary.payments.length === 0 ? (
+            {receiptPayments.length === 0 ? (
               <p className="text-sm text-muted">Nenhum pagamento registrado.</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {summary.payments.map((p) => (
+                {receiptPayments.map((p) => (
                   <li key={p.id} className="flex justify-between text-sm">
                     <span>
                       {METHOD_LABEL[p.method] ?? p.method}
                       <span className="text-muted"> · {formatDate(p.receivedAt)}</span>
                     </span>
-                    <span className="font-semibold">{formatBRL(p.amountCents)}</span>
+                    <span className="font-semibold">{formatBRL(p.netCents)}</span>
                   </li>
                 ))}
               </ul>
@@ -192,6 +208,12 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
                 <span>Total pago</span>
                 <span className="text-foreground">{formatBRL(summary.paidCents)}</span>
               </div>
+              {summary.discountCents > 0 ? (
+                <div className="flex justify-between text-muted">
+                  <span>Desconto concedido</span>
+                  <span className="text-foreground">- {formatBRL(summary.discountCents)}</span>
+                </div>
+              ) : null}
               {summary.remainingCents > 0 ? (
                 <div className="flex justify-between text-muted">
                   <span>Saldo em aberto</span>
@@ -212,7 +234,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
               descritos (OS {workOrder.number}).
             </p>
             <div className="mt-10 border-t border-border pt-2 text-xs text-muted">
-              BOX 02 — Centro Automotivo · Anápolis/GO, {formatDate(serviceDate)}
+              BOX 02 — Centro Automotivo · Anápolis/GO, {formatDate(footerDate)}
             </div>
           </div>
         </>

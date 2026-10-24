@@ -48,6 +48,8 @@ export interface WorkOrderPaymentsSummaryView {
   dueCents: number;
   paidCents: number;
   remainingCents: number;
+  /** Descontos já dados no recebimento (já abatidos do saldo). */
+  discountCents: number;
   status: "EM_ABERTO" | "PARCIALMENTE_PAGO" | "QUITADO";
   payments: WorkOrderPaymentView[];
   /** Ciclo M */
@@ -81,6 +83,7 @@ export function WorkOrderPaymentsSection({
     "OUTRO",
   ]);
   const [notes, setNotes] = useState("");
+  const [discount, setDiscount] = useState("");
   // Data do recebimento: padrão hoje (horário de Brasília); pode ser um dia
   // anterior para lançar um pagamento que já aconteceu.
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
@@ -89,7 +92,8 @@ export function WorkOrderPaymentsSection({
   const [error, setError] = useState<string | null>(null);
 
   const enteredCents = rows.reduce((sum, r) => sum + reaisToCents(r.amount || "0"), 0);
-  const leftCents = summary.remainingCents - enteredCents;
+  const discountCents = reaisToCents(discount || "0");
+  const leftCents = summary.remainingCents - enteredCents - discountCents;
 
   function handleRegister() {
     setError(null);
@@ -98,6 +102,7 @@ export function WorkOrderPaymentsSection({
         payments: rows
           .filter((r) => reaisToCents(r.amount || "0") > 0)
           .map((r) => ({ amountReais: r.amount, method: r.method })),
+        discountReais: discountCents > 0 ? discount : undefined,
         notes: notes || undefined,
         // Só envia quando é um dia anterior; hoje continua sendo "agora".
         receivedOn: receivedOn && receivedOn !== today ? receivedOn : undefined,
@@ -109,6 +114,7 @@ export function WorkOrderPaymentsSection({
       setLastMethod(rows[0]?.method ?? lastMethod);
       setRows([{ key: "p1", method: "DINHEIRO", amount: "" }]);
       setNotes("");
+      setDiscount("");
       setReceivedOn(today);
       setShowForm(false);
       router.refresh();
@@ -132,7 +138,7 @@ export function WorkOrderPaymentsSection({
         </span>
       </div>
 
-      <dl className="mb-3 grid grid-cols-3 gap-2 text-center text-sm">
+      <dl className={`mb-3 grid gap-2 text-center text-sm ${summary.discountCents > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
         <div>
           <dt className="text-[10px] text-muted">Devido</dt>
           <dd className="font-semibold">{formatBRL(summary.dueCents)}</dd>
@@ -141,6 +147,12 @@ export function WorkOrderPaymentsSection({
           <dt className="text-[10px] text-muted">Recebido</dt>
           <dd className="font-semibold text-success">{formatBRL(summary.paidCents)}</dd>
         </div>
+        {summary.discountCents > 0 ? (
+          <div>
+            <dt className="text-[10px] text-muted">Desconto</dt>
+            <dd className="font-semibold">{formatBRL(summary.discountCents)}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-[10px] text-muted">Saldo</dt>
           <dd className="font-semibold">{formatBRL(summary.remainingCents)}</dd>
@@ -268,8 +280,20 @@ export function WorkOrderPaymentsSection({
                 </button>
               ) : null}
             </div>
+            <label className="text-xs text-muted" htmlFor="discount">
+              Desconto (R$) — abate do saldo, não conta como dinheiro recebido
+            </label>
+            <input
+              id="discount"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              inputMode="decimal"
+              placeholder="0,00"
+              className={inputClass}
+            />
             <p className={`text-xs ${leftCents < 0 ? "text-danger" : "text-muted"}`}>
-              Saldo da OS {formatBRL(summary.remainingCents)} · Lançando {formatBRL(enteredCents)} ·{" "}
+              Saldo da OS {formatBRL(summary.remainingCents)} · Lançando {formatBRL(enteredCents)}
+              {discountCents > 0 ? ` · Desconto ${formatBRL(discountCents)}` : ""} ·{" "}
               {leftCents < 0 ? `Passou ${formatBRL(-leftCents)}` : `Ficará ${formatBRL(leftCents)} em aberto`}
             </p>
             <label className="text-xs text-muted" htmlFor="receivedOn">
@@ -298,7 +322,7 @@ export function WorkOrderPaymentsSection({
             <div className="flex gap-2">
               <button
                 onClick={handleRegister}
-                disabled={isPending || enteredCents <= 0 || leftCents < 0}
+                disabled={isPending || (enteredCents <= 0 && discountCents <= 0) || leftCents < 0}
                 className="h-11 flex-1 rounded-xl bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
               >
                 {isPending ? "Registrando…" : "Confirmar"}

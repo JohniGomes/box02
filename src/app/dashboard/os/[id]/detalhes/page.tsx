@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { getWorkOrderPaymentsSummaryService, getWorkOrderService, listWorkOrderEvidencesService } from "@/lib/workOrders/service";
+import {
+  getWorkOrderPaymentsSummaryService,
+  getWorkOrderService,
+  listWorkOrderCorrectionsService,
+  listWorkOrderEvidencesService,
+} from "@/lib/workOrders/service";
 import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
@@ -23,6 +28,7 @@ import {
   WorkOrderStatusActions,
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
+import { WorkOrderCorrections } from "../WorkOrderCorrections";
 import { WorkOrderChecklistPanel, type WorkOrderChecklistView } from "../WorkOrderChecklistPanel";
 import { WorkOrderExplanationSection } from "../WorkOrderExplanationSection";
 import { WorkOrderEvidenceSection } from "../WorkOrderEvidenceSection";
@@ -69,6 +75,7 @@ export default async function WorkOrderDetailsPage({
   const paymentsSummary =
     workOrder.status === "ENTREGUE" ? await getWorkOrderPaymentsSummaryService(workOrder.id) : null;
   const evidences = await listWorkOrderEvidencesService(workOrder.id);
+  const corrections = await listWorkOrderCorrectionsService(workOrder.id);
   const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired, deliveryChecklistRequired] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
@@ -348,6 +355,14 @@ export default async function WorkOrderDetailsPage({
         </section>
       ) : null}
 
+      <WorkOrderCorrections
+        workOrderId={workOrder.id}
+        delivered={workOrder.status === "ENTREGUE"}
+        paidCents={paymentsSummary?.paidCents ?? 0}
+        paymentCount={paymentsSummary?.payments.length ?? 0}
+        history={corrections.map((c) => ({ ...c, at: c.at.toISOString() }))}
+      />
+
       {paymentsSummary ? (
         <WorkOrderPaymentsSection
           workOrderId={workOrder.id}
@@ -356,6 +371,7 @@ export default async function WorkOrderDetailsPage({
             dueCents: paymentsSummary.dueCents,
             paidCents: paymentsSummary.paidCents,
             remainingCents: paymentsSummary.remainingCents,
+            discountCents: paymentsSummary.discountCents,
             status: paymentsSummary.status,
             payments: paymentsSummary.payments.map((p) => ({
               id: p.id,

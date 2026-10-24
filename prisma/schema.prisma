@@ -1335,3 +1335,16 @@ model Purchase {
   @@index([purchaseDate])
   @@map("purchases")
 }
+
+/// Etapa 3.3 — desconto dado no recebimento (abate o saldo; não é dinheiro recebido).
+model WorkOrderDiscount {
+  id              String   @id @default(cuid())
+  workOrderId     String
+  amountCents     Int
+  reason          String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  @@index([workOrderId])
+  @@map("work_order_discounts")
+}
