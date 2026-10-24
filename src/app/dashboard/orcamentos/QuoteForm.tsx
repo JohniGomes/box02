@@ -11,6 +11,7 @@ import { QuickCustomerForm } from "@/components/QuickCustomerForm";
 import { QuickVehicleForm } from "@/components/QuickVehicleForm";
 import { LastMileageHint } from "@/components/LastMileageHint";
 import { DraftBar, useDraft } from "@/components/DraftControls";
+import { getServiceKitAction, saveServiceKitAction } from "../configuracoes/servicos/actions";
 import {
   createQuoteAction,
   listCustomerVehiclesAction,
@@ -23,6 +24,9 @@ import {
 } from "./actions";
 import { computeQuoteTotals, formatBRL, lineTotalCents, reaisToCents } from "@/lib/money";
 import { fromDateOnlyLocal } from "@/lib/dateOnly";
+import { blockFieldsOf, laborToleranceWarning } from "./itemBlocks";
+
+export { blockFieldsOf, laborToleranceWarning };
 
 type ItemType = "SERVICO" | "PECA" | "MAO_DE_OBRA";
 type ItemCategory = "NECESSARIO" | "RECOMENDADO" | "INFORMATIVO";
@@ -41,6 +45,10 @@ export interface ItemDraft {
   customerSupplied?: boolean;
   /** Chave (key) do serviço-cabeça do bloco a que este item pertence; vazio = item solto. */
   groupKey?: string;
+  /** Peça que veio do kit como "vaga": a pessoa escolhe a peça do estoque depois. */
+  slot?: boolean;
+  /** Estimativa de mão de obra do serviço (preço padrão do catálogo), só para o aviso amarelo. */
+  estimateReais?: string;
 }
 
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
@@ -187,8 +195,7 @@ export function QuoteForm({
           serviceId: i.serviceId,
           partId: i.partId,
           // Bloco: as peças e a mão de obra seguem a categoria do serviço-cabeça.
-          category: i.groupKey ? (items.find((h) => h.key === i.groupKey)?.category ?? i.category) : i.category,
-          groupKey: i.groupKey ?? (items.some((c) => c.groupKey === i.key) ? i.key : undefined),
+          ...blockFieldsOf(items, i),
           // Observações só valem para Mão de obra; texto deixado em outro
           // tipo (ao trocar de aba) não deve ir junto.
           notes: i.type === "MAO_DE_OBRA" ? i.notes : undefined,
@@ -588,6 +595,7 @@ export function QuoteItemsEditor({
                   partId: undefined,
                   description: service.label,
                   unitPriceReais: service.suggestedPriceReais ?? "",
+                  estimateReais: service.defaultPriceReais ?? undefined,
                 })
               }
             />
@@ -599,6 +607,7 @@ export function QuoteItemsEditor({
                   serviceId: undefined,
                   description: part.label,
                   unitPriceReais: part.suggestedPriceReais ?? "",
+                  slot: false,
                 })
               }
             />
@@ -649,6 +658,24 @@ export function QuoteItemsEditor({
               </button>
             </div>
           ) : null}
+
+          {allowGroups && item.type === "SERVICO" && item.serviceId ? (
+            <KitControls head={item} items={items} onAdd={onAdd} />
+          ) : null}
+
+          {allowGroups && item.type === "PECA" && item.slot && !item.partId ? (
+            <p className="rounded-lg bg-accent/10 p-2 text-xs">
+              Peça do kit a escolher: toque em <strong>Selecionar do estoque</strong> acima (se não escolher agora, pode
+              escolher depois — nada trava).
+            </p>
+          ) : null}
+
+          {allowGroups && item.type === "MAO_DE_OBRA" && item.groupKey
+            ? (() => {
+                const warning = laborToleranceWarning(items, items.find((h) => h.key === item.groupKey));
+                return warning ? <p className="rounded-lg bg-accent/10 p-2 text-xs">{warning}</p> : null;
+              })()
+            : null}
 
           {allowGroups && item.type !== "SERVICO" ? (
             <div>
@@ -779,6 +806,136 @@ export function QuoteItemsEditor({
       >
         + Adicionar item
       </button>
+    </div>
+  );
+}
+
+/** Aplicar o kit do serviço e salvar as linhas do bloco como kit. Só acrescenta; nunca muda o que já foi digitado. */
+function KitControls({
+  head,
+  items,
+  onAdd,
+}: {
+  head: ItemDraft;
+  items: ItemDraft[];
+  onAdd: (preset?: Partial<ItemDraft>) => void;
+}) {
+  const children = items.filter((i) => i.groupKey === head.key && i.type !== "SERVICO");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // peças genéricas que ficam fixas no kit (as demais viram "vaga a escolher")
+  const [fixed, setFixed] = useState<Record<string, boolean>>({});
+
+  async function applyKit() {
+    setMessage(null);
+    setBusy(true);
+    const lines = await getServiceKitAction(head.serviceId as string);
+    setBusy(false);
+    if (lines.length === 0) {
+      setMessage("Este serviço ainda não tem kit. Monte as peças e a mão de obra abaixo e use \"Salvar como kit\".");
+      return;
+    }
+    let added = 0;
+    for (const line of lines) {
+      // Não repete uma linha que já está no bloco, e nunca troca o preço do que já existe.
+      const exists = children.some(
+        (c) => c.type === line.type && c.description.trim().toLowerCase() === line.description.trim().toLowerCase(),
+      );
+      if (exists) continue;
+      onAdd({
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPriceReais: line.unitPriceReais,
+        partId: line.partId,
+        slot: line.slot,
+        groupKey: head.key,
+        category: head.category,
+      });
+      added++;
+    }
+    setMessage(added === 0 ? "O kit já está neste serviço." : `${added} linha(s) do kit adicionada(s). Tudo continua editável.`);
+  }
+
+  async function saveKit() {
+    setMessage(null);
+    setBusy(true);
+    const result = await saveServiceKitAction(
+      head.serviceId as string,
+      children.map((c) => ({
+        type: c.type as "PECA" | "MAO_DE_OBRA",
+        description: c.description,
+        quantity: c.quantity,
+        unitPriceReais: c.type === "MAO_DE_OBRA" ? c.unitPriceReais : undefined,
+        partId: c.partId,
+        fixedPart: c.type === "PECA" ? Boolean(fixed[c.key]) : undefined,
+      })),
+    );
+    setBusy(false);
+    if (!result.success) {
+      setMessage(result.error ?? "Não foi possível salvar o kit.");
+      return;
+    }
+    setSaving(false);
+    setMessage(`Kit salvo com ${result.count} linha(s). Da próxima vez é só aplicar.`);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={applyKit}
+          disabled={busy}
+          className="h-9 rounded-lg border border-accent/50 px-3 text-xs font-semibold text-accent disabled:opacity-50"
+        >
+          Aplicar kit deste serviço
+        </button>
+        {children.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setSaving((v) => !v)}
+            className="h-9 rounded-lg border border-border px-3 text-xs font-medium"
+          >
+            Salvar como kit
+          </button>
+        ) : null}
+      </div>
+      {saving ? (
+        <div className="flex flex-col gap-2 text-xs">
+          <p className="text-muted">
+            Marque as peças <strong>genéricas</strong> (óleo, filtro, fluido): elas ficam fixas no kit. As outras (pastilha,
+            correia, embreagem…) viram &quot;vaga a escolher do estoque&quot;. Preços digitados não são guardados, só o valor da
+            mão de obra.
+          </p>
+          {children
+            .filter((c) => c.type === "PECA")
+            .map((c) => (
+              <label key={c.key} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  disabled={!c.partId}
+                  checked={Boolean(fixed[c.key]) && Boolean(c.partId)}
+                  onChange={(e) => setFixed((prev) => ({ ...prev, [c.key]: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+                <span>
+                  {c.description || "Peça"} {c.partId ? "" : <span className="text-muted">(sem peça do estoque: vira vaga)</span>}
+                </span>
+              </label>
+            ))}
+          <button
+            type="button"
+            onClick={saveKit}
+            disabled={busy}
+            className="h-9 w-fit rounded-lg bg-accent px-4 text-xs font-semibold text-accent-foreground disabled:opacity-50"
+          >
+            Guardar kit (substitui o kit atual)
+          </button>
+        </div>
+      ) : null}
+      {message ? <p className="text-xs text-muted">{message}</p> : null}
     </div>
   );
 }

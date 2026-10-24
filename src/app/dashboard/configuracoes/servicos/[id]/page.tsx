@@ -4,6 +4,8 @@ import { getServiceService, getSuggestedPriceForService } from "@/lib/services/s
 import { formatBRL } from "@/lib/money";
 import { ServiceStatusToggle } from "./ServiceStatusToggle";
 import { ServiceProcedureChecklistAssociation } from "../ServiceProcedureChecklistAssociation";
+import { listServiceKitService } from "@/lib/services/kit";
+import { ServiceKitPanel } from "./ServiceKitPanel";
 
 export default async function ServiceDetailPage({
   params,
@@ -14,6 +16,7 @@ export default async function ServiceDetailPage({
   const service = await getServiceService(id);
   if (!service) notFound();
   const suggested = await getSuggestedPriceForService(service);
+  const kit = await listServiceKitService(service.id);
 
   return (
     <div className="flex flex-col gap-5">
@@ -82,6 +85,8 @@ export default async function ServiceDetailPage({
         </Link>
         <ServiceStatusToggle serviceId={service.id} status={service.status} />
       </div>
+
+      <ServiceKitPanel serviceId={service.id} lines={kit} />
     </div>
   );
 }

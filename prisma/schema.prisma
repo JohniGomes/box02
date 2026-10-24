@@ -1350,3 +1350,19 @@ model WorkOrderDiscount {
   @@index([workOrderId])
   @@map("work_order_discounts")
 }
+
+/// Fase 2D — kit de um serviço (lista usual de peças e mão de obra).
+model ServiceKitItem {
+  id             String   @id @default(cuid())
+  serviceId      String
+  type           String
+  description    String
+  quantity       Decimal  @default(1)
+  partId         String?
+  unitPriceCents Int?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([serviceId])
+  @@map("service_kit_items")
+}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getQuoteService } from "@/lib/quotes/service";
+import { getServiceService } from "@/lib/services/service";
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { formatDocument } from "@/lib/validation/document";
@@ -29,6 +30,13 @@ export default async function EditQuotePage({
     getVehicleService(quote.vehicleId),
   ]);
   if (!customer || !vehicle) notFound();
+
+  // Estimativa de mão de obra de cada serviço do catálogo (só para o aviso amarelo).
+  const estimateByService = new Map<string, string>();
+  for (const serviceId of new Set(items.map((i) => i.serviceId).filter((id): id is string => Boolean(id)))) {
+    const s = await getServiceService(serviceId);
+    if (s?.defaultPriceCents != null) estimateByService.set(serviceId, centsToReais(s.defaultPriceCents));
+  }
 
   const headIdOfGroup = new Map<string, string>();
   for (const i of items) {
@@ -63,6 +71,7 @@ export default async function EditQuotePage({
       category: item.category,
       notes: item.notes ?? undefined,
       customerSupplied: item.customerSupplied,
+      estimateReais: item.serviceId && estimateByService.has(item.serviceId) ? estimateByService.get(item.serviceId) : undefined,
     })),
     discountType: version.discountType ?? "",
     discountReason: version.discountReason ?? "",

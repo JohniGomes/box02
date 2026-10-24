@@ -171,3 +171,54 @@ export async function listAssociationOptionsAction(): Promise<{
     checklists: checklists.items.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` })),
   };
 }
+
+// ============================================================
+// Fase 2D — kit do serviço (peças e mão de obra usuais)
+// ============================================================
+
+import {
+  deleteServiceKitService,
+  getServiceKitToApplyService,
+  saveServiceKitService,
+  ServiceKitError,
+  type KitLineToApply,
+} from "@/lib/services/kit";
+
+export async function getServiceKitAction(serviceId: string): Promise<KitLineToApply[]> {
+  await requireUserId();
+  return getServiceKitToApplyService(serviceId);
+}
+
+export async function saveServiceKitAction(
+  serviceId: string,
+  lines: {
+    type: "PECA" | "MAO_DE_OBRA";
+    description: string;
+    quantity: string;
+    unitPriceReais?: string;
+    partId?: string;
+    fixedPart?: boolean;
+  }[],
+): Promise<{ success: boolean; error?: string; count?: number }> {
+  try {
+    const userId = await requireUserId();
+    const count = await saveServiceKitService(userId, serviceId, { lines });
+    revalidatePath(`/dashboard/configuracoes/servicos/${serviceId}`);
+    return { success: true, count };
+  } catch (err) {
+    if (err instanceof ServiceKitError) return { success: false, error: err.message };
+    if (err instanceof Error && err.name === "ZodError") return { success: false, error: "Confira as linhas do kit." };
+    return { success: false, error: "Não foi possível salvar o kit." };
+  }
+}
+
+export async function deleteServiceKitAction(serviceId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const userId = await requireUserId();
+    await deleteServiceKitService(userId, serviceId);
+    revalidatePath(`/dashboard/configuracoes/servicos/${serviceId}`);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Não foi possível apagar o kit." };
+  }
+}
