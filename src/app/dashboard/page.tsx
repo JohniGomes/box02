@@ -5,6 +5,7 @@ import { formatBRL } from "@/lib/money";
 import { CalendarWidget } from "@/components/CalendarWidget";
 import { HomeAlerts } from "@/components/HomeAlerts";
 import { DraftsCard } from "@/components/DraftsCard";
+import { listReceivablesService } from "@/lib/workOrders/service";
 
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -31,10 +32,12 @@ export default async function DashboardHomePage() {
   const todayStart = new Date(year, now.getMonth(), now.getDate());
   const todayEnd = new Date(year, now.getMonth(), now.getDate() + 1);
 
-  const [metrics, monthAppointments] = await Promise.all([
+  const [metrics, monthAppointments, receivables] = await Promise.all([
     getDashboardMetricsService(),
     listAppointmentsWithNamesBetweenService(monthStart, monthEnd),
+    listReceivablesService(),
   ]);
+  const receivableTotal = receivables.reduce((sum, r) => sum + r.balanceCents, 0);
 
   const activeMonthAppointments = monthAppointments.filter((a) => a.status === "AGENDADO");
   const appointmentCountByDay: Record<number, number> = {};
@@ -97,6 +100,39 @@ export default async function DashboardHomePage() {
 
       <HomeAlerts />
       <DraftsCard />
+
+      {receivables.length > 0 ? (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">A receber</h2>
+            <span className="text-sm font-semibold text-danger">{formatBRL(receivableTotal)}</span>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {receivables.slice(0, 8).map((r) => {
+              const days = r.deliveredAt ? Math.max(0, Math.floor((now.getTime() - r.deliveredAt.getTime()) / 86400000)) : null;
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/dashboard/os/${r.id}/detalhes#recebimentos`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="font-mono text-xs font-semibold">{r.number}</span> · {r.customerName}
+                      {days !== null ? (
+                        <span className="text-xs text-muted"> · {days === 0 ? "entregue hoje" : `há ${days} dia${days === 1 ? "" : "s"}`}</span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 font-semibold">{formatBRL(r.balanceCents)}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <Link href="/dashboard/os?saldo=1" className="mt-3 inline-block text-xs font-medium text-accent">
+            Ver todas com saldo →
+          </Link>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CalendarWidget

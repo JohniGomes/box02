@@ -441,12 +441,25 @@ export async function registerWorkOrderReceptionAcceptance(
   return result.rows[0] ?? null;
 }
 
+/** Saldo a receber de uma OS ENTREGUE: valor do último fechamento menos o recebido
+ * (já líquido de estornos) menos o desconto dado no recebimento. NULL se não está entregue. */
+const BALANCE_SQL = `(CASE WHEN wo.status = 'ENTREGUE' THEN (
+    COALESCE((SELECT cl."totalAtClosureCents" FROM work_order_closures cl
+              WHERE cl."workOrderId" = wo.id ORDER BY cl."closedAt" DESC LIMIT 1), 0)
+    - COALESCE((SELECT SUM(p."amountCents") FROM work_order_payments p WHERE p."workOrderId" = wo.id), 0)
+    + COALESCE((SELECT SUM(r."refundCents") FROM work_order_payment_refunds r WHERE r."workOrderId" = wo.id), 0)
+    - COALESCE((SELECT SUM(d."amountCents") FROM work_order_discounts d WHERE d."workOrderId" = wo.id), 0)
+  )::int ELSE NULL END)`;
+
 export interface WorkOrderWithNames extends WorkOrderRecord {
+  balanceCents?: number | null;
   customerName: string;
   vehiclePlate: string | null;
 }
 
 export interface SearchWorkOrdersFilters {
+  /** Só OS entregues com saldo a receber. */
+  withBalance?: boolean;
   query?: string;
   status?: WorkOrderStatus;
   limit?: number;
@@ -481,6 +494,10 @@ export async function searchWorkOrders(
     conditions.push(`wo.status = $${params.length}`);
   }
 
+  if (filters.withBalance) {
+    conditions.push(`${BALANCE_SQL} > 0`);
+  }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = filters.limit ?? 20;
   const offset = filters.offset ?? 0;
@@ -499,7 +516,8 @@ export async function searchWorkOrders(
             wo."cancelReason", wo."deliveryAcceptedName", wo."deliveryAcceptedDocument", wo."deliveredByUserId",
             wo."receptionAcceptedAt",
             wo."createdByUserId", wo."createdAt", wo."updatedAt",
-            c."legalName" as "customerName", v.plate as "vehiclePlate"
+            c."legalName" as "customerName", v.plate as "vehiclePlate",
+            ${BALANCE_SQL} AS "balanceCents"
      FROM work_orders wo
      INNER JOIN customers c ON c.id = wo."customerId"
      INNER JOIN vehicles v ON v.id = wo."vehicleId"
@@ -518,6 +536,30 @@ export async function searchWorkOrders(
   );
 
   return { items: itemsResult.rows, total: Number(countResult.rows[0]?.count ?? 0) };
+}
+
+export interface ReceivableRow {
+  id: string;
+  number: string;
+  customerName: string;
+  deliveredAt: Date | null;
+  balanceCents: number;
+}
+
+/** OS entregues com saldo a receber, da mais antiga para a mais nova. */
+export async function listReceivables(): Promise<ReceivableRow[]> {
+  const result = await pool.query<ReceivableRow>(
+    `SELECT * FROM (
+       SELECT wo.id, wo.number, c."legalName" AS "customerName", wo."deliveredAt",
+              ${BALANCE_SQL} AS "balanceCents"
+       FROM work_orders wo
+       INNER JOIN customers c ON c.id = wo."customerId"
+       WHERE wo.status = 'ENTREGUE'
+     ) t
+     WHERE t."balanceCents" > 0
+     ORDER BY t."deliveredAt" ASC NULLS LAST, t.number ASC`,
+  );
+  return result.rows;
 }
 
 export interface CustomerWorkOrderHistoryRow {

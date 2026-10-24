@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { searchWorkOrdersService } from "@/lib/workOrders/service";
 import { formatPlate } from "@/lib/validation/plate";
+import { formatBRL } from "@/lib/money";
 import { WorkOrderSearchBar } from "./WorkOrderSearchBar";
 import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL } from "./statusLabels";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
@@ -8,7 +9,7 @@ import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
 export default async function WorkOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; saldo?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const page = Math.max(1, Number(params.page ?? "1") || 1);
@@ -17,6 +18,7 @@ export default async function WorkOrdersPage({
   const { items, total } = await searchWorkOrdersService({
     query: params.q,
     status: (params.status as WorkOrderStatus) || undefined,
+    withBalance: params.saldo === "1",
     limit: pageSize,
     offset: (page - 1) * pageSize,
   });
@@ -66,6 +68,9 @@ export default async function WorkOrdersPage({
                   <span className="text-xs text-muted">
                     {wo.vehiclePlate ? formatPlate(wo.vehiclePlate) : "Sem placa"}
                   </span>
+                  {wo.balanceCents ? (
+                    <span className="text-xs font-semibold text-danger">Saldo {formatBRL(wo.balanceCents)}</span>
+                  ) : null}
                   {!wo.receptionAcceptedAt && wo.status !== "CANCELADA" ? (
                     <span className="mt-1 w-fit rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
                       Aceite pendente
@@ -84,6 +89,7 @@ export default async function WorkOrdersPage({
                   <th className="px-4 py-3 font-medium">Cliente</th>
                   <th className="px-4 py-3 font-medium">Veículo</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Saldo</th>
                   <th className="px-4 py-3 font-medium">Recepção</th>
                 </tr>
               </thead>
@@ -103,6 +109,13 @@ export default async function WorkOrdersPage({
                       >
                         {WORK_ORDER_STATUS_LABEL[wo.status]}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {wo.balanceCents ? (
+                        <span className="font-semibold text-danger">{formatBRL(wo.balanceCents)}</span>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {!wo.receptionAcceptedAt && wo.status !== "CANCELADA" ? (
@@ -135,12 +148,13 @@ function Pagination({
 }: {
   page: number;
   totalPages: number;
-  searchParams: { q?: string; status?: string };
+  searchParams: { q?: string; status?: string; saldo?: string };
 }) {
   function hrefFor(p: number) {
     const params = new URLSearchParams();
     if (searchParams.q) params.set("q", searchParams.q);
     if (searchParams.status) params.set("status", searchParams.status);
+    if (searchParams.saldo) params.set("saldo", searchParams.saldo);
     params.set("page", String(p));
     return `/dashboard/os?${params.toString()}`;
   }

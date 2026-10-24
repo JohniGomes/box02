@@ -125,7 +125,7 @@ export function WorkOrderPaymentsSection({
     "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5">
+    <section id="recebimentos" className="rounded-2xl border border-border bg-surface p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-accent">Recebimentos</h2>
         {summary.paidCents > 0 ? (

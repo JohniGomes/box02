@@ -63,6 +63,7 @@ import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findVehicleById } from "@/lib/db/repositories/vehicles";
 import { bumpVehicleMileageIfHigherService } from "@/lib/vehicles/service";
 import { InvalidEventDateError, formatDateTimeBR, resolveEventInstant } from "@/lib/dateBr";
+import { listReceivables } from "@/lib/db/repositories/workOrders";
 import {
   createWorkOrderDiscount,
   listWorkOrderDiscounts,
@@ -1527,6 +1528,11 @@ export async function getWorkOrderService(workOrderId: string): Promise<WorkOrde
 
 export async function searchWorkOrdersService(filters: SearchWorkOrdersFilters) {
   return searchWorkOrders(filters);
+}
+
+/** Etapa 4.1 — OS entregues com saldo em aberto (card "A receber" do Início). */
+export async function listReceivablesService() {
+  return listReceivables();
 }
 
 // ============================================================
