@@ -76,6 +76,8 @@ export interface QuoteFormInitialValues {
   validUntil: string;
   internalNotes: string;
   customerMessage: string;
+  /** Queixa que veio de um agendamento. */
+  customerComplaint?: string;
 }
 
 const STEPS = ["Cliente", "Veículo", "Itens", "Ajustes"] as const;
@@ -90,7 +92,8 @@ export function QuoteForm({
   initialValues?: QuoteFormInitialValues;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  // Vindo de um agendamento (cliente e veículo prontos), já começa nos itens.
+  const [step, setStep] = useState(mode === "create" && initialValues?.vehicle ? 2 : 0);
 
   const [customer, setCustomer] = useState<EntityPickerOption | null>(initialValues?.customer ?? null);
   const [vehicle, setVehicle] = useState<VehicleOption | null>(initialValues?.vehicle ?? null);
@@ -99,11 +102,11 @@ export function QuoteForm({
   const [openQuotesResult, setOpenQuotesResult] = useState<{ key: string; rows: OpenQuoteRef[] }>({ key: "", rows: [] });
   const [loadingVehicles, setLoadingVehicles] = useState(false);
 
-  const [items, setItems] = useState<ItemDraft[]>(initialValues?.items ?? [newItem()]);
+  const [items, setItems] = useState<ItemDraft[]>(initialValues?.items?.length ? initialValues.items : [newItem()]);
   const [discountType, setDiscountType] = useState(initialValues?.discountType ?? "");
   const [discountValue, setDiscountValue] = useState(initialValues?.discountValue ?? "");
   const [discountReason, setDiscountReason] = useState(initialValues?.discountReason ?? "");
-  const [customerComplaint, setCustomerComplaint] = useState("");
+  const [customerComplaint, setCustomerComplaint] = useState(initialValues?.customerComplaint ?? "");
   const [mileageAtEntry, setMileageAtEntry] = useState("");
   const [surchargeType, setSurchargeType] = useState(initialValues?.surchargeType ?? "");
   const [surchargeValue, setSurchargeValue] = useState(initialValues?.surchargeValue ?? "");

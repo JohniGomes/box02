@@ -9,6 +9,8 @@ export interface SubmitServiceRequestResult {
   customerName?: string;
   customerPhone?: string;
   vehicleDescription?: string;
+  vehiclePlate?: string;
+  preferredTime?: string;
   description?: string;
 }
 
@@ -20,6 +22,8 @@ export async function submitServiceRequestAction(input: {
   customerName: string;
   customerPhone: string;
   vehicleDescription?: string;
+  vehiclePlate?: string;
+  preferredTime?: string;
   description: string;
 }): Promise<SubmitServiceRequestResult> {
   try {
@@ -29,6 +33,8 @@ export async function submitServiceRequestAction(input: {
       customerName: request.customerName,
       customerPhone: request.customerPhone,
       vehicleDescription: request.vehicleDescription ?? undefined,
+      vehiclePlate: request.vehiclePlate ?? undefined,
+      preferredTime: request.preferredTime ?? undefined,
       description: request.description,
     };
   } catch (err) {

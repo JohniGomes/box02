@@ -111,12 +111,22 @@ export default async function AppointmentsPage() {
                   </Link>
                 </p>
               ) : a.status !== "CANCELADO" ? (
-                <Link
-                  href={`/dashboard/os/novo?agendamento=${a.id}`}
-                  className="mt-2 inline-flex h-8 items-center rounded-lg border border-accent px-3 text-xs font-semibold text-accent"
-                >
-                  Criar OS
-                </Link>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Link
+                    href={`/dashboard/os/novo?agendamento=${a.id}`}
+                    className="inline-flex h-8 items-center rounded-lg border border-accent px-3 text-xs font-semibold text-accent"
+                  >
+                    Criar OS
+                  </Link>
+                  {a.vehicleId ? (
+                    <Link
+                      href={`/dashboard/orcamentos/novo?agendamento=${a.id}`}
+                      className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-semibold"
+                    >
+                      Criar orçamento
+                    </Link>
+                  ) : null}
+                </div>
               ) : null}
               {a.status !== "CANCELADO" ? (
                 <AppointmentActions

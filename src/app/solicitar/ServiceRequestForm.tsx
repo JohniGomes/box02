@@ -9,6 +9,8 @@ function buildNotifyMessage(input: {
   customerName: string;
   customerPhone: string;
   vehicleDescription?: string;
+  vehiclePlate?: string;
+  preferredTime?: string;
   description: string;
 }): string {
   const lines = [
@@ -17,6 +19,8 @@ function buildNotifyMessage(input: {
     `Telefone: ${input.customerPhone}`,
   ];
   if (input.vehicleDescription) lines.push(`Veículo: ${input.vehicleDescription}`);
+  if (input.vehiclePlate) lines.push(`Placa: ${input.vehiclePlate}`);
+  if (input.preferredTime) lines.push(`Melhor dia/horário: ${input.preferredTime}`);
   lines.push(`O que precisa: ${input.description}`);
   lines.push("", "Já está no sistema, em Solicitações.");
   return lines.join("\n");
@@ -26,6 +30,8 @@ export function ServiceRequestForm() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [vehicleDescription, setVehicleDescription] = useState("");
+  const [vehiclePlate, setVehiclePlate] = useState("");
+  const [preferredTime, setPreferredTime] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +39,8 @@ export function ServiceRequestForm() {
     customerName: string;
     customerPhone: string;
     vehicleDescription?: string;
+    vehiclePlate?: string;
+    preferredTime?: string;
     description: string;
   } | null>(null);
 
@@ -44,6 +52,8 @@ export function ServiceRequestForm() {
       customerName,
       customerPhone,
       vehicleDescription: vehicleDescription || undefined,
+      vehiclePlate: vehiclePlate || undefined,
+      preferredTime: preferredTime || undefined,
       description,
     });
 
@@ -58,6 +68,8 @@ export function ServiceRequestForm() {
       customerName: result.customerName!,
       customerPhone: result.customerPhone!,
       vehicleDescription: result.vehicleDescription,
+      vehiclePlate: result.vehiclePlate,
+      preferredTime: result.preferredTime,
       description: result.description!,
     });
   }
@@ -133,6 +145,33 @@ export function ServiceRequestForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium" htmlFor="vehiclePlate">
+          Placa (opcional)
+        </label>
+        <input
+          id="vehiclePlate"
+          value={vehiclePlate}
+          onChange={(e) => setVehiclePlate(e.target.value)}
+          maxLength={10}
+          className="h-12 rounded-xl border border-border bg-background px-4 text-base uppercase outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+          placeholder="ABC1D23"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium" htmlFor="preferredTime">
+          Melhor dia e horário (opcional)
+        </label>
+        <input
+          id="preferredTime"
+          value={preferredTime}
+          onChange={(e) => setPreferredTime(e.target.value)}
+          className="h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+          placeholder="Ex: sexta de manhã"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium" htmlFor="description">
           O que você precisa?
         </label>
@@ -162,6 +201,9 @@ export function ServiceRequestForm() {
       >
         {submitting ? "Enviando…" : "Enviar solicitação"}
       </button>
+      <p className="text-center text-xs text-muted">
+        Seus dados são usados só para o atendimento da BOX 02 e não são compartilhados.
+      </p>
     </div>
   );
 }
