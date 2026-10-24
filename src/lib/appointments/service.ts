@@ -3,6 +3,7 @@ import {
   createAppointment,
   findAppointmentById,
   listAppointmentsBetween,
+  linkAppointmentToWorkOrder,
   listAppointmentsWithNamesBetween,
   setAppointmentAttendance,
   updateAppointment,
@@ -76,6 +77,29 @@ export async function listAppointmentsWithNamesBetweenService(from: Date, to: Da
 }
 
 /** Corrige data/hora e descrição (ex.: incluir a queixa) de um agendamento ainda agendado. */
+/** Agendamento ainda sem OS (e não cancelado), para abrir a "Nova OS" já preenchida. */
+export async function getAppointmentForWorkOrderService(appointmentId: string) {
+  const a = await findAppointmentById(appointmentId);
+  if (!a || a.status === "CANCELADO" || a.workOrderId) return null;
+  const [customer, vehicle] = await Promise.all([
+    findCustomerById(a.customerId),
+    a.vehicleId ? findVehicleById(a.vehicleId) : Promise.resolve(null),
+  ]);
+  if (!customer) return null;
+  return {
+    id: a.id,
+    customerId: customer.id,
+    customerName: customer.legalName,
+    vehicleId: vehicle?.id ?? null,
+    description: a.description,
+  };
+}
+
+/** Liga o agendamento à OS criada (e marca que compareceu). Não falha a criação da OS se não der. */
+export async function linkAppointmentToWorkOrderService(appointmentId: string, workOrderId: string) {
+  return linkAppointmentToWorkOrder(appointmentId, workOrderId);
+}
+
 export async function updateAppointmentService(appointmentId: string, rawInput: unknown): Promise<AppointmentRecord> {
   const input = updateAppointmentSchema.parse(rawInput);
   const existing = await findAppointmentById(appointmentId);
