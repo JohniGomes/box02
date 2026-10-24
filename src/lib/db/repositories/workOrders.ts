@@ -443,7 +443,7 @@ export async function registerWorkOrderReceptionAcceptance(
 
 /** Saldo a receber de uma OS ENTREGUE: valor do último fechamento menos o recebido
  * (já líquido de estornos) menos o desconto dado no recebimento. NULL se não está entregue. */
-const BALANCE_SQL = `(CASE WHEN wo.status = 'ENTREGUE' THEN (
+export const BALANCE_SQL = `(CASE WHEN wo.status = 'ENTREGUE' THEN (
     COALESCE((SELECT cl."totalAtClosureCents" FROM work_order_closures cl
               WHERE cl."workOrderId" = wo.id ORDER BY cl."closedAt" DESC LIMIT 1), 0)
     - COALESCE((SELECT SUM(p."amountCents") FROM work_order_payments p WHERE p."workOrderId" = wo.id), 0)
