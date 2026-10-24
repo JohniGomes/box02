@@ -130,6 +130,36 @@ export async function listOpenQuotesForVehicle(
   return result.rows;
 }
 
+export interface QuoteWorkOrderImpact {
+  id: string;
+  number: string;
+  status: string;
+  paidCents: number;
+  executedItems: number;
+}
+
+/** Para avisar antes de cancelar: o que já aconteceu nas OS ligadas ao orçamento. */
+export async function listWorkOrderImpactByQuote(quoteId: string, db: Queryable = pool): Promise<QuoteWorkOrderImpact[]> {
+  const result = await db.query<{ id: string; number: string; status: string; paid: string; executed: string }>(
+    `SELECT w.id, w.number, w.status,
+       COALESCE((SELECT SUM("amountCents") FROM work_order_payments p WHERE p."workOrderId" = w.id), 0)
+       - COALESCE((SELECT SUM("refundCents") FROM work_order_payment_refunds r WHERE r."workOrderId" = w.id), 0) AS paid,
+       (SELECT COUNT(*) FROM work_order_items i WHERE i."workOrderId" = w.id AND i.status = 'EXECUTADO') AS executed
+     FROM work_orders w
+     JOIN quote_versions v ON v.id = w."sourceQuoteVersionId"
+     WHERE v."quoteId" = $1
+     ORDER BY w."createdAt" ASC`,
+    [quoteId],
+  );
+  return result.rows.map((r) => ({
+    id: r.id,
+    number: r.number,
+    status: r.status,
+    paidCents: Number(r.paid),
+    executedItems: Number(r.executed),
+  }));
+}
+
 export async function quoteHasWorkOrder(quoteId: string, db: Queryable = pool): Promise<boolean> {
   const result = await db.query(
     `SELECT 1 FROM work_orders wo

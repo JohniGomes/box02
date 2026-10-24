@@ -5,6 +5,8 @@ import {
   getQuoteApprovalService,
   getQuoteService,
   getRestorableVersion,
+  getQuoteCancellationImpactService,
+  getQuoteCancellationInfoService,
   listQuoteWorkOrdersService,
 } from "@/lib/quotes/service";
 import { WORK_ORDER_STATUS_LABEL } from "../../os/statusLabels";
@@ -62,11 +64,13 @@ export default async function QuoteDetailPage({
   const isDraft = version.status === "RASCUNHO";
   const isSent = version.status === "ENVIADO";
   const canCreateNewVersion = !isDraft;
-  const canCancel = isDraft || isSent;
   const isApprovedForConversion = version.status === "APROVADO" || version.status === "APROVADO_PARCIAL";
+  const canCancel = isDraft || isSent || isApprovedForConversion;
   const canRegisterApproval =
     (isDraft || isSent || version.status === "EXPIRADO") &&
     items.some((i) => i.category !== "INFORMATIVO");
+  const cancelImpact = canCancel ? await getQuoteCancellationImpactService(quote.id) : [];
+  const cancelInfo = version.status === "CANCELADO" ? await getQuoteCancellationInfoService(version.id) : null;
   const hasActiveWorkOrder = workOrders.some((w) => w.status !== "CANCELADA");
   const canRegisterCompleted = !hasActiveWorkOrder && (canRegisterApproval || isApprovedForConversion);
 
@@ -348,7 +352,20 @@ export default async function QuoteDetailPage({
             previousStatusLabel={QUOTE_STATUS_LABEL[restorable.status]}
           />
         ) : null}
-        {canCancel ? <CancelQuoteButton quoteId={quote.id} /> : null}
+        {cancelInfo ? (
+          <p className="rounded-xl border border-border bg-surface p-3 text-xs">
+            Orçamento cancelado em {formatDateTimeBR(cancelInfo.at)}
+            {cancelInfo.by ? ` por ${cancelInfo.by}` : ""}
+            {cancelInfo.reason ? `. Motivo: ${cancelInfo.reason}` : "."}
+          </p>
+        ) : null}
+        {canCancel ? (
+          <CancelQuoteButton
+            quoteId={quote.id}
+            approved={isApprovedForConversion}
+            impact={cancelImpact.map((o) => ({ ...o, paidLabel: formatBRL(o.paidCents) }))}
+          />
+        ) : null}
         <DeleteQuoteButton quoteId={quote.id} />
       </div>
     </div>

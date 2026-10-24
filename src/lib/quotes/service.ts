@@ -6,6 +6,7 @@ import {
   findQuoteById,
   listWorkOrdersByQuote,
   quoteHasWorkOrder,
+  listWorkOrderImpactByQuote,
   searchQuotes,
   updateQuoteCheckIn,
   updateQuoteStatusAndVersion,
@@ -43,7 +44,7 @@ import {
 } from "@/lib/db/repositories/quoteApprovals";
 import { findVehicleById, type VehicleRecord } from "@/lib/db/repositories/vehicles";
 import { findCustomerById, type CustomerRecord } from "@/lib/db/repositories/customers";
-import { recordAuditLog } from "@/lib/db/repositories/auditLog";
+import { listAuditLogsForEntity, recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { generateQuoteNumber } from "./numbering";
 import { generateQuoteAccessToken } from "./token";
 import { assertServiceIsActive } from "@/lib/services/service";
@@ -472,16 +473,22 @@ export async function createNewQuoteVersionService(
 export async function cancelQuoteVersionService(
   actorUserId: string,
   quoteId: string,
+  input: { reason?: string } = {},
 ): Promise<QuoteVersionRecord> {
   const quote = await findQuoteById(quoteId);
   if (!quote) throw new QuoteNotFoundError(quoteId);
 
   const currentVersion = await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber);
   if (!currentVersion) throw new QuoteVersionNotFoundError(quoteId);
-  if (currentVersion.status !== "RASCUNHO" && currentVersion.status !== "ENVIADO") {
+  const wasApproved = currentVersion.status === "APROVADO" || currentVersion.status === "APROVADO_PARCIAL";
+  if (currentVersion.status !== "RASCUNHO" && currentVersion.status !== "ENVIADO" && !wasApproved) {
     throw new InvalidQuoteTransitionError(
-      "Só é possível cancelar um orçamento em rascunho ou aguardando decisão do cliente.",
+      "Só é possível cancelar um orçamento em rascunho, aguardando decisão do cliente ou aprovado.",
     );
+  }
+  const reason = input.reason?.trim() ?? "";
+  if (wasApproved && reason.length < 3) {
+    throw new InvalidQuoteTransitionError("Informe o motivo do cancelamento.");
   }
 
   const updated = await setQuoteVersionStatus(currentVersion.id, "CANCELADO");
@@ -492,6 +499,7 @@ export async function cancelQuoteVersionService(
     action: "QUOTE_CANCELLED",
     entityType: "quote_version",
     entityId: currentVersion.id,
+    metadata: { reason: reason || null, previousStatus: currentVersion.status },
   });
 
   return updated as QuoteVersionRecord;
@@ -607,6 +615,22 @@ export async function restorePreviousQuoteVersionService(
   });
 
   return previous;
+}
+
+/** OS ligadas ao orçamento com o que já foi pago/executado (aviso antes de cancelar). */
+export async function getQuoteCancellationImpactService(quoteId: string) {
+  return listWorkOrderImpactByQuote(quoteId);
+}
+
+/** Motivo e autor do cancelamento da versão, se houver. */
+export async function getQuoteCancellationInfoService(versionId: string) {
+  const [last] = await listAuditLogsForEntity("quote_version", versionId, ["QUOTE_CANCELLED"]);
+  if (!last) return null;
+  return {
+    at: last.createdAt,
+    by: last.userName,
+    reason: typeof last.metadata?.reason === "string" ? last.metadata.reason : null,
+  };
 }
 
 export async function listQuoteWorkOrdersService(quoteId: string) {
