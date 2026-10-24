@@ -1,5 +1,6 @@
 "use server";
 
+import { linkAppointmentToWorkOrderService } from "@/lib/appointments/service";
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
@@ -120,10 +121,20 @@ export async function createWorkOrderFromQuoteAction(
   }
 }
 
-export async function createWorkOrderWithoutQuoteAction(input: unknown): Promise<ActionResult> {
+export async function createWorkOrderWithoutQuoteAction(input: unknown, appointmentId?: string): Promise<ActionResult> {
   try {
     const userId = await requireUserId();
     const { workOrder } = await createWorkOrderWithoutQuoteService(userId, input);
+    if (appointmentId) {
+      // O vínculo nunca impede de abrir a OS: se falhar, a OS já existe.
+      try {
+        await linkAppointmentToWorkOrderService(appointmentId, workOrder.id);
+        revalidatePath("/dashboard/agendamentos");
+        revalidatePath("/dashboard");
+      } catch {
+        /* segue sem o vínculo */
+      }
+    }
     revalidatePath("/dashboard/os");
     return { success: true, workOrderId: workOrder.id };
   } catch (err) {

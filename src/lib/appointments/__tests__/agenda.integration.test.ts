@@ -3,9 +3,13 @@ import { pool } from "@/lib/db/pool";
 import { hashPassword } from "@/lib/auth/password";
 import { createUser } from "@/lib/db/repositories/users";
 import { createCustomerService } from "@/lib/customers/service";
+import { createVehicleService } from "@/lib/vehicles/service";
+import { createWorkOrderWithoutQuoteService } from "@/lib/workOrders/service";
 import {
   cancelAppointmentService,
   createAppointmentService,
+  getAppointmentForWorkOrderService,
+  linkAppointmentToWorkOrderService,
   setAppointmentAttendanceService,
   updateAppointmentService,
 } from "../service";
@@ -19,7 +23,7 @@ let customerId: string;
 
 async function cleanAll() {
   await pool.query(
-    `TRUNCATE "appointments", "vehicles", "customers", "audit_logs", "user_roles", "role_permissions", "users", "roles", "permissions" CASCADE`,
+    `TRUNCATE "appointments", "work_orders", "vehicles", "customers", "audit_logs", "user_roles", "role_permissions", "users", "roles", "permissions" CASCADE`,
   );
   await pool.query(`DELETE FROM app_settings WHERE key = 'calendar_feed_token'`);
 }
@@ -93,5 +97,28 @@ describe("agenda no celular (calendário .ics)", () => {
     expect(msg).toContain("09:00 - João - Freios - ABC1D23");
     expect(msg).not.toContain("Maria");
     expect(buildDailyMessage("amanhã", "03/11/2026", [])).toContain("Sem agendamentos");
+  });
+});
+
+describe("Criar OS a partir do agendamento (passo 1B)", () => {
+  it("oferece os dados, liga a OS, marca compareceu e não deixa ligar duas vezes", async () => {
+    const v = await createVehicleService(actorUserId, { customerId, plate: "AGE1A23" });
+    const a = await createAppointmentService(actorUserId, { customerId, vehicleId: v.id, scheduledAt: "2026-11-05T09:00", description: "Barulho na frente" });
+
+    const prefill = await getAppointmentForWorkOrderService(a.id);
+    expect(prefill).toMatchObject({ customerId, vehicleId: v.id, description: "Barulho na frente" });
+
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId: v.id, customerComplaint: "Barulho na frente" });
+    const linked = await linkAppointmentToWorkOrderService(a.id, os.workOrder.id);
+    expect(linked).toMatchObject({ status: "COMPARECEU", workOrderId: os.workOrder.id });
+
+    expect(await getAppointmentForWorkOrderService(a.id)).toBeNull();
+    expect(await linkAppointmentToWorkOrderService(a.id, os.workOrder.id)).toBeNull();
+  });
+
+  it("agendamento cancelado não gera OS", async () => {
+    const a = await createAppointmentService(actorUserId, { customerId, scheduledAt: "2026-11-06T09:00" });
+    await cancelAppointmentService(a.id, {});
+    expect(await getAppointmentForWorkOrderService(a.id)).toBeNull();
   });
 });

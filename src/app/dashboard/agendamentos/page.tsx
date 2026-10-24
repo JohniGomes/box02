@@ -103,6 +103,21 @@ export default async function AppointmentsPage() {
                 </p>
               ) : null}
               {a.description ? <p className="mt-1 text-sm text-muted">{a.description}</p> : null}
+              {a.workOrderId ? (
+                <p className="mt-1 text-xs">
+                  OS:{" "}
+                  <Link href={`/dashboard/os/${a.workOrderId}`} className="font-mono font-semibold text-accent">
+                    {a.workOrderNumber}
+                  </Link>
+                </p>
+              ) : a.status !== "CANCELADO" ? (
+                <Link
+                  href={`/dashboard/os/novo?agendamento=${a.id}`}
+                  className="mt-2 inline-flex h-8 items-center rounded-lg border border-accent px-3 text-xs font-semibold text-accent"
+                >
+                  Criar OS
+                </Link>
+              ) : null}
               {a.status !== "CANCELADO" ? (
                 <AppointmentActions
                   appointmentId={a.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntityPicker, type EntityPickerOption } from "@/components/EntityPicker";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
@@ -37,13 +37,18 @@ function emptyItem(): DraftItem {
 }
 
 /** Criação de OS sem orçamento prévio: escolhe cliente/veículo, check-in, itens opcionais. */
-export function NewWorkOrderWithoutQuoteForm() {
+export function NewWorkOrderWithoutQuoteForm({
+  initial,
+}: {
+  /** Dados prontos vindos de um agendamento. */
+  initial?: { appointmentId: string; customer: EntityPickerOption; vehicleId: string; complaint: string };
+}) {
   const router = useRouter();
-  const [customer, setCustomer] = useState<EntityPickerOption | null>(null);
+  const [customer, setCustomer] = useState<EntityPickerOption | null>(initial?.customer ?? null);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
-  const [vehicleId, setVehicleId] = useState("");
+  const [vehicleId, setVehicleId] = useState(initial?.vehicleId ?? "");
   const [mileageAtEntry, setMileageAtEntry] = useState("");
-  const [customerComplaint, setCustomerComplaint] = useState("");
+  const [customerComplaint, setCustomerComplaint] = useState(initial?.complaint ?? "");
   const [diagnosis, setDiagnosis] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +80,13 @@ export function NewWorkOrderWithoutQuoteForm() {
       setItems(p.items ?? []);
     },
   });
+
+  // Cliente vindo do agendamento: carrega os veículos dele uma vez.
+  const initialCustomerId = initial?.customer.id;
+  useEffect(() => {
+    if (!initialCustomerId) return;
+    listCustomerVehiclesAction(initialCustomerId).then(setVehicles);
+  }, [initialCustomerId]);
 
   async function handleCustomerChange(c: EntityPickerOption | null) {
     setCustomer(c);
@@ -112,7 +124,7 @@ export function NewWorkOrderWithoutQuoteForm() {
           serviceId: i.serviceId,
           partId: i.partId,
         })),
-    });
+    }, initial?.appointmentId);
 
     setSubmitting(false);
     if (!result.success) {

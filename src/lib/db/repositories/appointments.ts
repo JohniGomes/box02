@@ -64,6 +64,7 @@ export interface AppointmentWithNames extends AppointmentRecord {
   customerName: string;
   vehiclePlate: string | null;
   vehicleDescription: string | null;
+  workOrderNumber: string | null;
 }
 
 /** Mesma janela de `listAppointmentsBetween`, mas já com nome do
@@ -76,7 +77,8 @@ export async function listAppointmentsWithNamesBetween(from: Date, to: Date): Pr
        a."createdByUserId", a."cancelledAt", a."cancelReason", a."workOrderId", a."createdAt", a."updatedAt",
        c."legalName" as "customerName",
        v.plate as "vehiclePlate",
-       NULLIF(TRIM(CONCAT(v.brand, ' ', v.model)), '') as "vehicleDescription"
+       NULLIF(TRIM(CONCAT(v.brand, ' ', v.model)), '') as "vehicleDescription",
+       (SELECT w.number FROM work_orders w WHERE w.id = a."workOrderId") as "workOrderNumber"
      FROM appointments a
      JOIN customers c ON c.id = a."customerId"
      LEFT JOIN vehicles v ON v.id = a."vehicleId"
@@ -125,6 +127,20 @@ export async function setAppointmentAttendance(
      WHERE id = $1 AND status <> 'CANCELADO'
      RETURNING ${COLUMNS}`,
     [id, status],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Liga o agendamento à OS criada a partir dele e marca que o cliente compareceu. */
+export async function linkAppointmentToWorkOrder(id: string, workOrderId: string): Promise<AppointmentRecord | null> {
+  const result = await pool.query<AppointmentRecord>(
+    `UPDATE appointments
+     SET "workOrderId" = $2,
+         status = CASE WHEN status = 'AGENDADO' THEN 'COMPARECEU' ELSE status END,
+         "updatedAt" = NOW()
+     WHERE id = $1 AND status <> 'CANCELADO' AND "workOrderId" IS NULL
+     RETURNING ${COLUMNS}`,
+    [id, workOrderId],
   );
   return result.rows[0] ?? null;
 }
