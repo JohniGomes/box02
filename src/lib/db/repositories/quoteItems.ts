@@ -25,11 +25,13 @@ export interface QuoteItemRecord {
   notes: string | null;
   /** Peça fornecida pelo cliente: valor zero e sem baixa de estoque. */
   customerSupplied: boolean;
+  /** Bloco do orçamento (serviço + peças + mão de obra); nulo = item solto. */
+  groupKey: string | null;
 }
 
 const COLUMNS = `
   id, "quoteVersionId", type, description, quantity, "unitPriceCents", "totalCents",
-  "clientDecision", category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes, "customerSupplied"
+  "clientDecision", category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes, "customerSupplied", "groupKey"
 `;
 
 export interface CreateQuoteItemInput {
@@ -46,6 +48,7 @@ export interface CreateQuoteItemInput {
   partId?: string | null;
   notes?: string | null;
   customerSupplied?: boolean;
+  groupKey?: string | null;
 }
 
 export async function insertQuoteItems(
@@ -58,8 +61,8 @@ export async function insertQuoteItems(
     const result = await db.query<QuoteItemRecord>(
       `INSERT INTO quote_items (
         id, "quoteVersionId", type, description, quantity, "unitPriceCents", "totalCents",
-        category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes, "customerSupplied"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        category, "catalogItemType", "catalogItemId", "serviceId", "partId", notes, "customerSupplied", "groupKey"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING ${COLUMNS}`,
       [
         id,
@@ -76,6 +79,7 @@ export async function insertQuoteItems(
         item.partId ?? null,
         item.notes ?? null,
         item.customerSupplied ?? false,
+        item.groupKey ?? null,
       ],
     );
     inserted.push(result.rows[0]);

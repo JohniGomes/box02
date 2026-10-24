@@ -30,6 +30,13 @@ export default async function EditQuotePage({
   ]);
   if (!customer || !vehicle) notFound();
 
+  const headIdOfGroup = new Map<string, string>();
+  for (const i of items) {
+    if (i.groupKey && !headIdOfGroup.has(i.groupKey)) {
+      headIdOfGroup.set(i.groupKey, (items.find((x) => x.groupKey === i.groupKey && x.type === "SERVICO") ?? i).id);
+    }
+  }
+
   const initialValues: QuoteFormInitialValues = {
     customer: {
       id: customer.id,
@@ -43,6 +50,8 @@ export default async function EditQuotePage({
     },
     items: items.map((item) => ({
       key: item.id,
+      // Itens do mesmo bloco guardam a mesma chave; o cabeça (serviço) é a "key" dos demais.
+      groupKey: item.groupKey && headIdOfGroup.get(item.groupKey) !== item.id ? headIdOfGroup.get(item.groupKey) : undefined,
       type: item.type,
       description: item.description,
       quantity: String(Number(item.quantity)),
