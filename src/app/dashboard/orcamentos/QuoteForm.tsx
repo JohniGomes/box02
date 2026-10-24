@@ -95,7 +95,8 @@ export function QuoteForm({
   const [customer, setCustomer] = useState<EntityPickerOption | null>(initialValues?.customer ?? null);
   const [vehicle, setVehicle] = useState<VehicleOption | null>(initialValues?.vehicle ?? null);
   const [vehicleOptions, setVehicleOptions] = useState<VehicleOption[]>([]);
-  const [openQuotes, setOpenQuotes] = useState<OpenQuoteRef[]>([]);
+  // Resultado da busca de orçamentos abertos, junto da chave (cliente+veículo) a que pertence.
+  const [openQuotesResult, setOpenQuotesResult] = useState<{ key: string; rows: OpenQuoteRef[] }>({ key: "", rows: [] });
   const [loadingVehicles, setLoadingVehicles] = useState(false);
 
   const [items, setItems] = useState<ItemDraft[]>(initialValues?.items ?? [newItem()]);
@@ -261,19 +262,20 @@ export function QuoteForm({
   });
 
   // Avisa se já existe orçamento em aberto para o mesmo cliente e veículo (só ao criar).
+  const openQuotesKey = mode === "create" && customer && vehicle ? `${customer.id}:${vehicle.id}` : "";
   useEffect(() => {
-    if (mode !== "create" || !customer || !vehicle) {
-      setOpenQuotes([]);
-      return;
-    }
+    if (!openQuotesKey) return;
+    const [customerId, vehicleId] = openQuotesKey.split(":");
     let cancelled = false;
-    listOpenQuotesForVehicleAction(customer.id, vehicle.id).then((rows) => {
-      if (!cancelled) setOpenQuotes(rows);
+    listOpenQuotesForVehicleAction(customerId, vehicleId).then((rows) => {
+      if (!cancelled) setOpenQuotesResult({ key: openQuotesKey, rows });
     });
     return () => {
       cancelled = true;
     };
-  }, [mode, customer, vehicle]);
+  }, [openQuotesKey]);
+  // Só vale o resultado da busca do cliente+veículo atuais; trocou, o aviso some até a nova resposta.
+  const openQuotes = openQuotesKey && openQuotesResult.key === openQuotesKey ? openQuotesResult.rows : [];
 
   const isLastStep = step === STEPS.length - 1;
   const canLeaveCliente = mode === "edit" || !!customer;
