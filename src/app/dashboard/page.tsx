@@ -6,6 +6,7 @@ import { CalendarWidget } from "@/components/CalendarWidget";
 import { HomeAlerts } from "@/components/HomeAlerts";
 import { DraftsCard } from "@/components/DraftsCard";
 import { listReceivablesService, listYardService } from "@/lib/workOrders/service";
+import { getMessageCenterService } from "@/lib/messages/service";
 import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL } from "./os/statusLabels";
 import { formatPlate } from "@/lib/validation/plate";
 
@@ -34,11 +35,12 @@ export default async function DashboardHomePage() {
   const todayStart = new Date(year, now.getMonth(), now.getDate());
   const todayEnd = new Date(year, now.getMonth(), now.getDate() + 1);
 
-  const [metrics, monthAppointments, receivables, yard] = await Promise.all([
+  const [metrics, monthAppointments, receivables, yard, messageCenter] = await Promise.all([
     getDashboardMetricsService(),
     listAppointmentsWithNamesBetweenService(monthStart, monthEnd),
     listReceivablesService(),
     listYardService(),
+    getMessageCenterService(),
   ]);
   const receivableTotal = receivables.reduce((sum, r) => sum + r.balanceCents, 0);
 
@@ -103,6 +105,19 @@ export default async function DashboardHomePage() {
 
       <HomeAlerts />
       <DraftsCard />
+
+      {messageCenter.total > 0 ? (
+        <Link
+          href="/dashboard/mensagens"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent/5 p-4 text-sm"
+        >
+          <span>
+            <span className="font-semibold">{messageCenter.total}</span>{" "}
+            {messageCenter.total === 1 ? "mensagem pronta para enviar" : "mensagens prontas para enviar"} aos clientes
+          </span>
+          <span className="shrink-0 font-semibold text-accent">Ver →</span>
+        </Link>
+      ) : null}
 
       {yard.length > 0 ? (
         <div className="rounded-2xl border border-border bg-surface p-5">
