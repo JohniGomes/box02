@@ -18,3 +18,12 @@ export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
 export const cancelAppointmentSchema = z.object({
   cancelReason: optionalTrimmed,
 });
+
+export const updateAppointmentSchema = z.object({
+  scheduledAt: z.string().trim().min(1, "Informe data e hora"),
+  description: optionalTrimmed,
+});
+
+export const appointmentAttendanceSchema = z.object({
+  status: z.enum(["AGENDADO", "COMPARECEU", "NAO_COMPARECEU"]),
+});

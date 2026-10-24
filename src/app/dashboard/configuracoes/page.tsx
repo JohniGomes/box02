@@ -7,6 +7,7 @@ const ITEMS = [
   { label: "Precificação", href: "/dashboard/configuracoes/precificacao" },
   { label: "Executores (quem executa)", href: "/dashboard/configuracoes/executores" },
   { label: "Regras da oficina", href: "/dashboard/configuracoes/regras" },
+  { label: "Agenda no celular (Google Agenda)", href: "/dashboard/configuracoes/agenda" },
 ];
 
 export default function ConfiguracoesPage() {

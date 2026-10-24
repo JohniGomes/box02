@@ -1,7 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { pool } from "../pool";
 
-export type AppointmentStatus = "AGENDADO" | "CANCELADO";
+export type AppointmentStatus = "AGENDADO" | "CANCELADO" | "COMPARECEU" | "NAO_COMPARECEU";
 
 export interface AppointmentRecord {
   id: string;
@@ -13,13 +13,14 @@ export interface AppointmentRecord {
   createdByUserId: string;
   cancelledAt: Date | null;
   cancelReason: string | null;
+  workOrderId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const COLUMNS = `
   id, status, "customerId", "vehicleId", "scheduledAt", description,
-  "createdByUserId", "cancelledAt", "cancelReason", "createdAt", "updatedAt"
+  "createdByUserId", "cancelledAt", "cancelReason", "workOrderId", "createdAt", "updatedAt"
 `;
 
 export async function createAppointment(
@@ -72,7 +73,7 @@ export async function listAppointmentsWithNamesBetween(from: Date, to: Date): Pr
   const result = await pool.query<AppointmentWithNames>(
     `SELECT
        a.id, a.status, a."customerId", a."vehicleId", a."scheduledAt", a.description,
-       a."createdByUserId", a."cancelledAt", a."cancelReason", a."createdAt", a."updatedAt",
+       a."createdByUserId", a."cancelledAt", a."cancelReason", a."workOrderId", a."createdAt", a."updatedAt",
        c."legalName" as "customerName",
        v.plate as "vehiclePlate",
        NULLIF(TRIM(CONCAT(v.brand, ' ', v.model)), '') as "vehicleDescription"
@@ -96,6 +97,34 @@ export async function cancelAppointment(
      WHERE id = $1 AND status = 'AGENDADO'
      RETURNING ${COLUMNS}`,
     [id, input.cancelReason ?? null],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Corrige data/hora e descrição de um agendamento que ainda está AGENDADO. */
+export async function updateAppointment(
+  id: string,
+  input: { scheduledAt: Date; description: string | null },
+): Promise<AppointmentRecord | null> {
+  const result = await pool.query<AppointmentRecord>(
+    `UPDATE appointments SET "scheduledAt" = $2, description = $3, "updatedAt" = NOW()
+     WHERE id = $1 AND status = 'AGENDADO'
+     RETURNING ${COLUMNS}`,
+    [id, input.scheduledAt, input.description],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Marca comparecimento (ou volta para AGENDADO). Cancelado não muda por aqui. */
+export async function setAppointmentAttendance(
+  id: string,
+  status: "AGENDADO" | "COMPARECEU" | "NAO_COMPARECEU",
+): Promise<AppointmentRecord | null> {
+  const result = await pool.query<AppointmentRecord>(
+    `UPDATE appointments SET status = $2, "updatedAt" = NOW()
+     WHERE id = $1 AND status <> 'CANCELADO'
+     RETURNING ${COLUMNS}`,
+    [id, status],
   );
   return result.rows[0] ?? null;
 }
