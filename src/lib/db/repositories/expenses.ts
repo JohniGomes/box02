@@ -185,3 +185,18 @@ export async function updateExpense(
   );
   return result.rows[0] ?? null;
 }
+
+/** Corrige só os textos de uma despesa JÁ PAGA (valor, data, forma e categoria ficam). */
+export async function updatePaidExpenseText(
+  id: string,
+  input: { description: string; supplierName: string | null; notes: string | null },
+  db: Queryable = pool,
+): Promise<ExpenseRecord | null> {
+  const result = await db.query<ExpenseRecord>(
+    `UPDATE expenses SET description = $2, "supplierName" = $3, notes = $4, "updatedAt" = NOW()
+     WHERE id = $1 AND "paidAt" IS NOT NULL
+     RETURNING ${COLUMNS}`,
+    [id, input.description, input.supplierName, input.notes],
+  );
+  return result.rows[0] ?? null;
+}

@@ -51,6 +51,14 @@ export const createExpenseSchema = z
   }));
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
+/** Correção só de texto numa despesa já paga: valor, data, forma e categoria não mudam. */
+export const correctPaidExpenseTextSchema = z.object({
+  description: z.string().trim().min(1, "Informe a descrição"),
+  supplierName: optionalTrimmed,
+  notes: optionalTrimmed,
+});
+export type CorrectPaidExpenseTextInput = z.infer<typeof correctPaidExpenseTextSchema>;
+
 export const updateExpenseSchema = createExpenseSchema;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 

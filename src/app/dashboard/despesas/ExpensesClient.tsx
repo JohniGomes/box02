@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL, centsToReais } from "@/lib/money";
 import {
+  correctPaidExpenseTextAction,
   createExpenseAction,
   deleteExpenseAction,
   listSupplierNamesAction,
@@ -176,6 +177,7 @@ function dueLabel(dueDate: string, today: string): { text: string; className: st
 function ExpenseCard({ expense }: { expense: ExpenseView }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [editingText, setEditingText] = useState(false);
   const [payMode, setPayMode] = useState(false);
   const [paymentMethod, setPaymentMethod] = useRememberedChoice("box02.lastPayMethod", "DINHEIRO", [
     "DINHEIRO",
@@ -259,6 +261,21 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
     );
   }
 
+  if (editingText) {
+    return (
+      <li className="rounded-xl border border-border bg-background p-3">
+        <PaidTextForm
+          expense={expense}
+          onDone={() => {
+            setEditingText(false);
+            router.refresh();
+          }}
+          onCancel={() => setEditingText(false)}
+        />
+      </li>
+    );
+  }
+
   return (
     <li className="rounded-xl border border-border bg-background p-3">
       <div className="flex items-start justify-between gap-2">
@@ -316,7 +333,13 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
             </div>
           </div>
         ) : (
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={() => setEditingText(true)}
+              className="h-9 flex-1 rounded-lg border border-border text-xs font-medium"
+            >
+              Corrigir texto
+            </button>
             <button
               onClick={() => setConfirmUndo(true)}
               className="h-9 flex-1 rounded-lg border border-border text-xs font-medium"
@@ -421,6 +444,64 @@ function ExpenseCard({ expense }: { expense: ExpenseView }) {
       ) : null}
       {expense.status !== "PAGA" && !payMode && error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
     </li>
+  );
+}
+
+/** Despesa já paga: só descrição, fornecedor e observação podem ser corrigidos. */
+function PaidTextForm({
+  expense,
+  onDone,
+  onCancel,
+}: {
+  expense: ExpenseView;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [description, setDescription] = useState(expense.description);
+  const [supplierName, setSupplierName] = useState(expense.supplierName ?? "");
+  const [notes, setNotes] = useState(expense.notes ?? "");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await correctPaidExpenseTextAction(expense.id, {
+        description,
+        supplierName: supplierName || undefined,
+        notes: notes || undefined,
+      });
+      if (!result.success) {
+        setError(result.error ?? "Falha ao salvar.");
+        return;
+      }
+      onDone();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
+      <p className="text-xs text-muted">
+        Corrige só o texto. O pagamento ({formatBRL(expense.amountCents)}) e a data não mudam. O texto antigo fica
+        registrado.
+      </p>
+      <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className={inputClass} />
+      <input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Fornecedor (opcional)" className={inputClass} />
+      <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observação (opcional)" className={inputClass} />
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      <div className="flex gap-2">
+        <button
+          onClick={save}
+          disabled={isPending || !description.trim()}
+          className="h-11 flex-1 rounded-xl bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
+        >
+          {isPending ? "Salvando…" : "Salvar correção"}
+        </button>
+        <button onClick={onCancel} className="h-11 flex-1 rounded-xl border border-border text-sm font-semibold">
+          Voltar
+        </button>
+      </div>
+    </div>
   );
 }
 

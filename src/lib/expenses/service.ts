@@ -11,18 +11,25 @@ import {
   markExpenseAsPaid,
   unmarkExpenseAsPaid,
   updateExpense,
+  updatePaidExpenseText,
   type ExpenseRecord,
 } from "@/lib/db/repositories/expenses";
 import { addOneMonth, noonInBrasilia, todayInBrasilia } from "./dates";
 import { resolveEventInstant } from "@/lib/dateBr";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { reaisToCents } from "@/lib/money";
-import { createExpenseSchema, markExpenseAsPaidSchema, updateExpenseSchema } from "@/lib/validation/expenses";
+import {
+  correctPaidExpenseTextSchema,
+  createExpenseSchema,
+  markExpenseAsPaidSchema,
+  updateExpenseSchema,
+} from "@/lib/validation/expenses";
 import {
   ExpenseAlreadyPaidError,
   ExpenseDuplicateError,
   ExpenseNotFoundError,
   ExpenseNotPaidError,
+  ExpenseNotPaidForTextEditError,
   ExpensePaidInFutureError,
   ExpenseReconciledError,
 } from "./errors";
@@ -121,6 +128,45 @@ export async function updateExpenseService(
       entityType: "expense",
       entityId: expenseId,
       metadata: { category: updated.category, amountCents, dueDate: updated.dueDate },
+    });
+
+    return toView(updated);
+  });
+}
+
+/**
+ * Corrige só o TEXTO (descrição, fornecedor, observação) de uma despesa já paga,
+ * sem desfazer o pagamento. Valor, data, forma e categoria não mudam, então o
+ * caixa e o Início continuam iguais. O texto antigo fica na auditoria.
+ */
+export async function correctPaidExpenseTextService(
+  actorUserId: string,
+  expenseId: string,
+  rawInput: unknown,
+): Promise<ExpenseView> {
+  const input = correctPaidExpenseTextSchema.parse(rawInput);
+
+  return withTransaction(async (client) => {
+    const expense = await lockExpenseById(expenseId, client);
+    if (!expense) throw new ExpenseNotFoundError(expenseId);
+    if (!expense.paidAt) throw new ExpenseNotPaidForTextEditError();
+
+    const updated = await updatePaidExpenseText(
+      expenseId,
+      { description: input.description, supplierName: input.supplierName ?? null, notes: input.notes ?? null },
+      client,
+    );
+    if (!updated) throw new ExpenseNotFoundError(expenseId);
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "EXPENSE_TEXT_CORRECTED",
+      entityType: "expense",
+      entityId: expenseId,
+      metadata: {
+        previous: { description: expense.description, supplierName: expense.supplierName, notes: expense.notes },
+        next: { description: updated.description, supplierName: updated.supplierName, notes: updated.notes },
+      },
     });
 
     return toView(updated);
