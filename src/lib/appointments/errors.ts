@@ -32,3 +32,10 @@ export class AppointmentNotEditableError extends Error {
     this.name = "AppointmentNotEditableError";
   }
 }
+
+export class AppointmentLinkError extends Error {
+  constructor() {
+    super("Não foi possível ligar este agendamento a essa OS (ela já está ligada a outro agendamento ou não é deste cliente).");
+    this.name = "AppointmentLinkError";
+  }
+}

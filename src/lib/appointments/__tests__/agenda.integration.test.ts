@@ -9,11 +9,13 @@ import {
   cancelAppointmentService,
   createAppointmentService,
   getAppointmentForWorkOrderService,
+  linkAppointmentToExistingWorkOrderService,
   linkAppointmentToWorkOrderService,
+  listLinkableWorkOrdersService,
   setAppointmentAttendanceService,
   updateAppointmentService,
 } from "../service";
-import { AppointmentAlreadyCancelledError, AppointmentNotEditableError } from "../errors";
+import { AppointmentAlreadyCancelledError, AppointmentLinkError, AppointmentNotEditableError } from "../errors";
 import { buildCalendarFeedIfAuthorized, getCalendarFeedToken, regenerateCalendarFeedToken } from "../feed";
 import { buildAppointmentsIcs } from "../ics";
 import { buildDailyMessage } from "../dailyMessage";
@@ -120,5 +122,35 @@ describe("Criar OS a partir do agendamento (passo 1B)", () => {
     const a = await createAppointmentService(actorUserId, { customerId, scheduledAt: "2026-11-06T09:00" });
     await cancelAppointmentService(a.id, {});
     expect(await getAppointmentForWorkOrderService(a.id)).toBeNull();
+  });
+});
+
+describe("ligar agendamento a uma OS que já existia", () => {
+  it("sugere a OS do mesmo cliente e veículo no mesmo dia, liga, marca compareceu e não liga duas vezes", async () => {
+    const v = await createVehicleService(actorUserId, { customerId, plate: "JEO1A23" });
+    // OS criada por outro caminho (sem passar pelo agendamento)
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId: v.id, customerComplaint: "Diagnóstico" });
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    const a = await createAppointmentService(actorUserId, { customerId, vehicleId: v.id, scheduledAt: `${today}T08:00`, description: "Diagnóstico" });
+
+    const found = await listLinkableWorkOrdersService(a.id);
+    expect(found.candidates.map((c) => c.id)).toEqual([os.workOrder.id]);
+    expect(found.suggestedId).toBe(os.workOrder.id);
+
+    const linked = await linkAppointmentToExistingWorkOrderService(a.id, os.workOrder.id);
+    expect(linked).toMatchObject({ status: "COMPARECEU", workOrderId: os.workOrder.id });
+
+    // a OS já ligada some da lista de outro agendamento e não deixa ligar de novo
+    const b = await createAppointmentService(actorUserId, { customerId, vehicleId: v.id, scheduledAt: `${today}T10:00` });
+    expect((await listLinkableWorkOrdersService(b.id)).candidates).toHaveLength(0);
+    await expect(linkAppointmentToExistingWorkOrderService(b.id, os.workOrder.id)).rejects.toThrow(AppointmentLinkError);
+  });
+
+  it("OS de outro cliente não pode ser ligada", async () => {
+    const other = (await createCustomerService(actorUserId, { type: "PF", legalName: "Outro Cliente" })).id;
+    const ov = await createVehicleService(actorUserId, { customerId: other, plate: "OUT1A23" });
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId: other, vehicleId: ov.id });
+    const a = await createAppointmentService(actorUserId, { customerId, scheduledAt: "2026-11-30T09:00" });
+    await expect(linkAppointmentToExistingWorkOrderService(a.id, os.workOrder.id)).rejects.toThrow(AppointmentLinkError);
   });
 });

@@ -4,6 +4,7 @@ import {
   findAppointmentById,
   listAppointmentsBetween,
   linkAppointmentToWorkOrder,
+  listLinkableWorkOrders,
   listAppointmentsWithNamesBetween,
   setAppointmentAttendance,
   updateAppointment,
@@ -21,6 +22,7 @@ import {
 import {
   AppointmentAlreadyCancelledError,
   AppointmentCustomerNotFoundError,
+  AppointmentLinkError,
   AppointmentNotEditableError,
   AppointmentNotFoundError,
   AppointmentVehicleNotOwnedByCustomerError,
@@ -124,4 +126,38 @@ export async function setAppointmentAttendanceService(appointmentId: string, raw
   const updated = await setAppointmentAttendance(appointmentId, input.status);
   if (!updated) throw new AppointmentNotFoundError(appointmentId);
   return updated;
+}
+
+/**
+ * OS que podem ser ligadas a um agendamento que ainda não tem OS (ex.: a OS foi
+ * criada por outro caminho). Se houver uma só e as datas baterem (±1 dia), vem
+ * marcada como sugestão.
+ */
+export async function listLinkableWorkOrdersService(appointmentId: string) {
+  const a = await findAppointmentById(appointmentId);
+  if (!a || a.status === "CANCELADO" || a.workOrderId) return { candidates: [], suggestedId: null as string | null };
+  const rows = await listLinkableWorkOrders(a.customerId, a.vehicleId);
+  const dayMs = 86400000;
+  // o agendamento guarda a hora como digitada (lida em UTC); a OS guarda UTC real: compara o dia de Brasília.
+  const apptDay = new Date(`${a.scheduledAt.toISOString().slice(0, 10)}T00:00:00.000Z`).getTime();
+  const brDay = (d: Date) => new Date(`${d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })}T00:00:00.000Z`).getTime();
+  const near = rows.filter((r) => {
+    const days = [brDay(r.entryAt), r.deliveredAt ? brDay(r.deliveredAt) : null].filter((x): x is number => x !== null);
+    return days.some((d) => Math.abs(d - apptDay) <= dayMs);
+  });
+  return {
+    candidates: rows.map((r) => ({ id: r.id, number: r.number, status: r.status, vehicleLabel: r.vehicleLabel })),
+    suggestedId: near.length === 1 ? near[0].id : null,
+  };
+}
+
+/** Liga o agendamento a uma OS que já existe (mesmo cliente) e marca que compareceu. */
+export async function linkAppointmentToExistingWorkOrderService(appointmentId: string, workOrderId: string) {
+  const { candidates } = await listLinkableWorkOrdersService(appointmentId);
+  if (!candidates.some((c) => c.id === workOrderId)) {
+    throw new AppointmentLinkError();
+  }
+  const linked = await linkAppointmentToWorkOrder(appointmentId, workOrderId);
+  if (!linked) throw new AppointmentLinkError();
+  return linked;
 }

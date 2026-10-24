@@ -4,6 +4,7 @@ import { buildDailyMessage } from "@/lib/appointments/dailyMessage";
 import { formatPlate } from "@/lib/validation/plate";
 import { CancelAppointmentButton } from "./CancelAppointmentButton";
 import { AppointmentActions } from "./AppointmentActions";
+import { LinkWorkOrder } from "./LinkWorkOrder";
 
 const DAY_MS = 86400000;
 
@@ -112,13 +113,16 @@ export default async function AppointmentsPage() {
                 </p>
               ) : a.status !== "CANCELADO" ? (
                 <div className="mt-2 flex flex-wrap gap-2">
+                  <LinkWorkOrder appointmentId={a.id} />
+                  {a.status === "COMPARECEU" && wallDate(a.scheduledAt) < todayBr ? null : (
                   <Link
                     href={`/dashboard/os/novo?agendamento=${a.id}`}
                     className="inline-flex h-8 items-center rounded-lg border border-accent px-3 text-xs font-semibold text-accent"
                   >
                     Criar OS
                   </Link>
-                  {a.vehicleId ? (
+                  )}
+                  {a.vehicleId && !(a.status === "COMPARECEU" && wallDate(a.scheduledAt) < todayBr) ? (
                     <Link
                       href={`/dashboard/orcamentos/novo?agendamento=${a.id}`}
                       className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-semibold"
