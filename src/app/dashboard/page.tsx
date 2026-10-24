@@ -5,6 +5,9 @@ import { formatBRL } from "@/lib/money";
 import { CalendarWidget } from "@/components/CalendarWidget";
 import { HomeAlerts } from "@/components/HomeAlerts";
 import { DraftsCard } from "@/components/DraftsCard";
+import { listReceivablesService, listYardService } from "@/lib/workOrders/service";
+import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL } from "./os/statusLabels";
+import { formatPlate } from "@/lib/validation/plate";
 
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -31,10 +34,13 @@ export default async function DashboardHomePage() {
   const todayStart = new Date(year, now.getMonth(), now.getDate());
   const todayEnd = new Date(year, now.getMonth(), now.getDate() + 1);
 
-  const [metrics, monthAppointments] = await Promise.all([
+  const [metrics, monthAppointments, receivables, yard] = await Promise.all([
     getDashboardMetricsService(),
     listAppointmentsWithNamesBetweenService(monthStart, monthEnd),
+    listReceivablesService(),
+    listYardService(),
   ]);
+  const receivableTotal = receivables.reduce((sum, r) => sum + r.balanceCents, 0);
 
   const activeMonthAppointments = monthAppointments.filter((a) => a.status === "AGENDADO");
   const appointmentCountByDay: Record<number, number> = {};
@@ -98,6 +104,75 @@ export default async function DashboardHomePage() {
       <HomeAlerts />
       <DraftsCard />
 
+      {yard.length > 0 ? (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Pátio de hoje</h2>
+            <span className="text-xs text-muted">
+              {yard.length} {yard.length === 1 ? "carro" : "carros"} na oficina
+            </span>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {yard.map((w) => {
+              const days = Math.max(0, Math.floor((now.getTime() - w.entryAt.getTime()) / 86400000));
+              return (
+                <li key={w.id}>
+                  <Link
+                    href={`/dashboard/os/${w.id}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="font-mono text-xs font-semibold">{w.number}</span> · {w.customerName}
+                      {w.vehiclePlate ? <span className="text-xs text-muted"> · {formatPlate(w.vehiclePlate)}</span> : null}
+                      <span className="text-xs text-muted">
+                        {" "}
+                        · {days === 0 ? "entrou hoje" : `há ${days} dia${days === 1 ? "" : "s"}`}
+                      </span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${WORK_ORDER_STATUS_CLASS[w.status]}`}>
+                      {WORK_ORDER_STATUS_LABEL[w.status]}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {receivables.length > 0 ? (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">A receber</h2>
+            <span className="text-sm font-semibold text-danger">{formatBRL(receivableTotal)}</span>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {receivables.slice(0, 8).map((r) => {
+              const days = r.deliveredAt ? Math.max(0, Math.floor((now.getTime() - r.deliveredAt.getTime()) / 86400000)) : null;
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/dashboard/os/${r.id}/detalhes#recebimentos`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="font-mono text-xs font-semibold">{r.number}</span> · {r.customerName}
+                      {days !== null ? (
+                        <span className="text-xs text-muted"> · {days === 0 ? "entregue hoje" : `há ${days} dia${days === 1 ? "" : "s"}`}</span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 font-semibold">{formatBRL(r.balanceCents)}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <Link href="/dashboard/os?saldo=1" className="mt-3 inline-block text-xs font-medium text-accent">
+            Ver todas com saldo →
+          </Link>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CalendarWidget
           year={year}
@@ -142,6 +217,12 @@ export default async function DashboardHomePage() {
             <Row label="Entradas do mês" value={formatBRL(metrics.monthlyRevenueCents)} />
             <Row label="Saídas do mês (pagas)" value={formatBRL(metrics.monthlyExpensesCents)} />
             <Row label="Resultado do mês" value={formatBRL(metrics.netResultCents)} />
+            {metrics.proLaboreCents > 0 ? (
+              <>
+                <Row label="Pró-labore pago no mês" value={formatBRL(metrics.proLaboreCents)} />
+                <Row label="Resultado antes do pró-labore" value={formatBRL(metrics.resultBeforeProLaboreCents)} />
+              </>
+            ) : null}
             <Row label="Despesas a pagar até o fim do mês" value={formatBRL(metrics.pendingExpensesCents)} />
             <Row label="A pagar no mês que vem" value={formatBRL(metrics.nextMonthExpensesCents)} />
           </div>

@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { listSuppliersService } from "@/lib/purchases/service";
 import { listWorkOrdersForExpense } from "@/lib/db/repositories/workOrders";
 import {
+  correctPaidExpenseTextService,
   createExpenseService,
   deleteExpenseService,
   markExpenseAsPaidService,
@@ -18,6 +19,7 @@ import {
   ExpenseDuplicateError,
   ExpenseNotFoundError,
   ExpenseNotPaidError,
+  ExpenseNotPaidForTextEditError,
   ExpensePaidInFutureError,
   ExpenseReconciledError,
 } from "@/lib/expenses/errors";
@@ -48,6 +50,7 @@ function friendlyError(err: unknown, fallback: string): ExpenseActionResult {
     err instanceof ExpenseNotFoundError ||
     err instanceof ExpenseAlreadyPaidError ||
     err instanceof ExpenseNotPaidError ||
+    err instanceof ExpenseNotPaidForTextEditError ||
     err instanceof ExpenseReconciledError ||
     err instanceof ExpenseDuplicateError ||
     err instanceof ExpensePaidInFutureError
@@ -93,6 +96,18 @@ export async function updateExpenseAction(expenseId: string, input: unknown): Pr
     return { success: true, expenseId };
   } catch (err) {
     return friendlyError(err, "Não foi possível corrigir a despesa.");
+  }
+}
+
+/** Corrige descrição, fornecedor e observação de uma despesa já paga (o pagamento não muda). */
+export async function correctPaidExpenseTextAction(expenseId: string, input: unknown): Promise<ExpenseActionResult> {
+  try {
+    const userId = await requireUserId();
+    await correctPaidExpenseTextService(userId, expenseId, input);
+    revalidatePath("/dashboard/despesas");
+    return { success: true, expenseId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível corrigir o texto da despesa.");
   }
 }
 

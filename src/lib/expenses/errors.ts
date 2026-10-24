@@ -42,3 +42,11 @@ export class ExpenseAlreadyPaidError extends Error {
     this.name = "ExpenseAlreadyPaidError";
   }
 }
+
+/** "Corrigir texto" só vale para despesa já paga; a em aberto usa "Editar". */
+export class ExpenseNotPaidForTextEditError extends Error {
+  constructor() {
+    super("Esta despesa ainda não está paga — use \"Editar\".");
+    this.name = "ExpenseNotPaidForTextEditError";
+  }
+}

@@ -23,6 +23,7 @@ export function WorkOrderSearchBar() {
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentStatus = searchParams.get("status") ?? "";
+  const withBalance = searchParams.get("saldo") === "1";
 
   function pushParams(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -65,6 +66,15 @@ export function WorkOrderSearchBar() {
             {opt.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => pushParams({ saldo: withBalance ? "" : "1" })}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${
+            withBalance ? "border-accent bg-accent/15 text-foreground" : "border-border text-muted"
+          }`}
+        >
+          Com saldo em aberto
+        </button>
       </div>
     </div>
   );

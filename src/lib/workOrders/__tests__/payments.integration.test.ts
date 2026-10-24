@@ -8,6 +8,9 @@ import {
   closeWorkOrderService,
   createWorkOrderWithoutQuoteService,
   getWorkOrderPaymentsSummaryService,
+  listReceivablesService,
+  listYardService,
+  searchWorkOrdersService,
   refundWorkOrderPaymentService,
   registerWorkOrderPaymentService,
   registerWorkOrderPaymentsService,
@@ -347,5 +350,49 @@ describe("desconto no recebimento (Etapa 3.3)", () => {
     const summary = await getWorkOrderPaymentsSummaryService(workOrderId);
     expect(summary!.paidCents).toBe(0);
     expect(summary!.remainingCents).toBe(19000);
+  });
+});
+
+describe("A receber (Etapa 4.1)", () => {
+  it("lista só OS entregues com saldo, com o saldo certo, e o filtro da lista bate", async () => {
+    const owing = await createDeliveredWorkOrder("850,00");
+    const partial = await createDeliveredWorkOrder("200,00");
+    const paid = await createDeliveredWorkOrder("100,00");
+
+    await registerWorkOrderPaymentsService(actorUserId, partial, {
+      payments: [{ amountReais: "100,00", method: "PIX" }],
+      discountReais: "10,00",
+    });
+    await registerWorkOrderPaymentsService(actorUserId, paid, { payments: [{ amountReais: "100,00", method: "PIX" }] });
+
+    const rows = await listReceivablesService();
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.balanceCents]));
+    expect(byId[owing]).toBe(85000);
+    expect(byId[partial]).toBe(9000);
+    expect(byId[paid]).toBeUndefined();
+
+    const filtered = await searchWorkOrdersService({ withBalance: true });
+    expect(filtered.items.map((i) => i.id).sort()).toEqual([owing, partial].sort());
+    expect(filtered.items.find((i) => i.id === owing)!.balanceCents).toBe(85000);
+  });
+
+  it("estorno reabre o saldo", async () => {
+    const id = await createDeliveredWorkOrder("100,00");
+    const payment = await registerWorkOrderPaymentService(actorUserId, id, { amountReais: "100,00", method: "PIX" });
+    expect((await listReceivablesService()).find((r) => r.id === id)).toBeUndefined();
+
+    await refundWorkOrderPaymentService(actorUserId, id, payment.id, { refundReais: "30,00", reason: "Erro" });
+    expect((await listReceivablesService()).find((r) => r.id === id)!.balanceCents).toBe(3000);
+  });
+});
+
+describe("Pátio de hoje", () => {
+  it("lista só OS que ainda estão na oficina", async () => {
+    const delivered = await createDeliveredWorkOrder("100,00");
+    const open = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+
+    const ids = (await listYardService()).map((r) => r.id);
+    expect(ids).toContain(open.workOrder.id);
+    expect(ids).not.toContain(delivered);
   });
 });
