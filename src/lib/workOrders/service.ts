@@ -1454,9 +1454,13 @@ export async function registerWorkOrderReceptionAcceptanceService(
     if (existing.receptionAcceptedAt) throw new WorkOrderReceptionAlreadyAcceptedError();
 
     // O Termo congela o que estiver gravado: sem queixa e KM ele nasceria vazio.
+    // Numa OS que já foi entregue (serviço lançado depois de feito) essas informações
+    // muitas vezes não existem mais: aceita sem elas, sem obrigar a digitar KM 0.
     const missing: string[] = [];
-    if (!existing.customerComplaint || existing.customerComplaint.trim() === "") missing.push("a queixa do cliente");
-    if (existing.mileageAtEntry === null || existing.mileageAtEntry === undefined) missing.push("o KM do painel");
+    if (existing.status !== "ENTREGUE") {
+      if (!existing.customerComplaint || existing.customerComplaint.trim() === "") missing.push("a queixa do cliente");
+      if (existing.mileageAtEntry === null || existing.mileageAtEntry === undefined) missing.push("o KM do painel");
+    }
     if (missing.length > 0) throw new WorkOrderReceptionIncompleteError(missing);
 
     let checklistSnapshot: ReceptionChecklistSnapshot | null = null;

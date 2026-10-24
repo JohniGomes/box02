@@ -71,6 +71,7 @@ export function QuickSaleForm({
   const [items, setItems] = useState<ItemDraft[]>([newItem()]);
   // Fechamento
   const [serviceDate, setServiceDate] = useState(today);
+  const [serviceTime, setServiceTime] = useState("");
   const [mileage, setMileage] = useState("");
   const [executedBy, setExecutedBy] = useRememberedChoice(
     "box02.lastExecutor",
@@ -250,6 +251,7 @@ export function QuickSaleForm({
         discountValue: discountType ? discountValue : undefined,
         discountReason: discountType && discountReason ? discountReason : undefined,
         serviceDate,
+        serviceTime: serviceTime || undefined,
         mileageAtEntry: mileage,
         executedBy,
         deliveryAcceptedName: deliveryName || customerName,
@@ -263,7 +265,12 @@ export function QuickSaleForm({
         return;
       }
       void draft.finish();
-      router.push(`/dashboard/os/${result.workOrderId}/recibo`);
+      // Sem pagamento não há recibo: abre a OS já na parte de recebimentos.
+      router.push(
+        paidCents > 0
+          ? `/dashboard/os/${result.workOrderId}/recibo`
+          : `/dashboard/os/${result.workOrderId}/detalhes#recebimentos`,
+      );
       router.refresh();
     });
   }
@@ -275,7 +282,6 @@ export function QuickSaleForm({
     (usingExistingVehicle || vehicleModel.trim() || vehiclePlate.trim()) &&
     items.some((i) => i.description.trim() !== "") &&
     executedBy &&
-    paidCents > 0 &&
     remainingCents >= 0;
 
   return (
@@ -409,6 +415,18 @@ export function QuickSaleForm({
               max={today}
               value={serviceDate}
               onChange={(e) => setServiceDate(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" htmlFor="qsTime">
+              Horário (opcional)
+            </label>
+            <input
+              id="qsTime"
+              type="time"
+              value={serviceTime}
+              onChange={(e) => setServiceTime(e.target.value)}
               className={inputClass}
             />
           </div>

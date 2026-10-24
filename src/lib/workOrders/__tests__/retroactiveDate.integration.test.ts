@@ -6,6 +6,7 @@ import { createCustomerService } from "@/lib/customers/service";
 import { createVehicleService } from "@/lib/vehicles/service";
 import { createQuoteService } from "@/lib/quotes/service";
 import { registerCompletedServiceFromQuoteService, RetroactiveServiceError } from "../retroactive";
+import { getWorkOrderPaymentsSummaryService, registerWorkOrderReceptionAcceptanceService } from "../service";
 
 let actorUserId: string;
 let customerId: string;
@@ -99,5 +100,42 @@ describe("Registrar serviço concluído — data e hora", () => {
     await expect(
       registerCompletedServiceFromQuoteService(actorUserId, quote.quote.id, input("2026-10-25")),
     ).rejects.toThrow(/não pode ser no futuro/);
+  });
+});
+
+describe("Modo rápido — sem pagamento, com horário e Termo sem KM", () => {
+  it("sem pagamento a OS fica entregue e o valor aparece em A receber; o KM do veículo não é tocado", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    const quote = await newQuote("Serviço fiado");
+    const result = await registerCompletedServiceFromQuoteService(
+      actorUserId,
+      quote.quote.id,
+      { serviceDate: "2026-10-24", serviceTime: "09:15", executedBy: actorUserId, deliveryAcceptedName: "Cliente Data", payments: [] },
+    );
+    const row = await pool.query(`SELECT status, "deliveredAt" FROM work_orders WHERE id = $1`, [result.workOrderId]);
+    expect(row.rows[0].status).toBe("ENTREGUE");
+    expect(new Date(row.rows[0].deliveredAt).getTime()).toBe(new Date("2026-10-24T12:15:00Z").getTime());
+    const summary = await getWorkOrderPaymentsSummaryService(result.workOrderId);
+    expect(summary).toMatchObject({ paidCents: 0, remainingCents: 10000, status: "EM_ABERTO" });
+    const v = await pool.query(`SELECT mileage FROM vehicles WHERE id = $1`, [vehicleId]);
+    expect(v.rows[0].mileage).toBeNull();
+  });
+
+  it("aceita o Termo de uma OS já entregue sem queixa nem KM, sem gravar KM 0", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    const quote = await newQuote("Serviço sem termo");
+    const result = await registerCompletedServiceFromQuoteService(actorUserId, quote.quote.id, input("2026-10-24"));
+    const accepted = await registerWorkOrderReceptionAcceptanceService(actorUserId, result.workOrderId, {
+      receptionAcceptedName: "Cliente Data",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
+    });
+    expect(accepted.receptionAcceptedAt).not.toBeNull();
+    expect(accepted.mileageAtEntry).toBeNull();
+    const v = await pool.query(`SELECT mileage FROM vehicles WHERE id = $1`, [vehicleId]);
+    expect(v.rows[0].mileage).toBeNull();
   });
 });

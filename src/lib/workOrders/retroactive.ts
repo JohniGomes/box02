@@ -64,7 +64,8 @@ export const registerCompletedServiceSchema = z.object({
         notes: optionalText,
       }),
     )
-    .min(1, "Informe pelo menos um pagamento"),
+    // Pode ficar vazio: o serviço entra como entregue e o valor fica em "A receber".
+    .default([]),
 });
 
 export type RegisterCompletedServiceInput = z.infer<typeof registerCompletedServiceSchema>;

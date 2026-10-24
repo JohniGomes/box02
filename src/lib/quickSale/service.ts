@@ -201,6 +201,8 @@ const quickSaleSchema = z.object({
   discountValue: z.union([z.string(), z.number()]).optional(),
   discountReason: z.string().trim().optional(),
   serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do serviço"),
+  /** Horário opcional (HH:MM). Sem ele: hoje = agora; dia anterior = 12:00. */
+  serviceTime: z.string().trim().optional(),
   mileageAtEntry: z.union([z.string(), z.number()]).optional(),
   executedBy: z.string().trim().min(1, "Selecione quem executou"),
   deliveryAcceptedName: z.string().trim().optional(),
@@ -211,7 +213,7 @@ const quickSaleSchema = z.object({
         amountReais: z.union([z.string(), z.number()]),
       }),
     )
-    .min(1, "Informe pelo menos um pagamento"),
+    .default([]),
 });
 
 export interface QuickSaleResult {
@@ -311,6 +313,7 @@ export async function quickSaleService(actorUserId: string, rawInput: unknown): 
   try {
     const done = await registerCompletedServiceFromQuoteService(actorUserId, quote.quote.id, {
       serviceDate: input.serviceDate,
+      serviceTime: input.serviceTime || undefined,
       mileageAtEntry: input.mileageAtEntry,
       executedBy: input.executedBy,
       deliveryAcceptedName: input.deliveryAcceptedName?.trim() || customer.legalName,
