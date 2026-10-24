@@ -538,6 +538,28 @@ export async function searchWorkOrders(
   return { items: itemsResult.rows, total: Number(countResult.rows[0]?.count ?? 0) };
 }
 
+export interface YardRow {
+  id: string;
+  number: string;
+  status: WorkOrderStatus;
+  customerName: string;
+  vehiclePlate: string | null;
+  entryAt: Date;
+}
+
+/** Pátio de hoje: OS que ainda estão na oficina (nem entregues nem canceladas), da mais antiga para a mais nova. */
+export async function listYardWorkOrders(): Promise<YardRow[]> {
+  const result = await pool.query<YardRow>(
+    `SELECT wo.id, wo.number, wo.status, c."legalName" AS "customerName", v.plate AS "vehiclePlate", wo."entryAt"
+     FROM work_orders wo
+     INNER JOIN customers c ON c.id = wo."customerId"
+     INNER JOIN vehicles v ON v.id = wo."vehicleId"
+     WHERE wo.status NOT IN ('ENTREGUE', 'CANCELADA')
+     ORDER BY wo."entryAt" ASC, wo.number ASC`,
+  );
+  return result.rows;
+}
+
 export interface ReceivableRow {
   id: string;
   number: string;

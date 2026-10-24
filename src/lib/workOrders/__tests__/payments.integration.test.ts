@@ -9,6 +9,7 @@ import {
   createWorkOrderWithoutQuoteService,
   getWorkOrderPaymentsSummaryService,
   listReceivablesService,
+  listYardService,
   searchWorkOrdersService,
   refundWorkOrderPaymentService,
   registerWorkOrderPaymentService,
@@ -382,5 +383,16 @@ describe("A receber (Etapa 4.1)", () => {
 
     await refundWorkOrderPaymentService(actorUserId, id, payment.id, { refundReais: "30,00", reason: "Erro" });
     expect((await listReceivablesService()).find((r) => r.id === id)!.balanceCents).toBe(3000);
+  });
+});
+
+describe("Pátio de hoje", () => {
+  it("lista só OS que ainda estão na oficina", async () => {
+    const delivered = await createDeliveredWorkOrder("100,00");
+    const open = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000 });
+
+    const ids = (await listYardService()).map((r) => r.id);
+    expect(ids).toContain(open.workOrder.id);
+    expect(ids).not.toContain(delivered);
   });
 });
