@@ -214,6 +214,7 @@ export async function createQuoteService(
         category: item.category,
         notes: item.notes ?? null,
         customerSupplied: item.customerSupplied ?? false,
+        groupKey: item.groupKey ?? null,
       })),
       client,
     );
@@ -310,6 +311,7 @@ export async function updateQuoteVersionService(
         category: item.category,
         notes: item.notes ?? null,
         customerSupplied: item.customerSupplied ?? false,
+        groupKey: item.groupKey ?? null,
       })),
       client,
     );
@@ -438,6 +440,7 @@ export async function createNewQuoteVersionService(
         category: item.category,
         notes: item.notes,
         customerSupplied: item.customerSupplied,
+        groupKey: item.groupKey,
       })),
       client,
     );

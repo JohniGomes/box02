@@ -26,6 +26,8 @@ export const quoteItemInputSchema = z.object({
   /// usado para preencher description/unitPriceReais no momento da
   /// criação (preço sugerido = custo + markup); nunca revalidado depois.
   partId: z.string().trim().optional(),
+  /// Fase 2E — itens com o mesmo groupKey formam um bloco (serviço + peças + mão de obra).
+  groupKey: z.string().trim().max(64).optional(),
   /// Observações livres do item (ex.: discriminar o que foi feito na mão
   /// de obra). Vazio vira undefined.
   notes: z

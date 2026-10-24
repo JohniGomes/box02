@@ -81,8 +81,10 @@ export default async function PublicQuotePage({
             />
             <QuoteApprovalForm
               token={token}
+              defaultApproverName={resolution.context.customer.legalName}
               items={resolution.context.items.map((i) => ({
                 id: i.id,
+                groupKey: i.groupKey,
                 type: i.type,
                 description: i.description,
                 notes: i.notes,

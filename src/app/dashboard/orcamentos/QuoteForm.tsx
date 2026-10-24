@@ -39,6 +39,8 @@ export interface ItemDraft {
   notes?: string;
   /** Peça fornecida pelo cliente: sem cobrança e sem baixa de estoque. */
   customerSupplied?: boolean;
+  /** Chave (key) do serviço-cabeça do bloco a que este item pertence; vazio = item solto. */
+  groupKey?: string;
 }
 
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
@@ -157,7 +159,12 @@ export function QuoteForm({
     setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   }
   function removeItem(key: string) {
-    setItems((prev) => (prev.length > 1 ? prev.filter((i) => i.key !== key) : prev));
+    // Quem sai era cabeça de bloco: as peças dele voltam a ser itens soltos.
+    setItems((prev) =>
+      prev.length > 1
+        ? prev.filter((i) => i.key !== key).map((i) => (i.groupKey === key ? { ...i, groupKey: undefined } : i))
+        : prev,
+    );
   }
 
   async function handleSubmit() {
@@ -179,7 +186,9 @@ export function QuoteForm({
           unitPriceReais: i.unitPriceReais || "0",
           serviceId: i.serviceId,
           partId: i.partId,
-          category: i.category,
+          // Bloco: as peças e a mão de obra seguem a categoria do serviço-cabeça.
+          category: i.groupKey ? (items.find((h) => h.key === i.groupKey)?.category ?? i.category) : i.category,
+          groupKey: i.groupKey ?? (items.some((c) => c.groupKey === i.key) ? i.key : undefined),
           // Observações só valem para Mão de obra; texto deixado em outro
           // tipo (ao trocar de aba) não deve ir junto.
           notes: i.type === "MAO_DE_OBRA" ? i.notes : undefined,
@@ -416,10 +425,11 @@ export function QuoteForm({
       {step === 2 ? (
         <QuoteItemsEditor
           items={items}
-          onAdd={() => setItems((prev) => [...prev, newItem()])}
+          onAdd={(preset) => setItems((prev) => [...prev, { ...newItem(), ...preset }])}
           onUpdate={updateItem}
           onRemove={removeItem}
           error={fieldErrors.items}
+          allowGroups
         />
       ) : null}
 
@@ -529,9 +539,12 @@ export function QuoteItemsEditor({
   onUpdate,
   onRemove,
   error,
+  allowGroups,
 }: {
   items: ItemDraft[];
-  onAdd: () => void;
+  /** Com `allowGroups`, o orçamento agrupa peças e mão de obra sob um serviço. */
+  allowGroups?: boolean;
+  onAdd: (preset?: Partial<ItemDraft>) => void;
   onUpdate: (key: string, patch: Partial<ItemDraft>) => void;
   onRemove: (key: string) => void;
   error?: string;
@@ -539,7 +552,20 @@ export function QuoteItemsEditor({
   return (
     <div className="flex flex-col gap-3">
       {items.map((item, idx) => (
-        <div key={item.key} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+        <div
+          key={item.key}
+          className={`flex flex-col gap-3 rounded-2xl border bg-surface p-4 ${
+            item.groupKey ? "ml-4 border-accent/40" : "border-border"
+          }`}
+        >
+          {allowGroups && item.groupKey ? (
+            <p className="text-xs text-accent">
+              Faz parte do serviço:{" "}
+              <strong>
+                {items.find((h) => h.key === item.groupKey)?.description || `Item ${items.findIndex((h) => h.key === item.groupKey) + 1}`}
+              </strong>
+            </p>
+          ) : null}
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Item {idx + 1}</span>
             {items.length > 1 ? (
@@ -604,6 +630,45 @@ export function QuoteItemsEditor({
               </button>
             ))}
           </div>
+
+          {allowGroups && item.type === "SERVICO" ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onAdd({ type: "PECA", groupKey: item.key, category: item.category })}
+                className="h-9 rounded-lg border border-dashed border-accent/50 px-3 text-xs font-semibold text-accent"
+              >
+                + Peça deste serviço
+              </button>
+              <button
+                type="button"
+                onClick={() => onAdd({ type: "MAO_DE_OBRA", groupKey: item.key, category: item.category })}
+                className="h-9 rounded-lg border border-dashed border-accent/50 px-3 text-xs font-semibold text-accent"
+              >
+                + Mão de obra deste serviço
+              </button>
+            </div>
+          ) : null}
+
+          {allowGroups && item.type !== "SERVICO" ? (
+            <div>
+              <span className="mb-1 block text-[11px] font-medium text-muted">Faz parte de qual serviço? (opcional)</span>
+              <select
+                value={item.groupKey ?? ""}
+                onChange={(e) => onUpdate(item.key, { groupKey: e.target.value || undefined })}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              >
+                <option value="">Nenhum — item solto</option>
+                {items
+                  .filter((h) => h.type === "SERVICO" && h.key !== item.key)
+                  .map((h) => (
+                    <option key={h.key} value={h.key}>
+                      {h.description || `Item ${items.findIndex((x) => x.key === h.key) + 1}`}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          ) : null}
 
           <div>
             <span className="mb-1 block text-[11px] font-medium text-muted">Categoria</span>
@@ -709,7 +774,7 @@ export function QuoteItemsEditor({
 
       <button
         type="button"
-        onClick={onAdd}
+        onClick={() => onAdd()}
         className="h-12 rounded-xl border border-dashed border-border text-sm font-medium text-muted"
       >
         + Adicionar item
