@@ -6,12 +6,15 @@ import { auth } from "@/auth";
 import {
   cancelAppointmentService,
   createAppointmentService,
+  linkAppointmentToExistingWorkOrderService,
+  listLinkableWorkOrdersService,
   setAppointmentAttendanceService,
   updateAppointmentService,
 } from "@/lib/appointments/service";
 import {
   AppointmentAlreadyCancelledError,
   AppointmentCustomerNotFoundError,
+  AppointmentLinkError,
   AppointmentNotEditableError,
   AppointmentNotFoundError,
   AppointmentVehicleNotOwnedByCustomerError,
@@ -50,6 +53,7 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
     err instanceof AppointmentVehicleNotOwnedByCustomerError ||
     err instanceof AppointmentNotFoundError ||
     err instanceof AppointmentNotEditableError ||
+    err instanceof AppointmentLinkError ||
     err instanceof AppointmentAlreadyCancelledError
   ) {
     return { success: false, error: err.message };
@@ -105,5 +109,23 @@ export async function setAppointmentAttendanceAction(
     return { success: true, appointmentId };
   } catch (err) {
     return mapKnownError(err, "Não foi possível marcar o comparecimento.");
+  }
+}
+
+/** OS que podem ser ligadas a este agendamento (e a sugestão, se for óbvia). */
+export async function listLinkableWorkOrdersAction(appointmentId: string) {
+  await requireUserId();
+  return listLinkableWorkOrdersService(appointmentId);
+}
+
+export async function linkAppointmentToWorkOrderAction(appointmentId: string, workOrderId: string): Promise<ActionResult> {
+  try {
+    await requireUserId();
+    await linkAppointmentToExistingWorkOrderService(appointmentId, workOrderId);
+    revalidatePath("/dashboard/agendamentos");
+    revalidatePath("/dashboard");
+    return { success: true, appointmentId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível ligar o agendamento a essa OS.");
   }
 }

@@ -144,3 +144,30 @@ export async function linkAppointmentToWorkOrder(id: string, workOrderId: string
   );
   return result.rows[0] ?? null;
 }
+
+export interface LinkableWorkOrder {
+  id: string;
+  number: string;
+  status: string;
+  entryAt: Date;
+  deliveredAt: Date | null;
+  vehicleLabel: string | null;
+}
+
+/** OS do mesmo cliente (e do mesmo veículo, se o agendamento tiver) que ainda não estão ligadas a outro agendamento. */
+export async function listLinkableWorkOrders(customerId: string, vehicleId: string | null): Promise<LinkableWorkOrder[]> {
+  const result = await pool.query<LinkableWorkOrder>(
+    `SELECT w.id, w.number, w.status, w."entryAt", w."deliveredAt",
+            NULLIF(TRIM(CONCAT(v.plate, ' ', v.brand, ' ', v.model)), '') AS "vehicleLabel"
+     FROM work_orders w
+     JOIN vehicles v ON v.id = w."vehicleId"
+     WHERE w."customerId" = $1
+       AND ($2::text IS NULL OR w."vehicleId" = $2)
+       AND w.status <> 'CANCELADA'
+       AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a."workOrderId" = w.id)
+     ORDER BY w."createdAt" DESC
+     LIMIT 10`,
+    [customerId, vehicleId],
+  );
+  return result.rows;
+}
