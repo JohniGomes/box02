@@ -21,9 +21,9 @@ const COLUMNS = `
 `;
 
 /**
- * Registra o fechamento de uma OS. Nesta sub-etapa só esta função é usada
- * — a reabertura (preencher reopenedAt/reopenedByUserId/reopenReason numa
- * linha já existente) chega na Sub-etapa 3.
+ * Registra o fechamento de uma OS. A reabertura preenche
+ * reopenedAt/reopenedByUserId/reopenReason na linha já existente
+ * (`markLatestClosureReopened`).
  */
 export async function createClosure(
   input: { workOrderId: string; closedByUserId: string; totalAtClosureCents: number },
@@ -48,4 +48,23 @@ export async function listClosuresByWorkOrder(
     [workOrderId],
   );
   return result.rows;
+}
+
+/** Marca o fechamento mais recente (ainda não reaberto) como reaberto: quem, quando e por quê. */
+export async function markLatestClosureReopened(
+  workOrderId: string,
+  input: { reopenedByUserId: string; reason: string },
+  db: Queryable = pool,
+): Promise<WorkOrderClosureRecord | null> {
+  const result = await db.query<WorkOrderClosureRecord>(
+    `UPDATE work_order_closures SET "reopenedAt" = NOW(), "reopenedByUserId" = $2, "reopenReason" = $3
+     WHERE id = (
+       SELECT id FROM work_order_closures
+       WHERE "workOrderId" = $1 AND "reopenedAt" IS NULL
+       ORDER BY "closedAt" DESC LIMIT 1
+     )
+     RETURNING ${COLUMNS}`,
+    [workOrderId, input.reopenedByUserId, input.reason],
+  );
+  return result.rows[0] ?? null;
 }

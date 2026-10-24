@@ -125,6 +125,18 @@ export const reactivateWorkOrderSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo da reativação"),
 });
 
+/** Corrige a data (e, se quiser, o horário) do atendimento de uma OS entregue. */
+export const correctServiceDateSchema = z.object({
+  serviceDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do atendimento"),
+  serviceTime: optionalTrimmed,
+  reason: z.string().trim().min(3, "Informe o motivo da correção"),
+});
+
+/** Reabre uma OS entregue (volta para "Pronta"), com motivo. */
+export const reopenWorkOrderSchema = z.object({
+  reason: z.string().trim().min(3, "Informe o motivo da reabertura"),
+});
+
 export const cancelWorkOrderItemSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo do cancelamento"),
 });
