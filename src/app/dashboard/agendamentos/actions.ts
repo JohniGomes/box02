@@ -3,10 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
-import { cancelAppointmentService, createAppointmentService } from "@/lib/appointments/service";
+import {
+  cancelAppointmentService,
+  createAppointmentService,
+  setAppointmentAttendanceService,
+  updateAppointmentService,
+} from "@/lib/appointments/service";
 import {
   AppointmentAlreadyCancelledError,
   AppointmentCustomerNotFoundError,
+  AppointmentNotEditableError,
   AppointmentNotFoundError,
   AppointmentVehicleNotOwnedByCustomerError,
 } from "@/lib/appointments/errors";
@@ -43,6 +49,7 @@ function mapKnownError(err: unknown, fallback: string): ActionResult {
     err instanceof AppointmentCustomerNotFoundError ||
     err instanceof AppointmentVehicleNotOwnedByCustomerError ||
     err instanceof AppointmentNotFoundError ||
+    err instanceof AppointmentNotEditableError ||
     err instanceof AppointmentAlreadyCancelledError
   ) {
     return { success: false, error: err.message };
@@ -71,5 +78,32 @@ export async function cancelAppointmentAction(appointmentId: string, cancelReaso
     return { success: true };
   } catch (err) {
     return mapKnownError(err, "Não foi possível cancelar o agendamento.");
+  }
+}
+
+export async function updateAppointmentAction(appointmentId: string, input: unknown): Promise<ActionResult> {
+  try {
+    await requireUserId();
+    await updateAppointmentService(appointmentId, input);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/agendamentos");
+    return { success: true, appointmentId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível corrigir o agendamento.");
+  }
+}
+
+export async function setAppointmentAttendanceAction(
+  appointmentId: string,
+  status: "AGENDADO" | "COMPARECEU" | "NAO_COMPARECEU",
+): Promise<ActionResult> {
+  try {
+    await requireUserId();
+    await setAppointmentAttendanceService(appointmentId, { status });
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/agendamentos");
+    return { success: true, appointmentId };
+  } catch (err) {
+    return mapKnownError(err, "Não foi possível marcar o comparecimento.");
   }
 }

@@ -25,3 +25,10 @@ export class AppointmentAlreadyCancelledError extends Error {
     this.name = "AppointmentAlreadyCancelledError";
   }
 }
+
+export class AppointmentNotEditableError extends Error {
+  constructor() {
+    super("Só dá para corrigir um agendamento que ainda está agendado.");
+    this.name = "AppointmentNotEditableError";
+  }
+}

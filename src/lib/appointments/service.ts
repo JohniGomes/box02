@@ -4,15 +4,23 @@ import {
   findAppointmentById,
   listAppointmentsBetween,
   listAppointmentsWithNamesBetween,
+  setAppointmentAttendance,
+  updateAppointment,
   type AppointmentRecord,
   type AppointmentWithNames,
 } from "@/lib/db/repositories/appointments";
 import { findCustomerById } from "@/lib/db/repositories/customers";
 import { findVehicleById } from "@/lib/db/repositories/vehicles";
-import { createAppointmentSchema, cancelAppointmentSchema } from "@/lib/validation/appointment";
+import {
+  appointmentAttendanceSchema,
+  createAppointmentSchema,
+  cancelAppointmentSchema,
+  updateAppointmentSchema,
+} from "@/lib/validation/appointment";
 import {
   AppointmentAlreadyCancelledError,
   AppointmentCustomerNotFoundError,
+  AppointmentNotEditableError,
   AppointmentNotFoundError,
   AppointmentVehicleNotOwnedByCustomerError,
 } from "./errors";
@@ -65,4 +73,31 @@ export async function listAppointmentsBetweenService(from: Date, to: Date): Prom
 
 export async function listAppointmentsWithNamesBetweenService(from: Date, to: Date): Promise<AppointmentWithNames[]> {
   return listAppointmentsWithNamesBetween(from, to);
+}
+
+/** Corrige data/hora e descrição (ex.: incluir a queixa) de um agendamento ainda agendado. */
+export async function updateAppointmentService(appointmentId: string, rawInput: unknown): Promise<AppointmentRecord> {
+  const input = updateAppointmentSchema.parse(rawInput);
+  const existing = await findAppointmentById(appointmentId);
+  if (!existing) throw new AppointmentNotFoundError(appointmentId);
+  if (existing.status !== "AGENDADO") throw new AppointmentNotEditableError();
+
+  const updated = await updateAppointment(appointmentId, {
+    scheduledAt: new Date(input.scheduledAt),
+    description: input.description ?? null,
+  });
+  if (!updated) throw new AppointmentNotEditableError();
+  return updated;
+}
+
+/** Marca "compareceu" / "não compareceu" (ou desfaz, voltando para agendado). */
+export async function setAppointmentAttendanceService(appointmentId: string, rawInput: unknown): Promise<AppointmentRecord> {
+  const input = appointmentAttendanceSchema.parse(rawInput);
+  const existing = await findAppointmentById(appointmentId);
+  if (!existing) throw new AppointmentNotFoundError(appointmentId);
+  if (existing.status === "CANCELADO") throw new AppointmentAlreadyCancelledError();
+
+  const updated = await setAppointmentAttendance(appointmentId, input.status);
+  if (!updated) throw new AppointmentNotFoundError(appointmentId);
+  return updated;
 }
