@@ -8,29 +8,36 @@ export interface ServiceRequestRecord {
   customerName: string;
   customerPhone: string;
   vehicleDescription: string | null;
+  vehiclePlate: string | null;
+  preferredTime: string | null;
   description: string;
   status: ServiceRequestStatus;
   attendedByUserId: string | null;
   attendedAt: Date | null;
+  customerId: string | null;
+  vehicleId: string | null;
+  appointmentId: string | null;
   createdAt: Date;
 }
 
-const COLUMNS = `id, "customerName", "customerPhone", "vehicleDescription", description, status, "attendedByUserId", "attendedAt", "createdAt"`;
+const COLUMNS = `id, "customerName", "customerPhone", "vehicleDescription", "vehiclePlate", "preferredTime", description, status, "attendedByUserId", "attendedAt", "customerId", "vehicleId", "appointmentId", "createdAt"`;
 
 export interface CreateServiceRequestInput {
   customerName: string;
   customerPhone: string;
   vehicleDescription?: string | null;
+  vehiclePlate?: string | null;
+  preferredTime?: string | null;
   description: string;
 }
 
 export async function createServiceRequest(input: CreateServiceRequestInput): Promise<ServiceRequestRecord> {
   const id = createId();
   const result = await pool.query<ServiceRequestRecord>(
-    `INSERT INTO service_requests (id, "customerName", "customerPhone", "vehicleDescription", description)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO service_requests (id, "customerName", "customerPhone", "vehicleDescription", "vehiclePlate", "preferredTime", description)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${COLUMNS}`,
-    [id, input.customerName, input.customerPhone, input.vehicleDescription ?? null, input.description],
+    [id, input.customerName, input.customerPhone, input.vehicleDescription ?? null, input.vehiclePlate ?? null, input.preferredTime ?? null, input.description],
   );
   return result.rows[0];
 }
@@ -66,6 +73,36 @@ export async function setServiceRequestStatus(
      WHERE id = $1
      RETURNING ${COLUMNS}`,
     [id, status, attendedByUserId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Marca como atendida e guarda o que foi usado/criado no atendimento. */
+export async function markServiceRequestAttended(
+  id: string,
+  links: { customerId: string; vehicleId: string | null; appointmentId: string | null },
+  attendedByUserId: string,
+): Promise<ServiceRequestRecord | null> {
+  const result = await pool.query<ServiceRequestRecord>(
+    `UPDATE service_requests SET
+       status = 'ATENDIDA', "attendedByUserId" = $2, "attendedAt" = NOW(),
+       "customerId" = $3, "vehicleId" = $4, "appointmentId" = $5
+     WHERE id = $1 AND status = 'PENDENTE'
+     RETURNING ${COLUMNS}`,
+    [id, attendedByUserId, links.customerId, links.vehicleId, links.appointmentId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Volta a solicitação para pendente e solta as ligações. */
+export async function reopenServiceRequest(id: string): Promise<ServiceRequestRecord | null> {
+  const result = await pool.query<ServiceRequestRecord>(
+    `UPDATE service_requests SET
+       status = 'PENDENTE', "attendedByUserId" = NULL, "attendedAt" = NULL,
+       "customerId" = NULL, "vehicleId" = NULL, "appointmentId" = NULL
+     WHERE id = $1 AND status = 'ATENDIDA'
+     RETURNING ${COLUMNS}`,
+    [id],
   );
   return result.rows[0] ?? null;
 }

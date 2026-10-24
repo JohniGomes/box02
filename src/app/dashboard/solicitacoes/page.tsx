@@ -2,6 +2,8 @@ import Link from "next/link";
 import { listServiceRequestsService } from "@/lib/serviceRequests/service";
 import { formatPhone, whatsappLinkWithMessage } from "@/lib/validation/phone";
 import { RequestActions } from "./RequestActions";
+import { AttendPanel } from "./AttendPanel";
+import { UndoAttendedButton } from "./UndoAttendedButton";
 import type { ServiceRequestStatus } from "@/lib/db/repositories/serviceRequests";
 import { formatDateTimeBR } from "@/lib/dateBr";
 
@@ -79,9 +81,12 @@ export default async function ServiceRequestsPage({
                 </span>
               </div>
 
-              {r.vehicleDescription ? (
-                <p className="text-sm text-muted">Veículo: {r.vehicleDescription}</p>
+              {r.vehicleDescription || r.vehiclePlate ? (
+                <p className="text-sm text-muted">
+                  Veículo: {[r.vehicleDescription, r.vehiclePlate].filter(Boolean).join(" · ")}
+                </p>
               ) : null}
+              {r.preferredTime ? <p className="text-sm text-muted">Melhor dia/horário: {r.preferredTime}</p> : null}
 
               <p className="whitespace-pre-wrap rounded-xl bg-background p-3 text-sm">{r.description}</p>
 
@@ -96,7 +101,13 @@ export default async function ServiceRequestsPage({
                 Falar com o cliente no WhatsApp
               </a>
 
-              {r.status === "PENDENTE" ? <RequestActions serviceRequestId={r.id} /> : null}
+              {r.status === "PENDENTE" ? (
+                <>
+                  <AttendPanel serviceRequestId={r.id} />
+                  <RequestActions serviceRequestId={r.id} />
+                </>
+              ) : null}
+              {r.status === "ATENDIDA" && r.appointmentId ? <UndoAttendedButton serviceRequestId={r.id} /> : null}
             </li>
           ))}
         </ul>
