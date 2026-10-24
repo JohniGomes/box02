@@ -178,6 +178,12 @@ export default async function DashboardHomePage() {
             <Row label="Entradas do mês" value={formatBRL(metrics.monthlyRevenueCents)} />
             <Row label="Saídas do mês (pagas)" value={formatBRL(metrics.monthlyExpensesCents)} />
             <Row label="Resultado do mês" value={formatBRL(metrics.netResultCents)} />
+            {metrics.proLaboreCents > 0 ? (
+              <>
+                <Row label="Pró-labore pago no mês" value={formatBRL(metrics.proLaboreCents)} />
+                <Row label="Resultado antes do pró-labore" value={formatBRL(metrics.resultBeforeProLaboreCents)} />
+              </>
+            ) : null}
             <Row label="Despesas a pagar até o fim do mês" value={formatBRL(metrics.pendingExpensesCents)} />
             <Row label="A pagar no mês que vem" value={formatBRL(metrics.nextMonthExpensesCents)} />
           </div>

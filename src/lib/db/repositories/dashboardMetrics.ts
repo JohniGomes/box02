@@ -28,6 +28,10 @@ export interface DashboardMetrics {
   monthlyRevenueCents: number;
   monthlyExpensesCents: number;
   netResultCents: number;
+  /** Pró-labore (categoria Salários/Pró-labore) pago no mês — já está dentro das saídas. */
+  proLaboreCents: number;
+  /** Resultado do mês sem contar o pró-labore. */
+  resultBeforeProLaboreCents: number;
   averageTicketCents: number;
   pendingExpensesCents: number;
   /** Despesas não pagas que vencem no mês seguinte. */
@@ -48,6 +52,7 @@ interface DashboardMetricsRow {
   monthly_revenue_cents: string;
   monthly_refunds_cents: string;
   monthly_expenses_cents: string;
+  monthly_pro_labore_cents: string;
   pending_expenses_cents: string;
   next_month_expenses_cents: string;
   paid_work_orders_this_month: string;
@@ -99,6 +104,9 @@ export function buildDashboardMetricsSql(nowExpr = "now()"): string {
         WHERE ${inMonth('"paidAt"')}
       ) AS monthly_expenses_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
+        WHERE category = 'SALARIOS' AND ${inMonth('"paidAt"')}
+      ) AS monthly_pro_labore_cents,
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
         WHERE "paidAt" IS NULL AND "dueDate" < (${nextMonth})::date
       ) AS pending_expenses_cents,
       (SELECT COALESCE(SUM("amountCents"), 0) FROM expenses
@@ -142,6 +150,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const row = result.rows[0];
   const monthlyRevenueCents = Number(row.monthly_revenue_cents) - Number(row.monthly_refunds_cents);
   const monthlyExpensesCents = Number(row.monthly_expenses_cents);
+  const proLaboreCents = Number(row.monthly_pro_labore_cents);
   const paidWorkOrdersThisMonth = Number(row.paid_work_orders_this_month);
 
   return {
@@ -153,6 +162,8 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     monthlyRevenueCents,
     monthlyExpensesCents,
     netResultCents: monthlyRevenueCents - monthlyExpensesCents,
+    proLaboreCents,
+    resultBeforeProLaboreCents: monthlyRevenueCents - monthlyExpensesCents + proLaboreCents,
     averageTicketCents: paidWorkOrdersThisMonth > 0 ? Math.round(monthlyRevenueCents / paidWorkOrdersThisMonth) : 0,
     pendingExpensesCents: Number(row.pending_expenses_cents),
     nextMonthExpensesCents: Number(row.next_month_expenses_cents),
