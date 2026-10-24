@@ -10,6 +10,7 @@ import { WORK_ORDER_STATUS_LABEL } from "../../statusLabels";
 import { PrintButton } from "@/components/PrintButton";
 import { vehicleDisplayName } from "@/lib/vehicles/label";
 import { computeQuoteTotals } from "@/lib/money";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -99,12 +100,12 @@ export default async function PrintWorkOrderPage({
           </div>
           <div>
             <dt className="text-xs text-muted">Data de entrada</dt>
-            <dd>{new Date(workOrder.entryAt).toLocaleString("pt-BR")}</dd>
+            <dd>{formatDateTimeBR(workOrder.entryAt)}</dd>
           </div>
           {workOrder.deliveredAt ? (
             <div>
               <dt className="text-xs text-muted">Data de entrega</dt>
-              <dd>{new Date(workOrder.deliveredAt).toLocaleString("pt-BR")}</dd>
+              <dd>{formatDateTimeBR(workOrder.deliveredAt)}</dd>
             </div>
           ) : null}
         </dl>

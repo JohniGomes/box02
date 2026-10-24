@@ -11,6 +11,7 @@ import { StartChecklistButton } from "../StartChecklistButton";
 import { CompleteChecklistButton } from "../CompleteChecklistButton";
 import { DamagesEditor } from "../DamagesEditor";
 import { EntryPhotoSlots } from "./EntryPhotoSlots";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 export default async function ChecklistEntradaPage({
   params,
@@ -46,7 +47,7 @@ export default async function ChecklistEntradaPage({
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm">
         <Field label="Nº da OS / PROV" value={workOrder.number} />
-        <Field label="Data / hora" value={new Date(workOrder.entryAt).toLocaleString("pt-BR")} />
+        <Field label="Data / hora" value={formatDateTimeBR(workOrder.entryAt)} />
         <Field label="Placa" value={workOrder.vehiclePlateSnapshot ? formatPlate(workOrder.vehiclePlateSnapshot) : "—"} />
         <Field label="Recebido por" value={receivedBy?.name ?? "—"} />
       </div>

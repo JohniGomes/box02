@@ -48,6 +48,7 @@ export default async function DashboardHomePage() {
   }).length;
 
   const dateLabel = now.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "long",
     year: "numeric",

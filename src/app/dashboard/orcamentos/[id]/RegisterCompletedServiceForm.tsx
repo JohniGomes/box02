@@ -57,6 +57,7 @@ export function RegisterCompletedServiceForm({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [serviceDate, setServiceDate] = useState("");
+  const [serviceTime, setServiceTime] = useState("");
   const [mileage, setMileage] = useState(defaultMileage);
   // `executors` = opções do seletor (nomes da lista de executores; se estiver
   // vazia, usuários ativos). O valor escolhido é enviado como `executedBy`.
@@ -89,6 +90,7 @@ export function RegisterCompletedServiceForm({
 
     const result = await registerCompletedServiceAction(quoteId, {
       serviceDate,
+      serviceTime: serviceTime || undefined,
       mileageAtEntry: mileage,
       executedBy,
       deliveryAcceptedName: deliveryName,
@@ -144,6 +146,20 @@ export function RegisterCompletedServiceForm({
             className={inputClass}
           />
           {fieldErrors.serviceDate ? <p className="text-xs text-danger">{fieldErrors.serviceDate}</p> : null}
+          <label className="mt-1 text-xs text-muted" htmlFor="serviceTime">
+            Horário (opcional)
+          </label>
+          <input
+            id="serviceTime"
+            type="time"
+            value={serviceTime}
+            onChange={(e) => setServiceTime(e.target.value)}
+            className={inputClass}
+          />
+          <p className="text-xs text-muted">
+            Sem horário: se a data é hoje, vale a hora de agora; se foi outro dia, 12:00.
+          </p>
+          {fieldErrors.serviceTime ? <p className="text-xs text-danger">{fieldErrors.serviceTime}</p> : null}
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" htmlFor="rcsMileage">

@@ -7,6 +7,7 @@ import { formatPhone, whatsappLink } from "@/lib/validation/phone";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatBRL } from "@/lib/money";
 import { CustomerStatusActions } from "./CustomerStatusActions";
+import { formatDateBR } from "@/lib/dateBr";
 
 const WO_STATUS_LABEL: Record<string, string> = {
   ABERTA: "Aberta",
@@ -213,7 +214,7 @@ export default async function CustomerDetailPage({
                     <span className="font-semibold">{wo.number}</span>
                     <span className="text-xs text-muted">
                       {wo.vehiclePlateSnapshot ?? wo.vehicleDescriptionSnapshot ?? "Veículo não informado"} ·{" "}
-                      {new Date(wo.entryAt).toLocaleDateString("pt-BR")}
+                      {formatDateBR(wo.entryAt)}
                     </span>
                   </div>
                   <div className="flex flex-col items-end">

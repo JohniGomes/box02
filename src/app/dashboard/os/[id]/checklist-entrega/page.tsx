@@ -9,6 +9,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { ChecklistItemsTable } from "../ChecklistItemsTable";
 import { StartChecklistButton } from "../StartChecklistButton";
 import { CompleteChecklistButton } from "../CompleteChecklistButton";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 export default async function ChecklistEntregaPage({
   params,
@@ -53,7 +54,7 @@ export default async function ChecklistEntregaPage({
         <Field label="Nº da OS / PROV" value={workOrder.number} />
         <Field
           label="Data / hora"
-          value={workOrder.deliveredAt ? new Date(workOrder.deliveredAt).toLocaleString("pt-BR") : "—"}
+          value={workOrder.deliveredAt ? formatDateTimeBR(workOrder.deliveredAt) : "—"}
         />
         <Field label="Placa" value={workOrder.vehiclePlateSnapshot ? formatPlate(workOrder.vehiclePlateSnapshot) : "—"} />
         <Field label="Recebido por" value={workOrder.deliveryAcceptedName ?? "—"} />
@@ -91,7 +92,7 @@ export default async function ChecklistEntregaPage({
         <Field label="Executor(es)" value={executorNames.length > 0 ? executorNames.join(", ") : "—"} />
         <Field
           label="Entrega: data/hora"
-          value={workOrder.deliveredAt ? new Date(workOrder.deliveredAt).toLocaleString("pt-BR") : "—"}
+          value={workOrder.deliveredAt ? formatDateTimeBR(workOrder.deliveredAt) : "—"}
         />
         <Field label="Recebido por" value={workOrder.deliveryAcceptedName ?? "—"} />
         <Field label="Responsável BOX 02" value={executorNames[0] ?? "—"} />

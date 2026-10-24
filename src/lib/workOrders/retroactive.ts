@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { InvalidEventDateError, resolveEventInstant } from "@/lib/dateBr";
 import { pool } from "@/lib/db/pool";
 import { withTransaction } from "@/lib/db/transaction";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
@@ -44,6 +45,12 @@ export const registerCompletedServiceSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data do serviço"),
   /** Opcional — serviço antigo muitas vezes não tem o km anotado. */
+  /** Horário opcional (HH:MM, Brasília). Sem ele: hoje = agora; dia anterior = 12:00. */
+  serviceTime: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v : undefined)),
   mileageAtEntry: workOrderCheckInSchema.shape.mileageAtEntry,
   customerComplaint: optionalText,
   /** Valor do seletor de executor (executor da lista ou usuário). */
@@ -108,12 +115,18 @@ export async function registerCompletedServiceFromQuoteService(
 ): Promise<RegisterCompletedServiceResult> {
   const input = registerCompletedServiceSchema.parse(rawInput);
 
-  const serviceDate = new Date(`${input.serviceDate}T12:00:00-03:00`);
-  if (Number.isNaN(serviceDate.getTime())) {
-    throw new RetroactiveServiceError("Data do serviço inválida.");
-  }
-  if (serviceDate.getTime() > Date.now()) {
-    throw new RetroactiveServiceError("A data do serviço não pode ser no futuro.");
+  // Hoje sem hora = agora (horário de Brasília); dia anterior = 12:00; com hora
+  // informada = essa hora. Nunca um horário fixo que caia no futuro.
+  let serviceDate: Date;
+  try {
+    serviceDate = resolveEventInstant(input.serviceDate, input.serviceTime);
+  } catch (err) {
+    if (err instanceof InvalidEventDateError) {
+      throw new RetroactiveServiceError(
+        err.message === "A data não pode ser no futuro." ? "A data do serviço não pode ser no futuro." : err.message,
+      );
+    }
+    throw err;
   }
 
   const quote = await findQuoteById(quoteId);

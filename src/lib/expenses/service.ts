@@ -14,6 +14,7 @@ import {
   type ExpenseRecord,
 } from "@/lib/db/repositories/expenses";
 import { addOneMonth, noonInBrasilia, todayInBrasilia } from "./dates";
+import { resolveEventInstant } from "@/lib/dateBr";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { reaisToCents } from "@/lib/money";
 import { createExpenseSchema, markExpenseAsPaidSchema, updateExpenseSchema } from "@/lib/validation/expenses";
@@ -142,7 +143,7 @@ export async function markExpenseAsPaidService(
     let paidAt = new Date();
     if (input.paidOn) {
       if (input.paidOn > todayInBrasilia()) throw new ExpensePaidInFutureError();
-      paidAt = noonInBrasilia(input.paidOn);
+      paidAt = resolveEventInstant(input.paidOn);
     }
 
     const updated = await markExpenseAsPaid(expenseId, { paidAt, paymentMethod: input.paymentMethod }, client);

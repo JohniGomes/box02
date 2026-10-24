@@ -1,6 +1,7 @@
 import { resolveAdditionalItemAccessTokenService } from "@/lib/workOrders/service";
 import { formatBRL } from "@/lib/money";
 import { AdditionalItemDecisionForm } from "./AdditionalItemDecisionForm";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -72,7 +73,7 @@ export default async function AdditionalItemPublicPage({
               </p>
               {resolution.item.clientAuthorizedAt ? (
                 <p className="text-xs text-muted">
-                  {new Date(resolution.item.clientAuthorizedAt).toLocaleString("pt-BR")}
+                  {formatDateTimeBR(resolution.item.clientAuthorizedAt)}
                 </p>
               ) : null}
             </div>

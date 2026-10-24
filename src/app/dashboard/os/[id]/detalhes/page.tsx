@@ -31,6 +31,7 @@ import { WorkOrderPaymentsSection } from "../WorkOrderPaymentsSection";
 import { MethodStepper } from "../MethodStepper";
 import { MethodStageHeader } from "../MethodStageHeader";
 import { CollapsibleSection } from "../CollapsibleSection";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -170,7 +171,7 @@ export default async function WorkOrderDetailsPage({
           </span>
         </div>
         <p className="text-sm text-muted">
-          Entrada em {new Date(workOrder.entryAt).toLocaleString("pt-BR")}{workOrder.mileageAtEntry != null ? ` · ${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : ""}
+          Entrada em {formatDateTimeBR(workOrder.entryAt)}{workOrder.mileageAtEntry != null ? ` · ${workOrder.mileageAtEntry.toLocaleString("pt-BR")} km` : ""}
         </p>
       </div>
 
@@ -332,7 +333,7 @@ export default async function WorkOrderDetailsPage({
             <span>{formatBRL(workOrder.totalCents)}</span>
           </div>
           <p className="mt-2 text-xs text-muted">
-            Entregue em {workOrder.deliveredAt ? new Date(workOrder.deliveredAt).toLocaleString("pt-BR") : "—"}
+            Entregue em {workOrder.deliveredAt ? formatDateTimeBR(workOrder.deliveredAt) : "—"}
           </p>
           {workOrder.deliveryAcceptedName ? (
             <p className="text-xs text-muted">

@@ -3,6 +3,7 @@ import { listServiceRequestsService } from "@/lib/serviceRequests/service";
 import { formatPhone, whatsappLinkWithMessage } from "@/lib/validation/phone";
 import { RequestActions } from "./RequestActions";
 import type { ServiceRequestStatus } from "@/lib/db/repositories/serviceRequests";
+import { formatDateTimeBR } from "@/lib/dateBr";
 
 const STATUS_LABEL: Record<ServiceRequestStatus, string> = {
   PENDENTE: "Pendente",
@@ -84,7 +85,7 @@ export default async function ServiceRequestsPage({
 
               <p className="whitespace-pre-wrap rounded-xl bg-background p-3 text-sm">{r.description}</p>
 
-              <p className="text-xs text-muted">{new Date(r.createdAt).toLocaleString("pt-BR")}</p>
+              <p className="text-xs text-muted">{formatDateTimeBR(r.createdAt)}</p>
 
               <a
                 href={whatsappLinkWithMessage(r.customerPhone, buildReplyMessage(r))}
