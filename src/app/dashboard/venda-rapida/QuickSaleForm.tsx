@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { QuoteItemsEditor, newItem, type ItemDraft } from "../orcamentos/QuoteForm";
+import { QuoteItemsEditor, blockFieldsOf, newItem, type ItemDraft } from "../orcamentos/QuoteForm";
 import {
   lookupCustomerByIdAction,
   lookupCustomerByPhoneAction,
@@ -244,7 +244,7 @@ export function QuickSaleForm({
             unitPriceReais: i.unitPriceReais || "0",
             serviceId: i.serviceId,
             partId: i.partId,
-            category: i.category,
+            ...blockFieldsOf(items, i),
             notes: i.type === "MAO_DE_OBRA" ? i.notes : undefined,
           })),
         discountType: discountType || undefined,
@@ -396,10 +396,17 @@ export function QuickSaleForm({
       <Section title="3. Itens">
         <QuoteItemsEditor
           items={items}
-          onAdd={() => setItems((prev) => [...prev, newItem()])}
+          onAdd={(preset) => setItems((prev) => [...prev, { ...newItem(), ...preset }])}
           onUpdate={updateItem}
-          onRemove={(key) => setItems((prev) => (prev.length > 1 ? prev.filter((i) => i.key !== key) : prev))}
+          onRemove={(key) =>
+            setItems((prev) =>
+              prev.length > 1
+                ? prev.filter((i) => i.key !== key).map((i) => (i.groupKey === key ? { ...i, groupKey: undefined } : i))
+                : prev,
+            )
+          }
           error={fieldErrors.items}
+          allowGroups
         />
       </Section>
 
