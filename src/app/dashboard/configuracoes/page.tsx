@@ -6,6 +6,7 @@ const ITEMS = [
   { label: "Procedimentos", href: "/dashboard/configuracoes/procedimentos" },
   { label: "Precificação", href: "/dashboard/configuracoes/precificacao" },
   { label: "Executores (quem executa)", href: "/dashboard/configuracoes/executores" },
+  { label: "Fornecedores", href: "/dashboard/configuracoes/fornecedores" },
   { label: "Regras da oficina", href: "/dashboard/configuracoes/regras" },
   { label: "Agenda no celular (Google Agenda)", href: "/dashboard/configuracoes/agenda" },
 ];

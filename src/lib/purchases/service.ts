@@ -15,6 +15,7 @@ import {
   findSupplierByName,
   listSuppliers,
   setSupplierStatus,
+  updateSupplier,
   type SupplierRecord,
 } from "@/lib/db/repositories/suppliers";
 import { noonInBrasilia, todayInBrasilia } from "@/lib/expenses/dates";
@@ -231,15 +232,46 @@ export async function listSuppliersService(onlyActive = true): Promise<SupplierR
   return listSuppliers(onlyActive);
 }
 
-export async function createSupplierService(rawName: string): Promise<SupplierRecord> {
+/** Telefone opcional: só dígitos, com DDD (10 ou 11); vazio vira nulo. */
+function cleanSupplierPhone(raw: string | null | undefined): string | null {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length !== 10 && digits.length !== 11) {
+    throw new InvalidPurchaseError("Telefone inválido — use DDD + número (ex.: 62 99999-0000).");
+  }
+  return digits;
+}
+
+export async function createSupplierService(
+  rawName: string,
+  extra: { phone?: string | null; notes?: string | null } = {},
+): Promise<SupplierRecord> {
   const name = (rawName ?? "").trim();
   if (name.length < 2) throw new InvalidPurchaseError("Informe o nome do fornecedor.");
+  const phone = cleanSupplierPhone(extra.phone);
+  const notes = extra.notes?.trim() || null;
   const existing = await findSupplierByName(name);
   if (existing) {
     if (existing.status === "INATIVO") return (await setSupplierStatus(existing.id, "ATIVO")) ?? existing;
     return existing;
   }
-  return createSupplier(name);
+  return createSupplier(name, undefined, { phone, notes });
+}
+
+/** Corrige nome, telefone e observação de um fornecedor. O nome não pode repetir outro. */
+export async function updateSupplierService(
+  id: string,
+  input: { name: string; phone?: string | null; notes?: string | null },
+): Promise<SupplierRecord> {
+  const name = (input.name ?? "").trim();
+  if (name.length < 2) throw new InvalidPurchaseError("Informe o nome do fornecedor.");
+  const current = await findSupplierById(id);
+  if (!current) throw new SupplierNotFoundError();
+  const sameName = await findSupplierByName(name);
+  if (sameName && sameName.id !== id) throw new InvalidPurchaseError("Já existe um fornecedor com esse nome.");
+  const updated = await updateSupplier(id, { name, phone: cleanSupplierPhone(input.phone), notes: input.notes?.trim() || null });
+  if (!updated) throw new SupplierNotFoundError();
+  return updated;
 }
 
 export async function setSupplierStatusService(id: string, status: "ATIVO" | "INATIVO"): Promise<SupplierRecord> {
