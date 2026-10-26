@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+import { MicButton } from "@/components/MicButton";
+import { appendTranscript } from "@/lib/voice";
 import {
   analisarTextoAction,
   analisarImagemAction,
@@ -121,7 +123,7 @@ export function AssistenteChat() {
             {(etapa === "idle" || etapa === "analisando") && (
               <>
                 <p className="text-xs text-muted">
-                  Digite o que aconteceu ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente.
+                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente.
                 </p>
                 <textarea
                   value={texto}
@@ -147,6 +149,10 @@ export function AssistenteChat() {
                   >
                     📷
                   </button>
+                  <MicButton
+                    onText={(spoken) => setTexto((prev) => appendTranscript(prev, spoken))}
+                    disabled={etapa === "analisando"}
+                  />
                   <input
                     ref={fileRef}
                     type="file"
