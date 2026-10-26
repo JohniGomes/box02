@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { extractFromText, extractFromImage, type ExtractedData } from "@/lib/gemini/extract";
+import { friendlyAiMessage } from "@/lib/gemini/errors";
 import { searchCustomers, findCustomerByDocument } from "@/lib/db/repositories/customers";
 import { findVehicleByPlate, listVehiclesByCustomer } from "@/lib/db/repositories/vehicles";
 import { listPartsWithStock } from "@/lib/db/repositories/parts";
@@ -58,7 +59,7 @@ export async function analisarTextoAction(text: string): Promise<AssistenteResul
     const reconciliado = await reconciliarDados(data);
     return { success: true, data, reconciliado };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Erro ao analisar texto." };
+    return { success: false, error: friendlyAiMessage(err) };
   }
 }
 
@@ -73,7 +74,7 @@ export async function analisarImagemAction(
     const reconciliado = await reconciliarDados(data);
     return { success: true, data, reconciliado };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Erro ao analisar imagem." };
+    return { success: false, error: friendlyAiMessage(err) };
   }
 }
 

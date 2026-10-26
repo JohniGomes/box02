@@ -1,4 +1,6 @@
-import { geminiFlash } from "./client";
+import { z } from "zod";
+import { generateJson } from "./json";
+import type { GeminiRunner } from "./client";
 
 export interface ExtractedItem {
   tipo: "SERVICO" | "PECA" | "OUTRO";
@@ -66,12 +68,56 @@ Regras importantes:
 - Telefone: mantenha apenas dígitos com DDD
 - confianca: ALTA = tudo claro, MEDIA = algumas dúvidas, BAIXA = muito difícil de ler`;
 
-export async function extractFromText(text: string): Promise<ExtractedData> {
-  const prompt = `${PROMPT_SISTEMA}\n\nTexto para analisar:\n${text}`;
-  const result = await geminiFlash.generateContent(prompt);
-  const responseText = result.response.text().trim();
-  const json = responseText.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-  const parsed = JSON.parse(json);
+/** Número que a IA às vezes devolve como texto ("98.000", "2015"). */
+function toNumber(v: unknown): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string") {
+    const digits = v.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+    const n = Number(digits);
+    return digits !== "" && Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+const optText = z.string().nullish().transform((v) => (v ? v : undefined));
+const optNumber = z.unknown().transform(toNumber);
+
+const ItemSchema = z.object({
+  tipo: z.enum(["SERVICO", "PECA", "OUTRO"]).catch("OUTRO"),
+  descricao: z.string().nullish().transform((v) => v ?? ""),
+  quantidade: z.unknown().transform((v) => toNumber(v) ?? 1),
+  precoUnitarioCentavos: z.unknown().transform((v) => toNumber(v) ?? null),
+});
+
+/** Formato que o Gemini deve devolver; tolerante com campos nulos/texto, rígido no que importa. */
+export const ExtractedCoreSchema = z.object({
+  cliente: z
+    .object({ nome: z.string().nullish().transform((v) => v ?? ""), telefone: optText, documento: optText })
+    .nullish()
+    .transform((v) => v ?? null),
+  veiculo: z
+    .object({ marca: optText, modelo: optText, ano: optNumber, placa: optText, cor: optText, quilometragem: optNumber })
+    .nullish()
+    .transform((v) => v ?? null),
+  itens: z
+    .array(ItemSchema)
+    .nullish()
+    .transform((items) => (items ?? []).filter((i) => i.descricao.trim() !== "")),
+  observacoes: z.string().nullish().transform((v) => v ?? ""),
+  confianca: z.enum(["ALTA", "MEDIA", "BAIXA"]).catch("BAIXA"),
+});
+
+interface ExtractOptions {
+  runner?: GeminiRunner;
+  models?: string[];
+}
+
+export async function extractFromText(text: string, opts: ExtractOptions = {}): Promise<ExtractedData> {
+  const prompt = `${PROMPT_SISTEMA}
+
+Texto para analisar:
+${text}`;
+  const parsed = await generateJson(prompt, ExtractedCoreSchema, opts);
   return { ...parsed, textoOriginal: text };
 }
 
@@ -79,20 +125,14 @@ export async function extractFromImage(
   imageBase64: string,
   mimeType: string,
   extraText?: string,
+  opts: ExtractOptions = {},
 ): Promise<ExtractedData> {
   const contentParts = [
-    { text: PROMPT_SISTEMA + (extraText ? `\n\nInformação adicional: ${extraText}` : "") },
-    {
-      inlineData: {
-        data: imageBase64,
-        mimeType,
-      },
-    },
-  ];
+    { text: PROMPT_SISTEMA + (extraText ? `
 
-  const result = await geminiFlash.generateContent({ contents: [{ role: "user", parts: contentParts }] });
-  const responseText = result.response.text().trim();
-  const json = responseText.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-  const parsed = JSON.parse(json);
+Informação adicional: ${extraText}` : "") },
+    { inlineData: { data: imageBase64, mimeType } },
+  ];
+  const parsed = await generateJson({ contents: [{ role: "user", parts: contentParts }] }, ExtractedCoreSchema, opts);
   return { ...parsed, textoOriginal: extraText ?? "[imagem]" };
 }
