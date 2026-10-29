@@ -501,17 +501,26 @@ export function CloseWorkOrderForm({
   );
 }
 
-export function CancelWorkOrderForm({ workOrderId }: { workOrderId: string }) {
+export function CancelWorkOrderForm({
+  workOrderId,
+  returnableParts = [],
+}: {
+  workOrderId: string;
+  /** Peças que já saíram do estoque nesta OS e podem voltar. */
+  returnableParts?: { itemId: string; description: string; quantity: number }[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  // Padrão "Sim": é o que deixa o saldo certo; a pessoa pode responder Não (ex.: a peça foi usada/perdida).
+  const [returnParts, setReturnParts] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function handleCancel() {
     setError(null);
     startTransition(async () => {
-      const result = await cancelWorkOrderAction(workOrderId, reason);
+      const result = await cancelWorkOrderAction(workOrderId, reason, returnableParts.length > 0 ? returnParts : undefined);
       if (!result.success) {
         setError(result.error ?? "Falha ao cancelar.");
         return;
@@ -536,6 +545,26 @@ export function CancelWorkOrderForm({ workOrderId }: { workOrderId: string }) {
         placeholder="Motivo do cancelamento"
         className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
       />
+      {returnableParts.length > 0 ? (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-background p-3 text-sm">
+          <p className="font-medium">Devolver as peças ao estoque?</p>
+          <ul className="text-xs text-muted">
+            {returnableParts.map((p) => (
+              <li key={p.itemId}>
+                {p.quantity} × {p.description}
+              </li>
+            ))}
+          </ul>
+          <label className="flex items-center gap-2">
+            <input type="radio" checked={returnParts} onChange={() => setReturnParts(true)} />
+            <span>Sim, devolver (o estoque volta ao que era)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" checked={!returnParts} onChange={() => setReturnParts(false)} />
+            <span>Não, as peças não voltam ao estoque</span>
+          </label>
+        </div>
+      ) : null}
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <div className="flex gap-2">
         <button
@@ -583,7 +612,10 @@ export function ReactivateWorkOrderForm({ workOrderId }: { workOrderId: string }
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4">
-      <p className="text-xs text-muted">A OS volta para o status em que estava antes de ser cancelada.</p>
+      <p className="text-xs text-muted">
+        A OS volta para o status em que estava antes de ser cancelada. Se as peças tinham sido devolvidas ao estoque, elas voltam a sair
+        (se faltar saldo, a saída acontece mesmo assim e o estoque pode ficar negativo).
+      </p>
       <input
         value={reason}
         onChange={(e) => setReason(e.target.value)}

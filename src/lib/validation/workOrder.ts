@@ -119,6 +119,8 @@ export type WorkOrderReceptionAcceptanceInput = z.infer<typeof workOrderReceptio
 
 export const cancelWorkOrderSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo do cancelamento"),
+  /** Devolver ao estoque as peças que já saíram nesta OS (pergunta feita ao cancelar). */
+  returnParts: z.boolean().optional(),
 });
 
 export const reactivateWorkOrderSchema = z.object({
