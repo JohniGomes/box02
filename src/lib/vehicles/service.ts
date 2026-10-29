@@ -234,3 +234,31 @@ export async function deleteVehicleService(actorUserId: string, vehicleId: strin
 }
 
 export type { VehicleInput };
+
+/**
+ * Atualiza só os dados técnicos do veículo (marca, modelo, versão/motor, anos e chassi) a partir da
+ * ficha de compra de peças. O resto do cadastro (cliente, placa, cor, KM…) é preservado.
+ */
+export async function updateVehicleSheetService(
+  actorUserId: string,
+  vehicleId: string,
+  sheet: { brand?: string; model?: string; version?: string; yearManufacture?: string; yearModel?: string; chassis?: string },
+): Promise<VehicleRecord> {
+  const existing = await findVehicleById(vehicleId);
+  if (!existing) throw new VehicleNotFoundError(vehicleId);
+  return updateVehicleService(actorUserId, vehicleId, {
+    customerId: existing.customerId,
+    plate: existing.plate ?? undefined,
+    brand: sheet.brand ?? existing.brand ?? undefined,
+    model: sheet.model ?? existing.model ?? undefined,
+    version: sheet.version ?? existing.version ?? undefined,
+    yearManufacture: sheet.yearManufacture ?? existing.yearManufacture ?? undefined,
+    yearModel: sheet.yearModel ?? existing.yearModel ?? undefined,
+    color: existing.color ?? undefined,
+    fuelType: existing.fuelType ?? undefined,
+    mileage: existing.mileage ?? undefined,
+    chassis: sheet.chassis ?? existing.chassis ?? undefined,
+    renavam: existing.renavam ?? undefined,
+    notes: existing.notes ?? undefined,
+  });
+}
