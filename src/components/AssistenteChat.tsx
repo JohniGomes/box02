@@ -2,6 +2,7 @@
 
 import { useState, useRef, useTransition } from "react";
 import { MicButton } from "@/components/MicButton";
+import { formatBRL } from "@/lib/money";
 import { appendTranscript } from "@/lib/voice";
 import {
   analisarTextoAction,
@@ -236,6 +237,14 @@ export function AssistenteChat() {
                             {item.quantidade > 1 && (
                               <span className="text-muted"> × {item.quantidade}</span>
                             )}
+                            {(item.precoUnitarioCentavos ?? item.precoSugeridoCentavos) != null ? (
+                              <span className="ml-1 font-medium">
+                                {formatBRL((item.precoUnitarioCentavos ?? item.precoSugeridoCentavos) as number)}
+                                {item.precoUnitarioCentavos == null ? <span className="text-muted"> (do cadastro)</span> : null}
+                              </span>
+                            ) : (
+                              <span className="ml-1 text-muted">sem valor</span>
+                            )}
                           </div>
                           <span className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium ${
                             item.acao === "USAR_EXISTENTE"
@@ -244,7 +253,7 @@ export function AssistenteChat() {
                               ? "bg-yellow-100 text-yellow-700"
                               : "bg-zinc-100 text-zinc-500"
                           }`}>
-                            {item.acao === "USAR_EXISTENTE" ? "✓" : item.acao === "CRIAR_NOVO" ? "+Novo" : "—"}
+                            {item.acao === "USAR_EXISTENTE" ? "✓ do cadastro" : item.acao === "CRIAR_NOVO" ? "texto livre" : "ignorado"}
                           </span>
                         </div>
                       ))}
@@ -290,7 +299,7 @@ export function AssistenteChat() {
                   disabled={isPending}
                   className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background disabled:opacity-40 hover:opacity-90"
                 >
-                  {isPending ? "Criando..." : `Criar ${tipoLancamento === "ORCAMENTO" ? "Orçamento" : "OS"}`}
+                  {isPending ? "Preparando..." : `Montar rascunho de ${tipoLancamento === "ORCAMENTO" ? "Orçamento" : "OS"}`}
                 </button>
               </div>
             )}
@@ -299,8 +308,8 @@ export function AssistenteChat() {
             {etapa === "concluido" && (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="text-4xl">✅</div>
-                <p className="font-semibold text-sm">Lançamento criado!</p>
-                <p className="text-xs text-muted">Redirecionando para o formulário...</p>
+                <p className="font-semibold text-sm">Rascunho pronto!</p>
+                <p className="text-xs text-muted">Abrindo o formulário com tudo preenchido. Confira e salve lá.</p>
               </div>
             )}
           </div>

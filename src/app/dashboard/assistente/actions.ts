@@ -3,12 +3,15 @@
 import { auth } from "@/auth";
 import { extractFromText, extractFromImage, type ExtractedData } from "@/lib/gemini/extract";
 import { friendlyAiMessage } from "@/lib/gemini/errors";
-import { searchCustomers, findCustomerByDocument } from "@/lib/db/repositories/customers";
-import { findVehicleByPlate, listVehiclesByCustomer } from "@/lib/db/repositories/vehicles";
+import { searchCustomers, findCustomerByDocument, findCustomersByPhone } from "@/lib/db/repositories/customers";
+import { findVehicleById, findVehicleByPlate, listVehiclesByCustomer } from "@/lib/db/repositories/vehicles";
 import { listPartsWithStock } from "@/lib/db/repositories/parts";
 import { createCustomerService } from "@/lib/customers/service";
 import { createVehicleService } from "@/lib/vehicles/service";
-import { createPartService } from "@/lib/inventory/service";
+import { getPartSuggestedSalePriceService } from "@/lib/inventory/service";
+import { buildAssistantDraft } from "@/lib/assistant/draft";
+import { draftResumeHref, saveDraftService } from "@/lib/drafts/service";
+import { formatPlate } from "@/lib/validation/plate";
 import { listActiveServices } from "@/lib/db/repositories/services";
 
 async function requireUserId(): Promise<string> {
@@ -32,6 +35,8 @@ export interface ReconciledItem {
   // se encontrado no cadastro:
   registroId?: string;
   registroNome?: string;
+  /** Preço do catálogo/estoque, usado se a pessoa não falou um valor. */
+  precoSugeridoCentavos?: number | null;
   acao: "USAR_EXISTENTE" | "CRIAR_NOVO" | "IGNORAR";
 }
 
@@ -83,7 +88,12 @@ async function reconciliarDados(data: ExtractedData): Promise<ReconciledData> {
   let clienteRec: ReconciledData["cliente"] = { nome: "", acao: "SEM_CLIENTE" };
   if (data.cliente?.nome) {
     let found = null;
-    if (data.cliente.documento) {
+    // 1º telefone (o mais confiável), 2º documento, 3º nome.
+    const phoneDigits = (data.cliente.telefone ?? "").replace(/\D/g, "");
+    if (phoneDigits.length === 10 || phoneDigits.length === 11) {
+      found = (await findCustomersByPhone(phoneDigits)).find((c) => c.status === "ATIVO") ?? null;
+    }
+    if (!found && data.cliente.documento) {
       found = await findCustomerByDocument(data.cliente.documento.replace(/\D/g, ""));
     }
     if (!found) {
@@ -132,11 +142,13 @@ async function reconciliarDados(data: ExtractedData): Promise<ReconciledData> {
           p.name.toLowerCase().includes(item.descricao.toLowerCase()) ||
           item.descricao.toLowerCase().includes(p.name.toLowerCase()),
         );
+        const suggested = found ? await getPartSuggestedSalePriceService(found.id) : null;
         return {
           ...item,
           tipo: "PECA" as const,
           registroId: found?.id,
           registroNome: found?.name,
+          precoSugeridoCentavos: suggested?.cents ?? null,
           acao: found ? ("USAR_EXISTENTE" as const) : ("CRIAR_NOVO" as const),
         };
       } else if (item.tipo === "SERVICO") {
@@ -149,6 +161,7 @@ async function reconciliarDados(data: ExtractedData): Promise<ReconciledData> {
           tipo: "SERVICO" as const,
           registroId: found?.id,
           registroNome: found?.name,
+          precoSugeridoCentavos: found?.defaultPriceCents ?? null,
           acao: found ? ("USAR_EXISTENTE" as const) : ("CRIAR_NOVO" as const),
         };
       }
@@ -215,28 +228,27 @@ export async function confirmarLancamentoAction(
       veiculoId = novo.id;
     }
 
-    // 3. Criar peças novas se necessário
-    for (const item of reconciliado.itens) {
-      if (item.tipo === "PECA" && item.acao === "CRIAR_NOVO") {
-        const novaPeca = await createPartService({
-          name: item.descricao,
-          costCents: item.precoUnitarioCentavos ?? undefined,
-        });
-        item.registroId = novaPeca.id;
-        item.registroNome = novaPeca.name;
-        item.acao = "USAR_EXISTENTE";
-      }
-    }
-
-    // 4. Redirecionar para criação de orçamento/OS com dados pré-preenchidos
-    const params = new URLSearchParams();
-    if (clienteId) params.set("clienteId", clienteId);
-    if (veiculoId) params.set("veiculoId", veiculoId);
-
-    const redirectUrl =
-      input.tipo === "ORCAMENTO"
-        ? `/dashboard/orcamentos/novo?${params.toString()}`
-        : `/dashboard/os/nova?${params.toString()}`;
+    // 3. O assistente NÃO cria peças nem grava o orçamento/OS: monta um RASCUNHO com o que entendeu
+    //    (peças e serviços novos entram como texto livre) e a pessoa revisa e confirma no formulário.
+    const veiculoDados = veiculoId ? await findVehicleById(veiculoId) : null;
+    const draft = buildAssistantDraft({
+      tipo: input.tipo,
+      cliente: { id: clienteId, nome: reconciliado.cliente.nome },
+      veiculo: veiculoDados
+        ? {
+            id: veiculoDados.id,
+            mileage: veiculoDados.mileage,
+            label: [veiculoDados.plate ? formatPlate(veiculoDados.plate) : "Sem placa", [veiculoDados.brand, veiculoDados.model].filter(Boolean).join(" ")]
+              .filter(Boolean)
+              .join(" — "),
+          }
+        : null,
+      itens: reconciliado.itens,
+      observacoes: reconciliado.extracted.observacoes,
+      quilometragem: reconciliado.extracted.veiculo?.quilometragem ?? null,
+    });
+    const saved = await saveDraftService(userId, { kind: draft.kind, title: draft.title, payload: draft.payload });
+    const redirectUrl = draftResumeHref(saved);
 
     return { success: true, clienteId, veiculoId, redirectUrl };
   } catch (err) {
