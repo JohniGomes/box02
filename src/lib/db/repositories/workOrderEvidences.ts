@@ -3,7 +3,10 @@ import { pool } from "../pool";
 
 type Queryable = Pool | PoolClient;
 
-export type WorkOrderEvidenceType = "GERAL" | "AVARIA";
+export type WorkOrderEvidenceType = "GERAL" | "AVARIA" | "PECA_ANTIGA" | "PECA_NOVA";
+
+/** Fotos das peças trocadas: acontecem durante o serviço e não entram no Termo de Recepção. */
+export const REPLACED_PART_EVIDENCE_TYPES: WorkOrderEvidenceType[] = ["PECA_ANTIGA", "PECA_NOVA"];
 
 export interface WorkOrderEvidenceRecord {
   id: string;

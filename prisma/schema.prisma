@@ -799,6 +799,8 @@ model WorkOrderPayment {
 enum WorkOrderEvidenceType {
   GERAL
   AVARIA
+  PECA_ANTIGA
+  PECA_NOVA
 }
 
 /// Vinculada só à OS (DEC-J4). Mutabilidade: livre antes do aceite de

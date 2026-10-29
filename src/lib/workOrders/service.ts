@@ -38,6 +38,7 @@ import {
   createWorkOrderEvidence,
   deleteWorkOrderEvidence,
   findWorkOrderEvidenceById,
+  REPLACED_PART_EVIDENCE_TYPES,
   listWorkOrderEvidences,
   type WorkOrderEvidenceRecord,
 } from "@/lib/db/repositories/workOrderEvidences";
@@ -1337,10 +1338,13 @@ export async function deleteWorkOrderEvidenceService(
 ): Promise<void> {
   const workOrder = await findWorkOrderById(workOrderId);
   if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
-  if (workOrder.receptionAcceptedAt) throw new WorkOrderEvidenceLockedError();
 
   const evidence = await findWorkOrderEvidenceById(evidenceId, workOrderId);
   if (!evidence) throw new WorkOrderEvidenceNotFoundError(evidenceId);
+  // O aceite do Termo trava as fotos de entrada e avaria; as das peças trocadas (durante o serviço) seguem livres.
+  if (workOrder.receptionAcceptedAt && !REPLACED_PART_EVIDENCE_TYPES.includes(evidence.type)) {
+    throw new WorkOrderEvidenceLockedError();
+  }
 
   await storageClient.deleteObject(evidence.storageKey);
   await deleteWorkOrderEvidence(evidenceId);

@@ -252,3 +252,25 @@ describe("regressão — gate de aceite de recepção e demais ciclos continuam 
     await expect(setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_EXECUCAO")).rejects.toThrow();
   });
 });
+
+describe("fotos das peças trocadas (opcionais)", () => {
+  it("aceita peça danificada e peça nova, e elas podem ser excluídas mesmo depois do aceite do Termo", async () => {
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, { customerId, vehicleId, mileageAtEntry: 1000, customerComplaint: "Barulho" });
+    const storage = createFakeStorageClient();
+    await acceptReceptionForTest(actorUserId, os.workOrder.id, { receptionAcceptedName: "Cliente Teste", receptionAwareness1: true, receptionAwareness2: true, receptionAwareness3: true });
+
+    const old = await createWorkOrderEvidenceService(actorUserId, os.workOrder.id, { type: "PECA_ANTIGA", description: "Pastilha dianteira", mimeType: "image/jpeg", fileSize: fakeFile.length }, fakeFile, storage);
+    const novo = await createWorkOrderEvidenceService(actorUserId, os.workOrder.id, { type: "PECA_NOVA", mimeType: "image/jpeg", fileSize: fakeFile.length }, fakeFile, storage);
+    expect(old.type).toBe("PECA_ANTIGA");
+    expect(novo.type).toBe("PECA_NOVA");
+
+    // pode excluir a foto da peça mesmo com o Termo aceito
+    await deleteWorkOrderEvidenceService(actorUserId, os.workOrder.id, old.id, storage);
+    expect(storage.objects.has(old.storageKey)).toBe(false);
+    expect((await listWorkOrderEvidencesService(os.workOrder.id)).map((e) => e.id)).toEqual([novo.id]);
+
+    // as fotos de entrada/avaria continuam travadas depois do aceite
+    const avaria = await createWorkOrderEvidenceService(actorUserId, os.workOrder.id, { type: "AVARIA", mimeType: "image/jpeg", fileSize: fakeFile.length }, fakeFile, storage);
+    await expect(deleteWorkOrderEvidenceService(actorUserId, os.workOrder.id, avaria.id, storage)).rejects.toThrow(WorkOrderEvidenceLockedError);
+  });
+});
