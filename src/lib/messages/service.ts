@@ -10,7 +10,9 @@ import {
 import { formatBRL } from "@/lib/money";
 import { onlyDigits } from "@/lib/validation/document";
 import { whatsappLinkWithMessage } from "@/lib/validation/phone";
-import { balanceMessage, confirmationMessage, reminderMessage, reviewMessage } from "./templates";
+import { balanceMessage, confirmationMessage, reminderMessage, reviewMessage, serviceDueMessage } from "./templates";
+import { listLastServicesForMessages } from "@/lib/db/repositories/serviceIntervals";
+import { computeNextDue } from "@/lib/vehicles/nextService";
 
 const REVIEW_LINK_KEY = "google_review_link";
 const DAY_MS = 86400000;
@@ -43,6 +45,8 @@ export interface MessageCenter {
   reminders: MessageItem[];
   reviews: MessageItem[];
   balances: MessageItem[];
+  /** Lembrete de próxima troca (óleo, correia…), pelo intervalo definido em cada serviço. */
+  trocas: MessageItem[];
   reviewLinkConfigured: boolean;
   total: number;
 }
@@ -61,11 +65,12 @@ export async function getMessageCenterService(now: Date = new Date()): Promise<M
   const dayAfterStart = new Date(todayStart.getTime() + 2 * DAY_MS);
   const horizon = new Date(todayStart.getTime() + 60 * DAY_MS);
 
-  const [upcoming, delivered, receivables, reviewLink] = await Promise.all([
+  const [upcoming, delivered, receivables, reviewLink, lastServices] = await Promise.all([
     listAppointmentsForMessages(todayStart, horizon),
     listDeliveredForMessages(new Date(now.getTime() - 14 * DAY_MS)),
     listReceivablesForMessages(),
     getGoogleReviewLink(),
+    listLastServicesForMessages(),
   ]);
 
   const [confirmedIds, remindedIds, reviewedIds, chargedIds] = await Promise.all([
@@ -118,13 +123,46 @@ export async function getMessageCenterService(now: Date = new Date()): Promise<M
     balances.push({ kind: "COBRANCA", refId: r.id, customerName: r.customerName, context: `${r.number} · saldo ${formatBRL(r.balanceCents)}`, text, whatsappUrl: whatsappLinkWithMessage(phone, text) });
   }
 
+  // Próxima troca: serviço com intervalo, vencido ou chegando, uma mensagem por ciclo (uma por execução do serviço).
+  const dueCandidates = lastServices
+    .map((row) => {
+      const due = computeNextDue(row, row.vehicleMileage, now);
+      if (!due || due.status === "EM_DIA") return null;
+      const phone = phoneDigits(row.customerPhone);
+      if (!phone) return null;
+      const lastDay = row.lastAt.toISOString().slice(0, 10);
+      return { row, due, phone, refId: `${row.vehicleId}:${row.serviceId}:${lastDay}` };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+  const dueLogged = await listLoggedRefIds("TROCA", dueCandidates.map((c) => c.refId));
+  const trocas: MessageItem[] = dueCandidates
+    .filter((c) => !dueLogged.has(c.refId))
+    .map(({ row, due, phone, refId }) => {
+      const text = serviceDueMessage({
+        customerName: row.customerName,
+        vehicleDescription: row.vehicleLabel,
+        serviceName: row.serviceName,
+        lastDate: row.lastAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+        overdue: due.status === "VENCIDA",
+      });
+      return {
+        kind: "TROCA" as const,
+        refId,
+        customerName: row.customerName,
+        context: `${row.serviceName} · ${due.status === "VENCIDA" ? "vencida" : "chegando"} (${due.dueText})`,
+        text,
+        whatsappUrl: whatsappLinkWithMessage(phone, text),
+      };
+    });
+
   return {
     confirmations,
     reminders,
     reviews,
     balances,
+    trocas,
     reviewLinkConfigured: Boolean(reviewLink),
-    total: confirmations.length + reminders.length + reviews.length + balances.length,
+    total: confirmations.length + reminders.length + reviews.length + balances.length + trocas.length,
   };
 }
 

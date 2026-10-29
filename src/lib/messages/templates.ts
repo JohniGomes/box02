@@ -61,3 +61,14 @@ export function balanceMessage(r: { customerName: string; number: string; vehicl
     `Obrigado!`
   );
 }
+
+export function serviceDueMessage(
+  r: { customerName: string; vehicleDescription: string | null; serviceName: string; lastDate: string; overdue: boolean },
+): string {
+  const vehicle = r.vehicleDescription ? ` do seu ${r.vehicleDescription}` : "";
+  const when = r.overdue ? "já passou da hora" : "está chegando a hora";
+  return (
+    `Olá, ${firstName(r.customerName)}! Aqui é da BOX 02. Passando para lembrar que ${when} da ${r.serviceName.toLowerCase()}${vehicle} ` +
+    `(a última foi em ${r.lastDate}). Quer que a gente já agende um horário? Abraço!`
+  );
+}

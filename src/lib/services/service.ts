@@ -35,6 +35,8 @@ export async function createServiceService(actorUserId: string, rawInput: unknow
     category: input.category ?? null,
     defaultPriceCents: toDefaultPriceCents(input.defaultPriceReais),
     costCents: toCostCents(input.costReais),
+    intervalMonths: input.intervalMonths ?? null,
+    intervalKm: input.intervalKm ?? null,
   });
 
   await recordAuditLog({
@@ -63,6 +65,8 @@ export async function updateServiceService(
     category: input.category ?? null,
     defaultPriceCents: toDefaultPriceCents(input.defaultPriceReais),
     costCents: toCostCents(input.costReais),
+    intervalMonths: input.intervalMonths ?? null,
+    intervalKm: input.intervalKm ?? null,
   });
   if (!updated) throw new ServiceNotFoundError(serviceId);
 

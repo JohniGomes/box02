@@ -41,6 +41,11 @@ export default async function MessagesPage() {
       <Section title="Confirmação de agendamento" hint="Agendamentos dos próximos dias que ainda não foram confirmados com o cliente." items={center.confirmations} />
       <Section title="Saldo a receber" hint="OS entregues há 2 dias ou mais com saldo em aberto." items={center.balances} />
       <Section
+        title="Lembrete de próxima troca"
+        hint="Veículos cujo serviço (óleo, correia, filtros…) está chegando na hora ou já passou, pelo intervalo definido em Configurações → Serviços."
+        items={center.trocas}
+      />
+      <Section
         title="Pedido de avaliação no Google"
         hint="OS entregues nos últimos 14 dias. Vai para todos os clientes, sem filtrar e sem oferecer vantagem."
         items={center.reviews}
