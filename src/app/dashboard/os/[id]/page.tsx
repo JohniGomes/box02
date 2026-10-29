@@ -131,6 +131,11 @@ export default async function WorkOrderDetailPage({
               Ver veículo →
             </Link>
           ) : null}
+          {vehicle?.plate ? (
+            <Link href={`/dashboard/estoque/ficha?placa=${encodeURIComponent(vehicle.plate)}`} className="text-accent">
+              Ficha p/ comprar peças →
+            </Link>
+          ) : null}
         </div>
       </section>
 
