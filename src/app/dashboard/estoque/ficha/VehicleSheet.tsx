@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { buildVehicleSheetText, vinModelYear } from "@/lib/vehicles/sheet";
 import { saveVehicleSheetAction } from "./actions";
+import { PartCodesPanel } from "./PartCodesPanel";
 
 const inputClass =
   "h-12 w-full rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
@@ -139,6 +140,7 @@ export function VehicleSheet({ vehicleId, initial }: { vehicleId: string | null;
         </button>
       ) : null}
       {message ? <p className="text-xs text-muted">{message}</p> : null}
+      <PartCodesPanel vehicle={{ marca: v.brand, modelo: v.model, ano: v.yearModel || v.yearManufacture, versao: v.version }} part={part} />
       <p className="text-xs text-muted">
         O Auto Experts é um catálogo gratuito de algumas marcas (Frasle e outras). Ele abre em outra aba: escolha montadora,
         veículo, ano e versão para achar o código. Sempre confirme o código com o fornecedor antes de comprar.
