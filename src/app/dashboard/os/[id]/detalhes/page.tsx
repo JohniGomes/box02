@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import {
   getWorkOrderPaymentsSummaryService,
   getWorkOrderService,
+  listReturnablePartsService,
   listWorkOrderCorrectionsService,
   listWorkOrderEvidencesService,
 } from "@/lib/workOrders/service";
@@ -76,6 +77,7 @@ export default async function WorkOrderDetailsPage({
     workOrder.status === "ENTREGUE" ? await getWorkOrderPaymentsSummaryService(workOrder.id) : null;
   const evidences = await listWorkOrderEvidencesService(workOrder.id);
   const corrections = await listWorkOrderCorrectionsService(workOrder.id);
+  const returnableParts = await listReturnablePartsService(workOrder.id);
   const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired, deliveryChecklistRequired] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
@@ -416,7 +418,7 @@ export default async function WorkOrderDetailsPage({
             }
           />
         ) : null}
-        {isOpenForCancel ? <CancelWorkOrderForm workOrderId={workOrder.id} /> : null}
+        {isOpenForCancel ? <CancelWorkOrderForm workOrderId={workOrder.id} returnableParts={returnableParts} /> : null}
         {workOrder.status === "CANCELADA" ? <ReactivateWorkOrderForm workOrderId={workOrder.id} /> : null}
       </div>
     </div>

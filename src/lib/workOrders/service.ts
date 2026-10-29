@@ -75,7 +75,7 @@ import { assertServiceIsActive } from "@/lib/services/service";
 import { assertPartIsActive } from "@/lib/inventory/service";
 import { findPartById, findPartByIdForUpdate, getPartCurrentStock } from "@/lib/db/repositories/parts";
 import { findServiceById } from "@/lib/db/repositories/services";
-import { createStockMovement } from "@/lib/db/repositories/stockMovements";
+import { createStockMovement, getReturnedQuantityForWorkOrderItem } from "@/lib/db/repositories/stockMovements";
 import { InsufficientStockError } from "@/lib/inventory/errors";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { generateWorkOrderNumber } from "./numbering";
@@ -479,21 +479,62 @@ export async function cancelWorkOrderService(
 
   assertTransitionAllowed(existing.status, "CANCELADA");
 
-  const updated = await setWorkOrderStatus(workOrderId, "CANCELADA", {
-    cancelledAt: new Date(),
-    cancelReason: input.reason,
-  });
-  if (!updated) throw new WorkOrderNotFoundError(workOrderId);
+  return withTransaction(async (client) => {
+    const updated = await setWorkOrderStatus(
+      workOrderId,
+      "CANCELADA",
+      { cancelledAt: new Date(), cancelReason: input.reason },
+      client,
+    );
+    if (!updated) throw new WorkOrderNotFoundError(workOrderId);
 
-  await recordAuditLog({
-    userId: actorUserId,
-    action: "WORK_ORDER_CANCELLED",
-    entityType: "work_order",
-    entityId: workOrderId,
-    metadata: { reason: input.reason, previousStatus: existing.status },
-  });
+    // Pergunta "Devolver as peças ao estoque?": cada item executado com peça volta como uma
+    // ENTRADA nova ligada ao item (nada é apagado nem editado, e nunca devolve duas vezes).
+    const returned: { description: string; quantity: number }[] = [];
+    if (input.returnParts) {
+      const items = await listWorkOrderItemsByWorkOrder(workOrderId, client);
+      for (const item of items) {
+        if (item.status !== "EXECUTADO" || !item.partId || item.customerSupplied) continue;
+        if ((await getReturnedQuantityForWorkOrderItem(item.id, client)) > 0) continue;
+        const quantity = Math.max(1, Math.round(Number(item.quantity)));
+        await createStockMovement(
+          {
+            partId: item.partId,
+            type: "ENTRADA",
+            quantity,
+            reason: `Devolução ao estoque — OS ${existing.number} cancelada, item "${item.description}"`,
+            workOrderItemId: item.id,
+            source: "OS_DEVOLUCAO",
+            createdByUserId: actorUserId,
+          },
+          client,
+        );
+        returned.push({ description: item.description, quantity });
+      }
+    }
 
-  return updated;
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "WORK_ORDER_CANCELLED",
+      entityType: "work_order",
+      entityId: workOrderId,
+      metadata: { reason: input.reason, previousStatus: existing.status, returnParts: Boolean(input.returnParts), returnedParts: returned },
+    });
+
+    return updated;
+  });
+}
+
+/** Peças que podem ser devolvidas ao estoque se a OS for cancelada (e ainda não foram). */
+export async function listReturnablePartsService(workOrderId: string): Promise<{ itemId: string; description: string; quantity: number }[]> {
+  const items = await listWorkOrderItemsByWorkOrder(workOrderId);
+  const out: { itemId: string; description: string; quantity: number }[] = [];
+  for (const item of items) {
+    if (item.status !== "EXECUTADO" || !item.partId || item.customerSupplied) continue;
+    if ((await getReturnedQuantityForWorkOrderItem(item.id)) > 0) continue;
+    out.push({ itemId: item.id, description: item.description, quantity: Math.max(1, Math.round(Number(item.quantity))) });
+  }
+  return out;
 }
 
 const REACTIVATABLE_STATUSES: WorkOrderStatus[] = [
@@ -660,17 +701,43 @@ export async function reactivateWorkOrderService(
     lastStatus && (REACTIVATABLE_STATUSES as string[]).includes(lastStatus) ? lastStatus : "ABERTA"
   ) as WorkOrderStatus;
 
-  const updated = await reactivateCancelledWorkOrder(workOrderId, previous);
-  if (!updated) throw new WorkOrderNotCancelledError();
+  return withTransaction(async (client) => {
+    const updated = await reactivateCancelledWorkOrder(workOrderId, previous, client);
+    if (!updated) throw new WorkOrderNotCancelledError();
 
-  await recordAuditLog({
-    userId: actorUserId,
-    action: "WORK_ORDER_REACTIVATED",
-    entityType: "work_order",
-    entityId: workOrderId,
-    metadata: { reason: input.reason, restoredStatus: previous, previousCancelReason: existing.cancelReason },
+    // Se as peças tinham sido devolvidas ao cancelar, a OS reativada volta a usá-las: nova saída.
+    // Não trava por falta de saldo (o estoque pode ficar negativo para a pessoa acertar depois).
+    const rebaixed: { description: string; quantity: number }[] = [];
+    const items = await listWorkOrderItemsByWorkOrder(workOrderId, client);
+    for (const item of items) {
+      if (item.status !== "EXECUTADO" || !item.partId || item.customerSupplied) continue;
+      const returned = await getReturnedQuantityForWorkOrderItem(item.id, client);
+      if (returned <= 0) continue;
+      await findPartByIdForUpdate(item.partId, client);
+      await createStockMovement(
+        {
+          partId: item.partId,
+          type: "SAIDA",
+          quantity: returned,
+          reason: `Nova baixa — OS ${existing.number} reativada, item "${item.description}"`,
+          workOrderItemId: item.id,
+          source: "OS_REBAIXA",
+          createdByUserId: actorUserId,
+        },
+        client,
+      );
+      rebaixed.push({ description: item.description, quantity: returned });
+    }
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "WORK_ORDER_REACTIVATED",
+      entityType: "work_order",
+      entityId: workOrderId,
+      metadata: { reason: input.reason, restoredStatus: previous, previousCancelReason: existing.cancelReason, rebaixedParts: rebaixed },
+    });
+    return updated;
   });
-  return updated;
 }
 
 // ============================================================
@@ -774,6 +841,8 @@ export async function setWorkOrderItemStatusService(
             type: "SAIDA",
             quantity,
             reason: `Baixa automática — OS ${workOrder.number}, item "${item.description}"`,
+            workOrderItemId: item.id,
+            source: "OS_BAIXA",
             createdByUserId: executedByUserId ?? actorUserId,
           },
           client,

@@ -224,10 +224,11 @@ export async function closeWorkOrderAction(
   }
 }
 
-export async function cancelWorkOrderAction(workOrderId: string, reason: string): Promise<ActionResult> {
+export async function cancelWorkOrderAction(workOrderId: string, reason: string, returnParts?: boolean): Promise<ActionResult> {
   try {
     const userId = await requireUserId();
-    await cancelWorkOrderService(userId, workOrderId, { reason });
+    await cancelWorkOrderService(userId, workOrderId, { reason, returnParts });
+    if (returnParts) revalidatePath("/dashboard/estoque");
     revalidatePath(`/dashboard/os/${workOrderId}`);
     return { success: true, workOrderId };
   } catch (err) {
