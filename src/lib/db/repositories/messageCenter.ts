@@ -2,7 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { pool } from "../pool";
 import { BALANCE_SQL } from "./workOrders";
 
-export type MessageKind = "CONFIRMACAO" | "LEMBRETE" | "AVALIACAO" | "COBRANCA";
+export type MessageKind = "CONFIRMACAO" | "LEMBRETE" | "AVALIACAO" | "COBRANCA" | "TROCA";
 
 /** Registra que a mensagem foi enviada (ou pulada). Só se acrescenta. */
 export async function createMessageLog(input: {

@@ -26,6 +26,8 @@ export default async function EditServicePage({
           category: service.category ?? "",
           defaultPriceReais: service.defaultPriceCents !== null ? centsToReais(service.defaultPriceCents) : "",
           costReais: service.costCents !== null ? centsToReais(service.costCents) : "",
+          intervalMonths: service.intervalMonths !== null ? String(service.intervalMonths) : "",
+          intervalKm: service.intervalKm !== null ? String(service.intervalKm) : "",
         }}
       />
     </div>

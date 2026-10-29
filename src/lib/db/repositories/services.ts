@@ -9,6 +9,8 @@ export interface ServiceRecord {
   category: string | null;
   defaultPriceCents: number | null;
   costCents: number | null;
+  intervalMonths: number | null;
+  intervalKm: number | null;
   status: ServiceStatus;
   procedureId: string | null;
   executionChecklistId: string | null;
@@ -16,22 +18,24 @@ export interface ServiceRecord {
   updatedAt: Date;
 }
 
-const COLUMNS = `id, name, category, "defaultPriceCents", "costCents", status, "procedureId", "executionChecklistId", "createdAt", "updatedAt"`;
+const COLUMNS = `id, name, category, "defaultPriceCents", "costCents", "intervalMonths", "intervalKm", status, "procedureId", "executionChecklistId", "createdAt", "updatedAt"`;
 
 export interface CreateServiceInput {
   name: string;
   category?: string | null;
   defaultPriceCents?: number | null;
   costCents?: number | null;
+  intervalMonths?: number | null;
+  intervalKm?: number | null;
 }
 
 export async function createService(input: CreateServiceInput): Promise<ServiceRecord> {
   const id = createId();
   const result = await pool.query<ServiceRecord>(
-    `INSERT INTO services (id, name, category, "defaultPriceCents", "costCents", status, "updatedAt")
-     VALUES ($1, $2, $3, $4, $5, 'ATIVO', NOW())
+    `INSERT INTO services (id, name, category, "defaultPriceCents", "costCents", "intervalMonths", "intervalKm", status, "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'ATIVO', NOW())
      RETURNING ${COLUMNS}`,
-    [id, input.name, input.category ?? null, input.defaultPriceCents ?? null, input.costCents ?? null],
+    [id, input.name, input.category ?? null, input.defaultPriceCents ?? null, input.costCents ?? null, input.intervalMonths ?? null, input.intervalKm ?? null],
   );
   return result.rows[0];
 }
@@ -45,6 +49,8 @@ export async function updateService(id: string, input: UpdateServiceInput): Prom
       category = CASE WHEN $3::boolean THEN $4 ELSE category END,
       "defaultPriceCents" = CASE WHEN $5::boolean THEN $6 ELSE "defaultPriceCents" END,
       "costCents" = CASE WHEN $7::boolean THEN $8 ELSE "costCents" END,
+      "intervalMonths" = CASE WHEN $9::boolean THEN $10 ELSE "intervalMonths" END,
+      "intervalKm" = CASE WHEN $11::boolean THEN $12 ELSE "intervalKm" END,
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
@@ -57,6 +63,10 @@ export async function updateService(id: string, input: UpdateServiceInput): Prom
       input.defaultPriceCents ?? null,
       "costCents" in input,
       input.costCents ?? null,
+      "intervalMonths" in input,
+      input.intervalMonths ?? null,
+      "intervalKm" in input,
+      input.intervalKm ?? null,
     ],
   );
   return result.rows[0] ?? null;

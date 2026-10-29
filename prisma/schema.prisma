@@ -862,6 +862,10 @@ model Service {
   /// voltado ao cliente.
   costCents Int?
 
+  /// Fase 2F — de quanto em quanto tempo/KM o serviço se repete (lembrete de próxima troca).
+  intervalMonths Int?
+  intervalKm     Int?
+
   /// Ciclo D — ambos opcionais, nunca obrigatórios (um serviço funciona
   /// sem procedimento e sem checklist de execução, como já era antes
   /// destes campos existirem). ON DELETE SET NULL: inativar/remover o

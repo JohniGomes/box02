@@ -4,6 +4,8 @@ import { getVehicleService } from "@/lib/vehicles/service";
 import { getCustomerService } from "@/lib/customers/service";
 import { formatPlate } from "@/lib/validation/plate";
 import { VehicleStatusActions, TransferVehicleAction } from "./VehicleActions";
+import { listLastServicesForVehicle } from "@/lib/db/repositories/serviceIntervals";
+import { computeNextDue } from "@/lib/vehicles/nextService";
 
 export default async function VehicleDetailPage({
   params,
@@ -15,6 +17,10 @@ export default async function VehicleDetailPage({
   if (!vehicle) notFound();
 
   const customer = await getCustomerService(vehicle.customerId);
+  const dueList = (await listLastServicesForVehicle(vehicle.id))
+    .map((row) => computeNextDue(row, vehicle.mileage))
+    .filter((d): d is NonNullable<typeof d> => d !== null)
+    .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
 
   const yearLine = [vehicle.yearManufacture, vehicle.yearModel]
     .filter((y): y is number => Boolean(y))
@@ -78,6 +84,37 @@ export default async function VehicleDetailPage({
           <Row label="Chassi" value={vehicle.chassis ?? "—"} muted={!vehicle.chassis} />
           <Row label="RENAVAM" value={vehicle.renavam ?? "—"} muted={!vehicle.renavam} />
         </dl>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-5">
+        <h2 className="mb-1 text-sm font-semibold">Próximas trocas</h2>
+        {dueList.length === 0 ? (
+          <p className="text-sm text-muted">
+            Ainda não há serviço com intervalo neste veículo. Para o sistema lembrar a próxima troca, defina &quot;Repetir a cada…&quot;
+            no serviço (Configurações → Serviços) e execute o serviço numa OS entregue.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {dueList.map((d) => (
+              <li key={d.serviceId} className="flex items-start justify-between gap-2 text-sm">
+                <span>
+                  <span className="font-medium">{d.serviceName}</span>
+                  <span className="block text-xs text-muted">
+                    Última em {d.lastAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                    {d.lastKm != null ? ` · ${d.lastKm.toLocaleString("pt-BR")} km` : ""} · próxima: {d.dueText}
+                  </span>
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    d.status === "VENCIDA" ? "bg-danger/15 text-danger" : d.status === "PROXIMA" ? "bg-accent/15 text-foreground" : "bg-success/15 text-success"
+                  }`}
+                >
+                  {d.status === "VENCIDA" ? "Vencida" : d.status === "PROXIMA" ? "Chegando" : "Em dia"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {vehicle.notes ? (

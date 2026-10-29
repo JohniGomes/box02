@@ -9,13 +9,22 @@ export function ServiceForm({
   initial,
 }: {
   serviceId?: string;
-  initial?: { name: string; category: string; defaultPriceReais: string; costReais: string };
+  initial?: {
+    name: string;
+    category: string;
+    defaultPriceReais: string;
+    costReais: string;
+    intervalMonths?: string;
+    intervalKm?: string;
+  };
 }) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [defaultPriceReais, setDefaultPriceReais] = useState(initial?.defaultPriceReais ?? "");
   const [costReais, setCostReais] = useState(initial?.costReais ?? "");
+  const [intervalMonths, setIntervalMonths] = useState(initial?.intervalMonths ?? "");
+  const [intervalKm, setIntervalKm] = useState(initial?.intervalKm ?? "");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +37,7 @@ export function ServiceForm({
     setError(null);
     setFieldErrors({});
 
-    const payload = { name, category, defaultPriceReais, costReais };
+    const payload = { name, category, defaultPriceReais, costReais, intervalMonths, intervalKm };
     const result = serviceId
       ? await updateServiceAction(serviceId, payload)
       : await createServiceAction(payload);
@@ -90,6 +99,40 @@ export function ServiceForm({
         <p className="text-xs text-muted">
           Usado só para calcular um preço sugerido de referência (quando não houver preço padrão manual).
           Nunca aparece em orçamento, OS ou qualquer documento do cliente.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
+        <p className="text-sm font-medium">Repetir a cada… (opcional, para lembrar a próxima troca)</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-muted" htmlFor="intervalMonths">Meses</label>
+            <input
+              id="intervalMonths"
+              inputMode="numeric"
+              value={intervalMonths}
+              onChange={(e) => setIntervalMonths(e.target.value)}
+              className={inputClass}
+              placeholder="Ex.: 6"
+            />
+            {fieldErrors.intervalMonths ? <p className="text-xs text-danger">{fieldErrors.intervalMonths}</p> : null}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-muted" htmlFor="intervalKm">Quilômetros</label>
+            <input
+              id="intervalKm"
+              inputMode="numeric"
+              value={intervalKm}
+              onChange={(e) => setIntervalKm(e.target.value)}
+              className={inputClass}
+              placeholder="Ex.: 10000"
+            />
+            {fieldErrors.intervalKm ? <p className="text-xs text-danger">{fieldErrors.intervalKm}</p> : null}
+          </div>
+        </div>
+        <p className="text-xs text-muted">
+          Ex.: troca de óleo a cada 6 meses ou 10.000 km (vale o que vencer primeiro). Deixe em branco se o serviço não se repete.
+          O sistema mostra a próxima troca na ficha do veículo e sugere o lembrete em Mensagens.
         </p>
       </div>
 

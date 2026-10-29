@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { markMessageService, setGoogleReviewLink } from "@/lib/messages/service";
 
-const KINDS = ["CONFIRMACAO", "LEMBRETE", "AVALIACAO", "COBRANCA"] as const;
+const KINDS = ["CONFIRMACAO", "LEMBRETE", "AVALIACAO", "COBRANCA", "TROCA"] as const;
 
 export async function markMessageAction(
   kind: string,
