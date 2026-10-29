@@ -293,7 +293,7 @@ export const ACCEPTED_EVIDENCE_MIME_TYPES = ["image/jpeg", "image/png", "image/h
 export const MAX_EVIDENCE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 export const createWorkOrderEvidenceMetadataSchema = z.object({
-  type: z.enum(["GERAL", "AVARIA"], { message: "Selecione o tipo de evidência" }),
+  type: z.enum(["GERAL", "AVARIA", "PECA_ANTIGA", "PECA_NOVA"], { message: "Selecione o tipo de evidência" }),
   description: optionalTrimmed,
   mimeType: z.enum(ACCEPTED_EVIDENCE_MIME_TYPES, { message: "Formato de arquivo não aceito (use JPEG, PNG ou HEIC)" }),
   fileSize: z

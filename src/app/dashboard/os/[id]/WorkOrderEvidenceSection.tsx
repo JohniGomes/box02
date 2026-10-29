@@ -7,7 +7,12 @@ import { createWorkOrderEvidenceAction, deleteWorkOrderEvidenceAction } from "..
 const TYPE_LABEL: Record<string, string> = {
   GERAL: "Geral (entrada)",
   AVARIA: "Avaria",
+  PECA_ANTIGA: "Peça danificada (retirada)",
+  PECA_NOVA: "Peça nova (instalada)",
 };
+
+/** Fotos das peças trocadas: durante o serviço, opcionais, e podem ser excluídas mesmo depois do aceite do Termo. */
+const REPLACED_TYPES = ["PECA_ANTIGA", "PECA_NOVA"];
 
 export interface WorkOrderEvidenceView {
   id: string;
@@ -36,6 +41,7 @@ export function WorkOrderEvidenceSection({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [type, setType] = useState("GERAL");
   const [description, setDescription] = useState("");
+  const replacing = REPLACED_TYPES.includes(type);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +86,7 @@ export function WorkOrderEvidenceSection({
     <section className="rounded-2xl border border-border bg-surface p-5">
       <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">Registro — Evidências</h2>
       <p className="mb-3 text-[11px] text-muted">
-        Fotos de entrada e avarias, vinculadas a esta OS.
+        Fotos de entrada, avarias e peças trocadas (opcional), vinculadas a esta OS.
         {locked ? " O aceite de recepção já foi registrado — evidências existentes não podem mais ser excluídas." : ""}
       </p>
 
@@ -98,7 +104,7 @@ export function WorkOrderEvidenceSection({
               />
               <span className="text-[10px] font-semibold text-muted">{TYPE_LABEL[ev.type] ?? ev.type}</span>
               {ev.description ? <span className="text-[10px] text-muted">{ev.description}</span> : null}
-              {!locked ? (
+              {!locked || REPLACED_TYPES.includes(ev.type) ? (
                 <button
                   onClick={() => handleDelete(ev.id)}
                   disabled={isPending}
@@ -124,13 +130,19 @@ export function WorkOrderEvidenceSection({
           onChange={(e) => setType(e.target.value)}
           className="h-11 rounded-xl border border-border bg-background px-3 text-sm"
         >
-          <option value="GERAL">Geral (entrada)</option>
-          <option value="AVARIA">Avaria</option>
+          <optgroup label="Recepção">
+            <option value="GERAL">Geral (entrada)</option>
+            <option value="AVARIA">Avaria</option>
+          </optgroup>
+          <optgroup label="Peças trocadas (opcional)">
+            <option value="PECA_ANTIGA">Peça danificada (retirada)</option>
+            <option value="PECA_NOVA">Peça nova (instalada)</option>
+          </optgroup>
         </select>
         <input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrição (opcional)"
+          placeholder={replacing ? "Qual peça? (ex.: pastilha dianteira) — opcional" : "Descrição (opcional)"}
           className="h-11 rounded-xl border border-border bg-background px-3 text-sm"
         />
         <button
