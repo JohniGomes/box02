@@ -201,6 +201,23 @@ export async function setWorkOrderItemStatus(
   return result.rows[0] ?? null;
 }
 
+/** Desfaz a execução: o item volta para "Planejado" sem executor nem custo gravado. */
+export async function resetWorkOrderItemToPlanned(id: string, db: Queryable = pool): Promise<WorkOrderItemRecord | null> {
+  const result = await db.query<WorkOrderItemRecord>(
+    `UPDATE work_order_items SET
+      status = 'PLANEJADO',
+      "executedAt" = NULL,
+      "executedByUserId" = NULL,
+      "executedByName" = NULL,
+      "unitCostCents" = NULL,
+      "updatedAt" = NOW()
+    WHERE id = $1
+    RETURNING ${COLUMNS}`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
 /** Grava o link de acesso público de um adicional (token + validade). */
 export async function setWorkOrderItemAccessToken(
   id: string,

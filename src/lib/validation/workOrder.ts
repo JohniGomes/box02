@@ -139,6 +139,11 @@ export const reopenWorkOrderSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo da reabertura"),
 });
 
+/** Desfazer a execução de um item (volta para "Planejado"), com motivo. */
+export const undoWorkOrderItemExecutionSchema = z.object({
+  reason: z.string().trim().min(3, "Informe o motivo"),
+});
+
 export const cancelWorkOrderItemSchema = z.object({
   reason: z.string().trim().min(3, "Informe o motivo do cancelamento"),
 });

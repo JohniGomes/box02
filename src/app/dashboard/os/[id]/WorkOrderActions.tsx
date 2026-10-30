@@ -11,6 +11,7 @@ import {
   getItemStockEntryDefaultsAction,
   setWorkOrderItemStatusAction,
   setWorkOrderStatusAction,
+  undoWorkOrderItemExecutionAction,
 } from "../actions";
 import type { StockEntryDefaults } from "@/lib/workOrders/stockEntry";
 import { defaultExecutorOptionId } from "@/lib/executors/value";
@@ -340,6 +341,8 @@ export function WorkOrderItemExecutorInfo({
 }) {
   const router = useRouter();
   const [correcting, setCorrecting] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [undoReason, setUndoReason] = useState("");
   const [newExecutorId, setNewExecutorId] = useState(
     users.find((u) => u.name === executedByName)?.id ?? defaultExecutorOptionId(users, executedByUserId ?? ""),
   );
@@ -360,6 +363,49 @@ export function WorkOrderItemExecutorInfo({
       setCorrecting(false);
       router.refresh();
     });
+  }
+
+  function confirmUndo() {
+    setError(null);
+    startTransition(async () => {
+      const result = await undoWorkOrderItemExecutionAction(workOrderId, itemId, undoReason);
+      if (!result.success) {
+        setError(result.error ?? "Falha ao desfazer a execução.");
+        return;
+      }
+      setUndoing(false);
+      setUndoReason("");
+      router.refresh();
+    });
+  }
+
+  if (undoing) {
+    return (
+      <div className="mt-1 flex flex-col gap-1.5">
+        <p className="text-[11px] text-muted">
+          O item volta para &quot;Planejado&quot;. Se ele deu baixa de peça no estoque, a peça volta. Fica no histórico.
+        </p>
+        <input
+          value={undoReason}
+          onChange={(e) => setUndoReason(e.target.value)}
+          placeholder="Motivo (ex.: marquei o item errado)"
+          className="h-9 rounded-lg border border-border bg-background px-3 text-xs"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={confirmUndo}
+            disabled={isPending || undoReason.trim().length < 3}
+            className="h-8 flex-1 rounded-lg bg-danger text-[11px] font-semibold text-white disabled:opacity-50"
+          >
+            Desfazer execução
+          </button>
+          <button onClick={() => setUndoing(false)} className="h-8 flex-1 rounded-lg border border-border text-[11px]">
+            Voltar
+          </button>
+        </div>
+        {error ? <p className="text-[11px] text-danger">{error}</p> : null}
+      </div>
+    );
   }
 
   if (correcting) {
@@ -387,9 +433,14 @@ export function WorkOrderItemExecutorInfo({
     <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
       <span>Executado por: {executorName}</span>
       {canManage ? (
-        <button onClick={() => setCorrecting(true)} className="font-medium text-accent">
-          Corrigir
-        </button>
+        <>
+          <button onClick={() => setCorrecting(true)} className="font-medium text-accent">
+            Corrigir
+          </button>
+          <button onClick={() => setUndoing(true)} className="font-medium text-danger">
+            Desfazer execução
+          </button>
+        </>
       ) : null}
     </div>
   );

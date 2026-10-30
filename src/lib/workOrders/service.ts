@@ -29,6 +29,7 @@ import {
   revokeWorkOrderItemAccessToken,
   setWorkOrderItemAccessToken,
   setWorkOrderItemClientDecision,
+  resetWorkOrderItemToPlanned,
   setWorkOrderItemStatus,
   type WorkOrderItemRecord,
   type WorkOrderItemStatus,
@@ -80,10 +81,11 @@ import { InsufficientStockError } from "@/lib/inventory/errors";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { generateWorkOrderNumber } from "./numbering";
 import { computeAdditionalItemExpiresAt, generateAdditionalItemAccessToken } from "./additionalItemToken";
-import { computeQuoteTotals, lineTotalCents, reaisToCents } from "@/lib/money";
+import { computeQuoteTotals, formatBRL, lineTotalCents, reaisToCents } from "@/lib/money";
 import {
   additionalItemDecisionSchema,
   adjustAdditionalItemSchema,
+  undoWorkOrderItemExecutionSchema,
   authorizeAdditionalItemDirectlySchema,
   cancelWorkOrderItemSchema,
   cancelWorkOrderSchema,
@@ -835,6 +837,8 @@ export async function setWorkOrderItemStatusService(
         if (quantity > currentStock) {
           throw new InsufficientStockError(currentStock, quantity);
         }
+        // Se a execução já foi desfeita antes (peça devolvida), esta nova baixa anula a devolução.
+        const alreadyReturned = (await getReturnedQuantityForWorkOrderItem(item.id, client)) > 0;
         await createStockMovement(
           {
             partId: item.partId,
@@ -842,7 +846,7 @@ export async function setWorkOrderItemStatusService(
             quantity,
             reason: `Baixa automática — OS ${workOrder.number}, item "${item.description}"`,
             workOrderItemId: item.id,
-            source: "OS_BAIXA",
+            source: alreadyReturned ? "OS_REBAIXA" : "OS_BAIXA",
             createdByUserId: executedByUserId ?? actorUserId,
           },
           client,
@@ -858,6 +862,71 @@ export async function setWorkOrderItemStatusService(
       metadata: { workOrderId, to: status, cancelReason, executedByUserId, executedByName },
     });
 
+    return updated;
+  });
+}
+
+/**
+ * Desfazer execução: marcou o item errado como executado. O item volta para "Planejado" e,
+ * se deu baixa de peça no estoque, a peça volta. Só com a OS ainda aberta; fica no histórico.
+ * Nunca trava por saldo de estoque.
+ */
+export async function undoWorkOrderItemExecutionService(
+  actorUserId: string,
+  workOrderId: string,
+  itemId: string,
+  rawInput: unknown,
+): Promise<WorkOrderItemRecord> {
+  const input = undoWorkOrderItemExecutionSchema.parse(rawInput);
+  const workOrder = await findWorkOrderById(workOrderId);
+  if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+  if (workOrder.status === "ENTREGUE" || workOrder.status === "CANCELADA") {
+    throw new InvalidWorkOrderItemTransitionError(
+      "Esta OS já está fechada/cancelada — para mexer nos itens, reabra a OS pela correção.",
+    );
+  }
+
+  return withTransaction(async (client) => {
+    const item = await lockWorkOrderItemById(itemId, client);
+    if (!item || item.workOrderId !== workOrderId) throw new WorkOrderItemNotFoundError(itemId);
+    if (item.status !== "EXECUTADO") {
+      throw new InvalidWorkOrderItemTransitionError(`Só dá para desfazer um item "EXECUTADO" (item está "${item.status}").`);
+    }
+
+    const updated = await resetWorkOrderItemToPlanned(itemId, client);
+    if (!updated) throw new WorkOrderItemNotFoundError(itemId);
+
+    let returnedQuantity = 0;
+    if (item.partId && !item.customerSupplied && (await getReturnedQuantityForWorkOrderItem(itemId, client)) <= 0) {
+      await findPartByIdForUpdate(item.partId, client);
+      returnedQuantity = Math.max(1, Math.round(Number(item.quantity)));
+      await createStockMovement(
+        {
+          partId: item.partId,
+          type: "ENTRADA",
+          quantity: returnedQuantity,
+          reason: `Devolução ao estoque — execução desfeita na OS ${workOrder.number}, item "${item.description}"`,
+          workOrderItemId: item.id,
+          source: "OS_DEVOLUCAO",
+          createdByUserId: actorUserId,
+        },
+        client,
+      );
+    }
+
+    await recordAuditLog({
+      userId: actorUserId,
+      action: "WORK_ORDER_ITEM_EXECUTION_UNDONE",
+      entityType: "work_order_item",
+      entityId: itemId,
+      metadata: {
+        workOrderId,
+        reason: input.reason,
+        returnedQuantity,
+        previousExecutedByUserId: item.executedByUserId,
+        previousExecutedByName: item.executedByName,
+      },
+    });
     return updated;
   });
 }
@@ -1917,6 +1986,113 @@ export async function adjustAdditionalItemService(
     entityType: "work_order_item",
     entityId: newItem.id,
     metadata: { supersedesItemId: itemId, reason: input.adjustReason },
+  });
+
+  return newItem;
+}
+
+/**
+ * Corrigir um adicional JÁ APROVADO pelo cliente (valor/descrição errados). Cancela o antigo e cria o
+ * novo ligado a ele, que já nasce APROVADO (decisão dos donos): quem e como o cliente autorizou é
+ * mantido, e o motivo, o valor anterior e a data da aprovação original ficam anotados.
+ */
+export async function correctApprovedAdditionalItemService(
+  actorUserId: string,
+  workOrderId: string,
+  itemId: string,
+  rawInput: unknown,
+): Promise<WorkOrderItemRecord> {
+  const input = adjustAdditionalItemSchema.parse(rawInput);
+  const workOrder = await findWorkOrderById(workOrderId);
+  if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+  assertWorkOrderOpenForAdditional(workOrder);
+
+  const oldItem = await findWorkOrderItemById(itemId);
+  if (!oldItem || oldItem.workOrderId !== workOrderId) throw new WorkOrderItemNotFoundError(itemId);
+  if (oldItem.origin !== "ADICIONAL_DURANTE_EXECUCAO") {
+    throw new AdditionalItemNotEligibleError("Só itens adicionais podem ser corrigidos.");
+  }
+  if (oldItem.clientDecision !== "APROVADO") {
+    throw new AdditionalItemNotEligibleError(
+      oldItem.clientDecision === "PENDENTE"
+        ? 'Este adicional ainda não foi decidido — use "Ajustar valor/escopo".'
+        : "O cliente recusou este adicional — registre um novo adicional se necessário.",
+    );
+  }
+  if (oldItem.status !== "PLANEJADO") {
+    throw new InvalidWorkOrderItemTransitionError(
+      oldItem.status === "EXECUTADO"
+        ? 'Este adicional já foi executado — use "Desfazer execução" antes de corrigir.'
+        : "Este adicional já foi cancelado.",
+    );
+  }
+
+  const unitPriceCents = reaisToCents(input.unitPriceReais);
+  const totalCents = lineTotalCents(input.quantity, unitPriceCents);
+  const originalDate = oldItem.clientAuthorizedAt
+    ? oldItem.clientAuthorizedAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+    : null;
+  const notes =
+    `Corrigido pela oficina: ${input.adjustReason}. Valor anterior: ${formatBRL(oldItem.totalCents)}` +
+    (oldItem.clientAuthorizedBy
+      ? `; aprovação original de ${oldItem.clientAuthorizedBy}${originalDate ? ` em ${originalDate}` : ""}.`
+      : ".");
+
+  const newItem = await withTransaction(async (client) => {
+    const locked = await lockWorkOrderItemById(itemId, client);
+    if (!locked || locked.status !== "PLANEJADO" || locked.clientDecision !== "APROVADO") {
+      throw new InvalidWorkOrderItemTransitionError("Item mudou de estado — recarregue e tente novamente.");
+    }
+    if (locked.accessToken) await revokeWorkOrderItemAccessToken(itemId, client);
+
+    await setWorkOrderItemStatus(itemId, "CANCELADO", { cancelReason: `Corrigido: ${input.adjustReason}` }, client);
+
+    const [created] = await insertWorkOrderItems(
+      [
+        {
+          workOrderId,
+          type: locked.type,
+          description: input.description,
+          quantity: input.quantity,
+          unitPriceCents,
+          totalCents,
+          origin: "ADICIONAL_DURANTE_EXECUCAO",
+          createdByUserId: actorUserId,
+          supersedesItemId: itemId,
+          serviceId: locked.serviceId,
+          partId: locked.partId,
+          catalogItemType: locked.catalogItemType,
+          catalogItemId: locked.catalogItemId,
+          customerSupplied: locked.customerSupplied,
+        },
+      ],
+      client,
+    );
+    const approved = await setWorkOrderItemClientDecision(
+      created.id,
+      {
+        clientDecision: "APROVADO",
+        clientAuthorizedBy: locked.clientAuthorizedBy ?? "Cliente",
+        authorizationChannel: locked.authorizationChannel ?? "PRESENCIAL",
+        authorizationNotes: notes,
+      },
+      client,
+    );
+    return approved ?? created;
+  });
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_ITEM_SUPERSEDED",
+    entityType: "work_order_item",
+    entityId: newItem.id,
+    metadata: {
+      supersedesItemId: itemId,
+      reason: input.adjustReason,
+      correctedAfterApproval: true,
+      previousTotalCents: oldItem.totalCents,
+      totalCents,
+    },
   });
 
   return newItem;
