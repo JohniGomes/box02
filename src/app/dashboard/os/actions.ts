@@ -18,6 +18,8 @@ import {
   reactivateWorkOrderService,
   authorizeAdditionalItemDirectlyService,
   adjustAdditionalItemService,
+  correctApprovedAdditionalItemService,
+  undoWorkOrderItemExecutionService,
   generateAdditionalItemLinkService,
   setWorkOrderItemStatusService,
   setWorkOrderStatusService,
@@ -360,6 +362,37 @@ export async function authorizeAdditionalItemDirectlyAction(
     return { success: true, workOrderId, itemId };
   } catch (err) {
     return friendlyError(err, "Não foi possível registrar a autorização.");
+  }
+}
+
+export async function undoWorkOrderItemExecutionAction(
+  workOrderId: string,
+  itemId: string,
+  reason: string,
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await undoWorkOrderItemExecutionService(userId, workOrderId, itemId, { reason });
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/estoque");
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível desfazer a execução.");
+  }
+}
+
+export async function correctApprovedAdditionalItemAction(
+  workOrderId: string,
+  itemId: string,
+  input: unknown,
+): Promise<AdditionalItemActionResult> {
+  try {
+    const userId = await requireUserId();
+    const newItem = await correctApprovedAdditionalItemService(userId, workOrderId, itemId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    return { success: true, workOrderId, itemId: newItem.id };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível corrigir o adicional.");
   }
 }
 

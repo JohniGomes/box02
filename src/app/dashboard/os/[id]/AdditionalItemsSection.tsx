@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   adjustAdditionalItemAction,
+  correctApprovedAdditionalItemAction,
   authorizeAdditionalItemDirectlyAction,
   createAdditionalItemAction,
   generateAdditionalItemLinkAction,
@@ -25,6 +26,8 @@ export interface AdditionalItemView {
   type: ItemType;
   description: string;
   totalCents: number;
+  quantity: string;
+  unitPriceCents: number;
   status: "PLANEJADO" | "EXECUTADO" | "CANCELADO";
   clientDecision: "PENDENTE" | "APROVADO" | "RECUSADO";
   clientAuthorizedBy: string | null;
@@ -211,7 +214,7 @@ function AdditionalItemCard({
   currentUserId: string;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<null | "direct" | "link" | "adjust">(null);
+  const [mode, setMode] = useState<null | "direct" | "link" | "adjust" | "correct">(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
@@ -356,12 +359,37 @@ function AdditionalItemCard({
       ) : null}
 
       {canManage && item.clientDecision === "APROVADO" && item.status === "PLANEJADO" ? (
-        <ExecuteOrCancelButtons
-          workOrderId={workOrderId}
-          itemId={item.id}
-          users={users}
-          currentUserId={currentUserId}
-        />
+        <>
+          <ExecuteOrCancelButtons
+            workOrderId={workOrderId}
+            itemId={item.id}
+            users={users}
+            currentUserId={currentUserId}
+          />
+          {mode === "correct" ? (
+            <div className="mt-2">
+              <AdjustItemForm
+                workOrderId={workOrderId}
+                itemId={item.id}
+                correction
+                initial={{
+                  description: item.description,
+                  quantity: String(Number(item.quantity)),
+                  unitPriceReais: (item.unitPriceCents / 100).toFixed(2).replace(".", ","),
+                }}
+                onCancel={() => setMode(null)}
+                onDone={() => {
+                  setMode(null);
+                  router.refresh();
+                }}
+              />
+            </div>
+          ) : (
+            <button onClick={() => setMode("correct")} className="mt-2 text-xs font-medium text-accent">
+              Corrigir valor/descrição
+            </button>
+          )}
+        </>
       ) : null}
     </li>
   );
@@ -454,17 +482,22 @@ function DirectAuthorizationForm({
 function AdjustItemForm({
   workOrderId,
   itemId,
+  correction,
+  initial,
   onCancel,
   onDone,
 }: {
   workOrderId: string;
   itemId: string;
+  /** Item já aprovado pelo cliente: o novo nasce aprovado, com o motivo anotado. */
+  correction?: boolean;
+  initial?: { description: string; quantity: string; unitPriceReais: string };
   onCancel: () => void;
   onDone: () => void;
 }) {
-  const [description, setDescription] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [unitPriceReais, setUnitPriceReais] = useState("");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [quantity, setQuantity] = useState(initial?.quantity ?? "1");
+  const [unitPriceReais, setUnitPriceReais] = useState(initial?.unitPriceReais ?? "");
   const [adjustReason, setAdjustReason] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -472,7 +505,8 @@ function AdjustItemForm({
   function handleSubmit() {
     setError(null);
     startTransition(async () => {
-      const result = await adjustAdditionalItemAction(workOrderId, itemId, {
+      const submit = correction ? correctApprovedAdditionalItemAction : adjustAdditionalItemAction;
+      const result = await submit(workOrderId, itemId, {
         description,
         quantity,
         unitPriceReais,
@@ -489,15 +523,16 @@ function AdjustItemForm({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
       <p className="text-xs text-muted">
-        Isto cancela o item atual e cria um novo com os dados corrigidos — o item anterior fica preservado no
-        histórico.
+        {correction
+          ? "Isto cancela o item atual e cria um novo com os dados corrigidos, que já nasce aprovado (a autorização original do cliente fica anotada). O item anterior fica no histórico."
+          : "Isto cancela o item atual e cria um novo com os dados corrigidos — o item anterior fica preservado no histórico."}
       </p>
       <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Nova descrição" className="h-10 rounded-lg border border-border bg-background px-3 text-sm" />
       <div className="grid grid-cols-2 gap-2">
         <input inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Qtd" className="h-10 rounded-lg border border-border bg-background px-3 text-sm" />
         <input inputMode="decimal" value={unitPriceReais} onChange={(e) => setUnitPriceReais(e.target.value)} placeholder="Novo valor (R$)" className="h-10 rounded-lg border border-border bg-background px-3 text-sm" />
       </div>
-      <input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="Motivo do ajuste" className="h-10 rounded-lg border border-border bg-background px-3 text-sm" />
+      <input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder={correction ? "Motivo da correção" : "Motivo do ajuste"} className="h-10 rounded-lg border border-border bg-background px-3 text-sm" />
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <div className="flex gap-2">
         <button
@@ -505,7 +540,7 @@ function AdjustItemForm({
           disabled={isPending || !description.trim() || !unitPriceReais || adjustReason.trim().length < 3}
           className="h-9 flex-1 rounded-lg bg-accent text-xs font-semibold text-accent-foreground disabled:opacity-50"
         >
-          Confirmar ajuste
+          {correction ? "Confirmar correção" : "Confirmar ajuste"}
         </button>
         <button onClick={onCancel} className="h-9 flex-1 rounded-lg border border-border text-xs">
           Voltar

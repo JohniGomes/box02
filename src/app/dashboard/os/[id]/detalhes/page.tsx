@@ -308,6 +308,8 @@ export default async function WorkOrderDetailsPage({
             type: item.type,
             description: item.description,
             totalCents: item.totalCents,
+            quantity: item.quantity,
+            unitPriceCents: item.unitPriceCents,
             status: item.status,
             clientDecision: item.clientDecision,
             clientAuthorizedBy: item.clientAuthorizedBy,
