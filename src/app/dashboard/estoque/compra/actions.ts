@@ -6,6 +6,8 @@ import { auth } from "@/auth";
 import { registerPurchaseService } from "@/lib/purchases/service";
 import { InvalidPurchaseError, SupplierNotFoundError } from "@/lib/purchases/errors";
 import { DuplicatePartNameError, PartNotActiveError, PartNotFoundError } from "@/lib/inventory/errors";
+import { extractPurchaseInvoice, type PurchaseInvoice } from "@/lib/gemini/invoice";
+import { friendlyAiMessage } from "@/lib/gemini/errors";
 
 export interface PurchaseActionResult {
   success: boolean;
@@ -55,5 +57,22 @@ export async function registerPurchaseAction(input: unknown): Promise<PurchaseAc
       return { success: false, error: err.message };
     }
     return { success: false, error: "Não foi possível registrar a compra." };
+  }
+}
+
+/** Lê uma foto da nota de compra (fornecedor, data, itens e valores) para pré-preencher o formulário. Não grava nada. */
+export async function readPurchaseInvoiceAction(
+  imageBase64: string,
+  mimeType: string,
+): Promise<{ success: boolean; error?: string; data?: PurchaseInvoice }> {
+  try {
+    await requireUserId();
+    if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) return { success: false, error: "Envie uma foto (JPG, PNG ou WebP)." };
+    if (!imageBase64 || imageBase64.length > 4_000_000) return { success: false, error: "A foto ficou grande demais. Tire outra, mais de perto." };
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    const data = await extractPurchaseInvoice(imageBase64, mimeType, today);
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: friendlyAiMessage(err) };
   }
 }
