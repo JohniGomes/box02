@@ -135,6 +135,36 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-5">
+        <h2 className="mb-2 text-sm font-semibold">Margem das OS entregues no mês</h2>
+        {cur.margin.osCount === 0 ? (
+          <p className="text-sm text-muted">Nenhuma OS entregue neste mês.</p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card label="Lucro estimado" value={formatBRL(cur.margin.profitCents)}>
+                <Delta current={cur.margin.profitCents} previous={prev.margin.profitCents} />
+              </Card>
+              <Card label="Margem" value={cur.margin.marginPercent === null ? "—" : `${cur.margin.marginPercent}%`}>
+                <p className="text-xs text-muted">
+                  {cur.margin.osCount} {cur.margin.osCount === 1 ? "OS entregue" : "OS entregues"} · receita {formatBRL(cur.margin.revenueCents)} · custo{" "}
+                  {formatBRL(cur.margin.costCents)}
+                </p>
+              </Card>
+            </div>
+            {cur.margin.itemsWithoutCost > 0 ? (
+              <p className="mt-3 rounded-lg bg-accent/10 px-3 py-2 text-xs">
+                {cur.margin.itemsWithoutCost} {cur.margin.itemsWithoutCost === 1 ? "item executado está" : "itens executados estão"} sem custo informado: a
+                margem real pode ser menor. É só um aviso.
+              </p>
+            ) : null}
+          </>
+        )}
+        <p className="mt-2 text-xs text-muted">
+          Receita = itens executados menos descontos. Custo = o custo gravado em cada item na hora da execução (peça do estoque, custo estimado do serviço).
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="mb-2 text-sm font-semibold">A pagar e a receber</h2>
         <ul className="flex flex-col gap-1.5 text-sm">
           <li className="flex justify-between">
