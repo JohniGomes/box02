@@ -3,6 +3,7 @@ import { pool } from "@/lib/db/pool";
 import { hashPassword } from "@/lib/auth/password";
 import { createUser } from "@/lib/db/repositories/users";
 import { createCustomerService } from "@/lib/customers/service";
+import { setRemindersConsent } from "@/lib/db/repositories/customers";
 import { createVehicleService } from "@/lib/vehicles/service";
 import { createServiceService, updateServiceService } from "@/lib/services/service";
 import { listLastServicesForVehicle } from "@/lib/db/repositories/serviceIntervals";
@@ -113,8 +114,21 @@ describe("intervalo no serviço e lembrete de troca", () => {
     expect(last).toHaveLength(1);
     expect(last[0]).toMatchObject({ serviceName: "Troca de óleo", lastKm: 70000 });
 
+    // Sem permissão do cliente: não sugere a troca, sugere pedir a permissão.
+    const semPermissao = await getMessageCenterService();
+    expect(semPermissao.trocas).toHaveLength(0);
+    expect(semPermissao.permissions.map((m) => m.refId)).toEqual([customerId]);
+
+    // Quem não quer receber não aparece em nada.
+    await setRemindersConsent(customerId, "NAO");
+    const recusou = await getMessageCenterService();
+    expect(recusou.trocas).toHaveLength(0);
+    expect(recusou.permissions).toHaveLength(0);
+
     // veículo está com 80.000 km: vence em 80.000 km -> vencida pelo KM
+    await setRemindersConsent(customerId, "SIM");
     const center = await getMessageCenterService();
+    expect(center.permissions).toHaveLength(0);
     expect(center.trocas).toHaveLength(1);
     expect(center.trocas[0].text).toContain("Olá, Ana!");
     expect(center.trocas[0].text).toContain("troca de óleo");

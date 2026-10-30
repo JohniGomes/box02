@@ -175,6 +175,12 @@ model Customer {
 
   notes String?
 
+  /// Cadastro feito às pressas (rápido, "Atender", assistente): etiqueta "conferir" até salvar o cadastro completo.
+  isPreRegistration Boolean @default(false)
+  /// Aceita lembretes por WhatsApp: "SIM", "NAO" ou nulo (ainda não perguntado).
+  remindersConsent   String?
+  remindersConsentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

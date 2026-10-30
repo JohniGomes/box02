@@ -2,7 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { pool } from "../pool";
 import { BALANCE_SQL } from "./workOrders";
 
-export type MessageKind = "CONFIRMACAO" | "LEMBRETE" | "AVALIACAO" | "COBRANCA" | "TROCA";
+export type MessageKind = "CONFIRMACAO" | "LEMBRETE" | "AVALIACAO" | "COBRANCA" | "TROCA" | "PERMISSAO";
 
 /** Registra que a mensagem foi enviada (ou pulada). Só se acrescenta. */
 export async function createMessageLog(input: {
@@ -25,6 +25,21 @@ export async function listLoggedRefIds(kind: MessageKind, refIds: string[]): Pro
     [kind, refIds],
   );
   return new Set(result.rows.map((r) => r.refId));
+}
+
+/** Último registro (ENVIADA ou PULADA) de cada item, para saber em que pé está. */
+export async function listLoggedActions(
+  kind: MessageKind,
+  refIds: string[],
+): Promise<Map<string, "ENVIADA" | "PULADA">> {
+  if (refIds.length === 0) return new Map();
+  const result = await pool.query<{ refId: string; action: "ENVIADA" | "PULADA" }>(
+    `SELECT DISTINCT ON ("refId") "refId", action FROM message_log
+     WHERE kind = $1 AND "refId" = ANY($2::text[])
+     ORDER BY "refId", "createdAt" DESC`,
+    [kind, refIds],
+  );
+  return new Map(result.rows.map((r) => [r.refId, r.action]));
 }
 
 export interface AppointmentMessageRow {
@@ -57,6 +72,8 @@ export interface DeliveredMessageRow {
   number: string;
   deliveredAt: Date | null;
   customerName: string;
+  customerId: string;
+  remindersConsent: "SIM" | "NAO" | null;
   customerPhone: string | null;
   vehicleDescription: string | null;
   balanceCents: number;
@@ -66,6 +83,7 @@ export interface DeliveredMessageRow {
 export async function listDeliveredForMessages(since: Date): Promise<DeliveredMessageRow[]> {
   const result = await pool.query<DeliveredMessageRow>(
     `SELECT wo.id, wo.number, wo."deliveredAt", c."legalName" AS "customerName",
+            c.id AS "customerId", c."remindersConsent",
             COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, '')) AS "customerPhone",
             NULLIF(TRIM(CONCAT(v.brand, ' ', v.model)), '') AS "vehicleDescription",
             COALESCE(${BALANCE_SQL}, 0) AS "balanceCents"
@@ -84,6 +102,7 @@ export async function listReceivablesForMessages(): Promise<DeliveredMessageRow[
   const result = await pool.query<DeliveredMessageRow>(
     `SELECT * FROM (
        SELECT wo.id, wo.number, wo."deliveredAt", c."legalName" AS "customerName",
+              c.id AS "customerId", c."remindersConsent",
               COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, '')) AS "customerPhone",
               NULLIF(TRIM(CONCAT(v.brand, ' ', v.model)), '') AS "vehicleDescription",
               COALESCE(${BALANCE_SQL}, 0) AS "balanceCents"

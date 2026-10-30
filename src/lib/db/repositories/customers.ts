@@ -23,16 +23,24 @@ export interface CustomerRecord {
   addressState: string | null;
   addressZipCode: string | null;
   notes: string | null;
+  /** Cadastro feito às pressas: aparece com etiqueta "conferir" até salvar o cadastro completo. */
+  isPreRegistration: boolean;
+  /** Aceita lembretes por WhatsApp? null = ainda não perguntado. */
+  remindersConsent: RemindersConsent | null;
+  remindersConsentAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type RemindersConsent = "SIM" | "NAO";
 
 const CUSTOMER_COLUMNS = `
   id, type, status, "legalName", "tradeName", "contactName", document,
   phone, whatsapp, email,
   "addressStreet", "addressNumber", "addressComplement", "addressNeighborhood",
   "addressCity", "addressState", "addressZipCode",
-  notes, "createdAt", "updatedAt"
+  notes, "isPreRegistration", "remindersConsent", "remindersConsentAt",
+  "createdAt", "updatedAt"
 `;
 
 export interface CreateCustomerInput {
@@ -52,6 +60,7 @@ export interface CreateCustomerInput {
   addressState?: string;
   addressZipCode?: string;
   notes?: string;
+  isPreRegistration?: boolean;
 }
 
 export async function createCustomer(input: CreateCustomerInput): Promise<CustomerRecord> {
@@ -62,13 +71,13 @@ export async function createCustomer(input: CreateCustomerInput): Promise<Custom
       phone, whatsapp, email,
       "addressStreet", "addressNumber", "addressComplement", "addressNeighborhood",
       "addressCity", "addressState", "addressZipCode",
-      notes, "updatedAt"
+      notes, "isPreRegistration", "updatedAt"
     ) VALUES (
       $1, $2, 'ATIVO', $3, $4, $5, $6,
       $7, $8, $9,
       $10, $11, $12, $13,
       $14, $15, $16,
-      $17, NOW()
+      $17, $18, NOW()
     ) RETURNING ${CUSTOMER_COLUMNS}`,
     [
       id,
@@ -88,12 +97,13 @@ export async function createCustomer(input: CreateCustomerInput): Promise<Custom
       input.addressState ?? null,
       input.addressZipCode ?? null,
       input.notes ?? null,
+      input.isPreRegistration ?? false,
     ],
   );
   return result.rows[0];
 }
 
-export type UpdateCustomerInput = Partial<CreateCustomerInput>;
+export type UpdateCustomerInput = Partial<Omit<CreateCustomerInput, "isPreRegistration">>;
 
 export async function updateCustomer(
   id: string,
@@ -116,6 +126,7 @@ export async function updateCustomer(
       "addressState" = $14,
       "addressZipCode" = $15,
       notes = $16,
+      "isPreRegistration" = FALSE,
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${CUSTOMER_COLUMNS}`,
@@ -137,6 +148,34 @@ export async function updateCustomer(
       input.addressZipCode ?? null,
       input.notes ?? null,
     ],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** "Já conferi": tira a etiqueta de pré-cadastro sem mexer nos dados. */
+export async function markCustomerChecked(id: string): Promise<CustomerRecord | null> {
+  const result = await pool.query<CustomerRecord>(
+    `UPDATE customers SET "isPreRegistration" = FALSE, "updatedAt" = NOW()
+     WHERE id = $1
+     RETURNING ${CUSTOMER_COLUMNS}`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Registra se o cliente aceita lembretes por WhatsApp (null volta para "não perguntado"). */
+export async function setRemindersConsent(
+  id: string,
+  consent: RemindersConsent | null,
+): Promise<CustomerRecord | null> {
+  const result = await pool.query<CustomerRecord>(
+    `UPDATE customers SET
+       "remindersConsent" = $2,
+       "remindersConsentAt" = CASE WHEN $2::text IS NULL THEN NULL ELSE NOW() END,
+       "updatedAt" = NOW()
+     WHERE id = $1
+     RETURNING ${CUSTOMER_COLUMNS}`,
+    [id, consent],
   );
   return result.rows[0] ?? null;
 }

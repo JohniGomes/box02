@@ -7,6 +7,7 @@ import { formatPhone, whatsappLink } from "@/lib/validation/phone";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatBRL } from "@/lib/money";
 import { CustomerStatusActions } from "./CustomerStatusActions";
+import { CustomerFlags } from "./CustomerFlags";
 import { formatDateBR } from "@/lib/dateBr";
 
 const WO_STATUS_LABEL: Record<string, string> = {
@@ -73,6 +74,13 @@ export default async function CustomerDetailPage({
           {customer.tradeName ? ` · ${customer.tradeName}` : ""}
         </p>
       </div>
+
+      <CustomerFlags
+        customerId={customer.id}
+        isPreRegistration={customer.isPreRegistration}
+        consent={customer.remindersConsent}
+        consentAt={customer.remindersConsentAt ? formatDateBR(customer.remindersConsentAt) : null}
+      />
 
       <section className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="mb-3 text-sm font-semibold">Identificação</h2>

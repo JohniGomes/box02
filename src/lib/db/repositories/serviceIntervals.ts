@@ -24,6 +24,8 @@ export interface DueRowForMessages extends LastServiceRow {
   vehicleMileage: number | null;
   vehicleLabel: string | null;
   customerName: string;
+  customerId: string;
+  remindersConsent: "SIM" | "NAO" | null;
   customerPhone: string | null;
 }
 
@@ -33,7 +35,7 @@ export async function listLastServicesForMessages(): Promise<DueRowForMessages[]
     `SELECT DISTINCT ON (v.id, s.id)
        v.id AS "vehicleId", v.mileage AS "vehicleMileage",
        NULLIF(TRIM(CONCAT(v.brand, ' ', v.model)), '') AS "vehicleLabel",
-       c."legalName" AS "customerName",
+       c."legalName" AS "customerName", c.id AS "customerId", c."remindersConsent",
        COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, '')) AS "customerPhone",
        s.id AS "serviceId", s.name AS "serviceName", s."intervalMonths", s."intervalKm",
        w."deliveredAt" AS "lastAt", w."mileageAtEntry" AS "lastKm"

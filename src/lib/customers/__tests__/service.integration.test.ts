@@ -6,8 +6,10 @@ import {
   createCustomerService,
   getCustomerService,
   inactivateCustomerService,
+  markCustomerCheckedService,
   reactivateCustomerService,
   searchCustomersService,
+  setRemindersConsentService,
   updateCustomerService,
 } from "../service";
 import { DuplicateCustomerDocumentError, CustomerNotFoundError } from "../errors";
@@ -34,6 +36,38 @@ beforeEach(async () => {
 afterAll(async () => {
   await cleanDatabase();
   await pool.end();
+});
+
+describe("pré-cadastro e consentimento", () => {
+  it("cadastro completo nasce sem etiqueta e sem resposta de lembretes", async () => {
+    const c = await createCustomerService(actorUserId, { type: "PF", legalName: "Completo da Silva" });
+    expect(c.isPreRegistration).toBe(false);
+    expect(c.remindersConsent).toBeNull();
+    expect(c.remindersConsentAt).toBeNull();
+  });
+
+  it("pré-cadastro some ao salvar o cadastro completo ou ao tocar em já conferi", async () => {
+    const a = await createCustomerService(actorUserId, { type: "PF", legalName: "Rápido Um" }, { preRegistration: true });
+    expect(a.isPreRegistration).toBe(true);
+    const editado = await updateCustomerService(actorUserId, a.id, { type: "PF", legalName: "Rápido Um" });
+    expect(editado.isPreRegistration).toBe(false);
+
+    const b = await createCustomerService(actorUserId, { type: "PF", legalName: "Rápido Dois" }, { preRegistration: true });
+    const conferido = await markCustomerCheckedService(actorUserId, b.id);
+    expect(conferido.isPreRegistration).toBe(false);
+    expect(conferido.legalName).toBe("Rápido Dois");
+  });
+
+  it("registra aceite com data, recusa, e volta para não perguntado", async () => {
+    const c = await createCustomerService(actorUserId, { type: "PF", legalName: "Consente" });
+    const sim = await setRemindersConsentService(actorUserId, c.id, "SIM");
+    expect(sim.remindersConsent).toBe("SIM");
+    expect(sim.remindersConsentAt).toBeInstanceOf(Date);
+    expect((await setRemindersConsentService(actorUserId, c.id, "NAO")).remindersConsent).toBe("NAO");
+    const limpo = await setRemindersConsentService(actorUserId, c.id, null);
+    expect(limpo.remindersConsent).toBeNull();
+    expect(limpo.remindersConsentAt).toBeNull();
+  });
 });
 
 describe("createCustomerService", () => {

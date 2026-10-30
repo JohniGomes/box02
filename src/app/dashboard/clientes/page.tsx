@@ -57,7 +57,12 @@ export default async function CustomersPage({
                   className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{c.legalName}</span>
+                    <span className="font-medium">
+                      {c.legalName}
+                      {c.isPreRegistration ? (
+                        <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold">Pré-cadastro</span>
+                      ) : null}
+                    </span>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                         c.status === "ATIVO"
@@ -109,6 +114,9 @@ export default async function CustomersPage({
                       <Link href={`/dashboard/clientes/${c.id}`} className="font-medium hover:underline">
                         {c.legalName}
                       </Link>
+                      {c.isPreRegistration ? (
+                        <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold">Pré-cadastro</span>
+                      ) : null}
                       {c.tradeName ? (
                         <span className="ml-1 text-xs text-muted">({c.tradeName})</span>
                       ) : null}
