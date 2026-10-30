@@ -15,6 +15,7 @@ const ITEMS = [
   { label: "Checklists", href: "/dashboard/checklists" },
   { label: "Estoque", href: "/dashboard/estoque" },
   { label: "Despesas", href: "/dashboard/despesas" },
+  { label: "Financeiro", href: "/dashboard/financeiro" },
   { label: "Configurações", href: "/dashboard/configuracoes" },
 ];
 
