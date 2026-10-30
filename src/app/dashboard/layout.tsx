@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardNav } from "@/components/DashboardNav";
 import { AssistenteChat } from "@/components/AssistenteChat";
+import { QuickSaleFab } from "@/components/QuickSaleFab";
 
 export default async function DashboardLayout({
   children,
@@ -58,6 +59,9 @@ export default async function DashboardLayout({
 
       {/* Assistente IA — botão flutuante para lançamento por voz/foto */}
       <AssistenteChat />
+
+      {/* Atalho fixo para a Venda rápida */}
+      <QuickSaleFab />
     </div>
   );
 }

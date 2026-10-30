@@ -11,6 +11,7 @@ import {
   setWorkOrderItemStatusAction,
 } from "../actions";
 import { formatBRL } from "@/lib/money";
+import { priceToleranceWarning } from "@/lib/services/priceTolerance";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
@@ -111,8 +112,11 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
   const [unitPriceReais, setUnitPriceReais] = useState("");
   const [serviceId, setServiceId] = useState<string | undefined>(undefined);
   const [partId, setPartId] = useState<string | undefined>(undefined);
+  // preço padrão do serviço escolhido no catálogo (base do aviso de 20%)
+  const [estimateReais, setEstimateReais] = useState<string | undefined>(undefined);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const priceWarning = serviceId ? priceToleranceWarning(estimateReais, unitPriceReais) : null;
 
   const inputClass =
     "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
@@ -147,6 +151,7 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
             setPartId(undefined);
             setDescription(service.label);
             setUnitPriceReais(service.suggestedPriceReais ?? "");
+            setEstimateReais(service.suggestedPriceReais ?? undefined);
           }}
         />
         <PartPickerButton
@@ -154,6 +159,7 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
             setType("PECA");
             setPartId(part.id);
             setServiceId(undefined);
+            setEstimateReais(undefined);
             setDescription(part.label);
             setUnitPriceReais(part.suggestedPriceReais ?? "");
           }}
@@ -163,6 +169,7 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
             setType("PECA");
             setPartId(part.id);
             setServiceId(undefined);
+            setEstimateReais(undefined);
             setDescription(part.label);
             setQuantity(String(qty));
             setUnitPriceReais(part.suggestedPriceReais ?? "");
@@ -186,6 +193,7 @@ function NewAdditionalItemForm({ workOrderId, onDone }: { workOrderId: string; o
         <input inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Qtd" className={inputClass} />
         <input inputMode="decimal" value={unitPriceReais} onChange={(e) => setUnitPriceReais(e.target.value)} placeholder="Valor (R$)" className={inputClass} />
       </div>
+      {priceWarning ? <p className="rounded-lg bg-accent/10 px-3 py-2 text-xs">{priceWarning}</p> : null}
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <button
         onClick={handleSubmit}

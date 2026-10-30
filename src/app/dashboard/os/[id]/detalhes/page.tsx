@@ -29,6 +29,7 @@ import {
   WorkOrderStatusActions,
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
+import { SaveKitFromOrder } from "../SaveKitFromOrder";
 import { WorkOrderCorrections } from "../WorkOrderCorrections";
 import { WorkOrderChecklistPanel, type WorkOrderChecklistView } from "../WorkOrderChecklistPanel";
 import { WorkOrderExplanationSection } from "../WorkOrderExplanationSection";
@@ -294,6 +295,23 @@ export default async function WorkOrderDetailsPage({
             ))}
           </ul>
         )}
+        {isOpenForCancel ? (
+          <SaveKitFromOrder
+            services={baseItems
+              .filter((i) => i.type === "SERVICO" && i.serviceId && i.status !== "CANCELADO")
+              .map((i) => ({ serviceId: i.serviceId as string, description: i.description }))}
+            lines={baseItems
+              .filter((i) => (i.type === "PECA" || i.type === "MAO_DE_OBRA") && i.status !== "CANCELADO" && !i.customerSupplied)
+              .map((i) => ({
+                id: i.id,
+                type: i.type as "PECA" | "MAO_DE_OBRA",
+                description: i.description,
+                quantity: String(Number(i.quantity)),
+                unitPriceReais: i.type === "MAO_DE_OBRA" ? (i.unitPriceCents / 100).toFixed(2).replace(".", ",") : undefined,
+                partId: i.partId,
+              }))}
+          />
+        ) : null}
       </CollapsibleSection>
 
       <CollapsibleSection title="Adicionais" defaultOpen={additionalItems.length <= 2}>
