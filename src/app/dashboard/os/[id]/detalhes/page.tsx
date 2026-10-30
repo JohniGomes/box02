@@ -30,6 +30,7 @@ import {
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
 import { SaveKitFromOrder } from "../SaveKitFromOrder";
+import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
 import { WorkOrderCorrections } from "../WorkOrderCorrections";
 import { WorkOrderChecklistPanel, type WorkOrderChecklistView } from "../WorkOrderChecklistPanel";
 import { WorkOrderExplanationSection } from "../WorkOrderExplanationSection";
@@ -79,6 +80,7 @@ export default async function WorkOrderDetailsPage({
   const evidences = await listWorkOrderEvidencesService(workOrder.id);
   const corrections = await listWorkOrderCorrectionsService(workOrder.id);
   const returnableParts = await listReturnablePartsService(workOrder.id);
+  const margin = await getWorkOrderMarginService(workOrder.id);
   const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired, deliveryChecklistRequired] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
@@ -338,6 +340,37 @@ export default async function WorkOrderDetailsPage({
             executedByName: item.executedByName,
           }))}
         />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Margem desta OS (uso interno)" defaultOpen={false}>
+        {margin.revenueCents === 0 && margin.costCents === 0 ? (
+          <p className="text-sm text-muted">Nada executado ainda: a margem aparece quando o primeiro item for marcado como executado.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">Receita (itens executados, menos descontos)</span>
+              <span className="font-medium">{formatBRL(margin.revenueCents)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Custo</span>
+              <span className="font-medium">{formatBRL(margin.costCents)}</span>
+            </div>
+            <div className="flex justify-between text-base font-semibold">
+              <span>Lucro{margin.marginPercent === null ? "" : ` (${margin.marginPercent}%)`}</span>
+              <span>{formatBRL(margin.profitCents)}</span>
+            </div>
+          </div>
+        )}
+        {margin.itemsWithoutCost > 0 ? (
+          <p className="mt-3 rounded-lg bg-accent/10 px-3 py-2 text-xs">
+            {margin.itemsWithoutCost} {margin.itemsWithoutCost === 1 ? "item executado está" : "itens executados estão"} sem custo informado: a margem real pode
+            ser menor. É só um aviso.
+          </p>
+        ) : null}
+        {margin.pendingItems > 0 ? (
+          <p className="mt-2 text-xs text-muted">Margem parcial: ainda há {margin.pendingItems} item(ns) planejado(s) que não entraram na conta.</p>
+        ) : null}
+        <p className="mt-2 text-xs text-muted">Só para uso interno: não aparece no recibo nem para o cliente.</p>
       </CollapsibleSection>
 
       {showVerificando ? (
