@@ -6,7 +6,9 @@ import {
   createCustomerService,
   deleteCustomerService,
   inactivateCustomerService,
+  markCustomerCheckedService,
   reactivateCustomerService,
+  setRemindersConsentService,
   updateCustomerService,
 } from "@/lib/customers/service";
 import { CustomerNotDeletableError, DuplicateCustomerDocumentError } from "@/lib/customers/errors";
@@ -95,6 +97,35 @@ export async function reactivateCustomerAction(customerId: string): Promise<Acti
     return { success: true, customerId };
   } catch {
     return { success: false, error: "Não foi possível reativar o cliente." };
+  }
+}
+
+export async function markCustomerCheckedAction(customerId: string): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await markCustomerCheckedService(userId, customerId);
+    revalidatePath("/dashboard/clientes");
+    revalidatePath(`/dashboard/clientes/${customerId}`);
+    return { success: true, customerId };
+  } catch {
+    return { success: false, error: "Não foi possível marcar como conferido." };
+  }
+}
+
+export async function setRemindersConsentAction(
+  customerId: string,
+  value: "SIM" | "NAO" | null,
+): Promise<ActionResult> {
+  try {
+    if (value !== "SIM" && value !== "NAO" && value !== null) throw new Error("Valor inválido.");
+    const userId = await requireUserId();
+    await setRemindersConsentService(userId, customerId, value);
+    revalidatePath("/dashboard/clientes");
+    revalidatePath(`/dashboard/clientes/${customerId}`);
+    revalidatePath("/dashboard/mensagens");
+    return { success: true, customerId };
+  } catch {
+    return { success: false, error: "Não foi possível registrar a resposta." };
   }
 }
 

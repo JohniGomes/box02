@@ -115,12 +115,16 @@ export async function createQuickCustomerService(actorUserId: string, rawInput: 
     if (existing) return { customer: existing, reused: true };
   }
 
-  const customer = await createCustomerService(actorUserId, {
-    type: "PF",
-    legalName: input.name,
-    phone: phone || undefined,
-    whatsapp: phone || undefined,
-  });
+  const customer = await createCustomerService(
+    actorUserId,
+    {
+      type: "PF",
+      legalName: input.name,
+      phone: phone || undefined,
+      whatsapp: phone || undefined,
+    },
+    { preRegistration: true },
+  );
   return { customer, reused: false };
 }
 

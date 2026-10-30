@@ -200,11 +200,15 @@ export async function confirmarLancamentoAction(
     // 1. Criar cliente se necessário
     let clienteId = reconciliado.cliente.id;
     if (reconciliado.cliente.acao === "CRIAR_NOVO") {
-      const novo = await createCustomerService(userId, {
-        type: "PF",
-        legalName: reconciliado.cliente.nome,
-        phone: reconciliado.cliente.telefone ?? undefined,
-      });
+      const novo = await createCustomerService(
+        userId,
+        {
+          type: "PF",
+          legalName: reconciliado.cliente.nome,
+          phone: reconciliado.cliente.telefone ?? undefined,
+        },
+        { preRegistration: true },
+      );
       clienteId = novo.id;
     }
     if (!clienteId) {

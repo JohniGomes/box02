@@ -62,6 +62,14 @@ export function balanceMessage(r: { customerName: string; number: string; vehicl
   );
 }
 
+/** Pede permissão antes de mandar lembretes de revisão. */
+export function permissionMessage(r: { customerName: string }): string {
+  return (
+    `Olá, ${firstName(r.customerName)}! Aqui é da BOX 02. Posso te avisar quando estiver chegando a hora de trocar óleo, ` +
+    `filtros e outras revisões do seu carro? Se preferir não receber, é só me falar. Obrigado!`
+  );
+}
+
 export function serviceDueMessage(
   r: { customerName: string; vehicleDescription: string | null; serviceName: string; lastDate: string; overdue: boolean },
 ): string {

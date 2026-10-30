@@ -4,6 +4,7 @@ import { useState, useRef, useTransition } from "react";
 import { MicButton } from "@/components/MicButton";
 import { formatBRL } from "@/lib/money";
 import { appendTranscript } from "@/lib/voice";
+import { fileToResizedJpegBase64 } from "@/lib/imageResize";
 import {
   analisarTextoAction,
   analisarImagemAction,
@@ -51,25 +52,28 @@ export function AssistenteChat() {
   function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1];
-      const mimeType = file.type;
-      setEtapa("analisando");
-      setErro(null);
-      startTransition(async () => {
-        const result = await analisarImagemAction(base64, mimeType, texto || undefined);
-        if (!result.success || !result.reconciliado) {
-          setErro(result.error ?? "Erro ao analisar imagem.");
-          setEtapa("idle");
-          return;
-        }
-        setReconciliado(result.reconciliado);
-        setEtapa("revisao");
-      });
-    };
-    reader.readAsDataURL(file);
+    e.target.value = "";
+    setEtapa("analisando");
+    setErro(null);
+    startTransition(async () => {
+      let foto: { base64: string; mimeType: string };
+      try {
+        // Reduz a foto no celular: foto da câmera passa de vários MB e o envio aceita cerca de 1 MB.
+        foto = await fileToResizedJpegBase64(file);
+      } catch {
+        setErro("Não consegui preparar a foto. Tente outra foto.");
+        setEtapa("idle");
+        return;
+      }
+      const result = await analisarImagemAction(foto.base64, foto.mimeType, texto || undefined);
+      if (!result.success || !result.reconciliado) {
+        setErro(result.error ?? "Erro ao analisar imagem.");
+        setEtapa("idle");
+        return;
+      }
+      setReconciliado(result.reconciliado);
+      setEtapa("revisao");
+    });
   }
 
   function handleConfirmar() {

@@ -120,6 +120,14 @@ export default async function WorkOrderDetailPage({
           {workOrder.vehiclePlateSnapshot ? formatPlate(workOrder.vehiclePlateSnapshot) : "Sem placa"}
           {workOrder.vehicleDescriptionSnapshot ? ` — ${workOrder.vehicleDescriptionSnapshot}` : ""}
         </p>
+        {customer?.isPreRegistration ? (
+          <p className="mt-2 rounded-lg bg-accent/10 px-3 py-2 text-xs">
+            Pré-cadastro: conferir os dados do cliente na recepção.{" "}
+            <Link href={`/dashboard/clientes/${customer.id}`} className="font-semibold underline">
+              Abrir ficha
+            </Link>
+          </p>
+        ) : null}
         <div className="mt-3 flex gap-3 text-xs">
           {customer ? (
             <Link href={`/dashboard/clientes/${customer.id}`} className="text-accent">

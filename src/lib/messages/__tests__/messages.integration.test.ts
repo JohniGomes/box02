@@ -3,6 +3,7 @@ import { pool } from "@/lib/db/pool";
 import { hashPassword } from "@/lib/auth/password";
 import { createUser } from "@/lib/db/repositories/users";
 import { createCustomerService } from "@/lib/customers/service";
+import { setRemindersConsent } from "@/lib/db/repositories/customers";
 import { createVehicleService } from "@/lib/vehicles/service";
 import { createAppointmentService } from "@/lib/appointments/service";
 import {
@@ -104,7 +105,31 @@ describe("central de mensagens", () => {
     expect(center.balances).toHaveLength(0); // entregue agora: ainda não cobra
 
     await setGoogleReviewLink("https://g.page/r/teste");
+
+    // Cliente ainda não perguntado: não recebe pedido de avaliação, aparece o pedido de permissão.
     center = await getMessageCenterService();
+    expect(center.reviews).toHaveLength(0);
+    expect(center.permissions.map((m) => m.refId)).toEqual([customerId]);
+    expect(center.permissions[0].state).toBe("PEDIR");
+    expect(center.permissions[0].text).toContain("Posso te avisar");
+    expect(center.permissions[0].whatsappUrl).toContain("https://wa.me/5562999998888?text=");
+
+    // "Já pedi" → aguardando resposta; "Agora não" → some.
+    await markMessageService(actorUserId, { kind: "PERMISSAO", refId: customerId, action: "ENVIADA" });
+    center = await getMessageCenterService();
+    expect(center.permissions.map((m) => m.state)).toEqual(["AGUARDANDO"]);
+    await markMessageService(actorUserId, { kind: "PERMISSAO", refId: customerId, action: "PULADA" });
+    expect((await getMessageCenterService()).permissions).toHaveLength(0);
+
+    // Quem não quer nunca aparece; quem autorizou passa a receber o pedido de avaliação.
+    await setRemindersConsent(customerId, "NAO");
+    center = await getMessageCenterService();
+    expect(center.reviews).toHaveLength(0);
+    expect(center.permissions).toHaveLength(0);
+
+    await setRemindersConsent(customerId, "SIM");
+    center = await getMessageCenterService();
+    expect(center.permissions).toHaveLength(0);
     expect(center.reviews.map((m) => m.refId)).toEqual([os.workOrder.id]);
     expect(center.reviews[0].text).toContain("https://g.page/r/teste");
 

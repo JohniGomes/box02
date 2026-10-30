@@ -3,10 +3,13 @@ import {
   deleteCustomer,
   findCustomerByDocument,
   findCustomerById,
+  markCustomerChecked,
   searchCustomers,
   setCustomerStatus,
+  setRemindersConsent,
   updateCustomer,
   type CustomerRecord,
+  type RemindersConsent,
   type SearchCustomersFilters,
 } from "@/lib/db/repositories/customers";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
@@ -30,6 +33,7 @@ import { CustomerNotDeletableError, CustomerNotFoundError, DuplicateCustomerDocu
 export async function createCustomerService(
   actorUserId: string,
   rawInput: unknown,
+  options?: { preRegistration?: boolean },
 ): Promise<CustomerRecord> {
   const parsed = customerInputSchema.parse(rawInput);
   const input = normalizeCustomerInput(parsed);
@@ -58,6 +62,7 @@ export async function createCustomerService(
     addressState: input.addressState,
     addressZipCode: input.addressZipCode,
     notes: input.notes,
+    isPreRegistration: options?.preRegistration ?? false,
   });
 
   await recordAuditLog({
@@ -154,6 +159,44 @@ export async function reactivateCustomerService(
     action: "CUSTOMER_REACTIVATED",
     entityType: "customer",
     entityId: customerId,
+  });
+
+  return updated;
+}
+
+/** "Já conferi": tira a etiqueta de pré-cadastro. */
+export async function markCustomerCheckedService(
+  actorUserId: string,
+  customerId: string,
+): Promise<CustomerRecord> {
+  const updated = await markCustomerChecked(customerId);
+  if (!updated) throw new CustomerNotFoundError(customerId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "CUSTOMER_CHECKED",
+    entityType: "customer",
+    entityId: customerId,
+  });
+
+  return updated;
+}
+
+/** Registra se o cliente aceita lembretes por WhatsApp (null = volta para "não perguntado"). */
+export async function setRemindersConsentService(
+  actorUserId: string,
+  customerId: string,
+  consent: RemindersConsent | null,
+): Promise<CustomerRecord> {
+  const updated = await setRemindersConsent(customerId, consent);
+  if (!updated) throw new CustomerNotFoundError(customerId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "CUSTOMER_REMINDERS_CONSENT",
+    entityType: "customer",
+    entityId: customerId,
+    metadata: { consent },
   });
 
   return updated;

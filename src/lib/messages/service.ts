@@ -3,6 +3,7 @@ import {
   createMessageLog,
   listAppointmentsForMessages,
   listDeliveredForMessages,
+  listLoggedActions,
   listLoggedRefIds,
   listReceivablesForMessages,
   type MessageKind,
@@ -10,7 +11,7 @@ import {
 import { formatBRL } from "@/lib/money";
 import { onlyDigits } from "@/lib/validation/document";
 import { whatsappLinkWithMessage } from "@/lib/validation/phone";
-import { balanceMessage, confirmationMessage, reminderMessage, reviewMessage, serviceDueMessage } from "./templates";
+import { balanceMessage, confirmationMessage, permissionMessage, reminderMessage, reviewMessage, serviceDueMessage } from "./templates";
 import { listLastServicesForMessages } from "@/lib/db/repositories/serviceIntervals";
 import { computeNextDue } from "@/lib/vehicles/nextService";
 
@@ -40,7 +41,15 @@ export interface MessageItem {
   whatsappUrl: string;
 }
 
+/** Pedido de permissão para lembretes (refId = id do cliente). */
+export interface PermissionItem extends MessageItem {
+  /** PEDIR: ainda não pediu. AGUARDANDO: pedido feito, falta a resposta do cliente. */
+  state: "PEDIR" | "AGUARDANDO";
+}
+
 export interface MessageCenter {
+  /** Quem ainda não foi perguntado se aceita lembretes: não recebe troca/avaliação até autorizar. */
+  permissions: PermissionItem[];
   confirmations: MessageItem[];
   reminders: MessageItem[];
   reviews: MessageItem[];
@@ -107,7 +116,7 @@ export async function getMessageCenterService(now: Date = new Date()): Promise<M
   if (reviewLink) {
     for (const d of delivered) {
       const phone = phoneDigits(d.customerPhone);
-      if (!phone || reviewedIds.has(d.id)) continue;
+      if (!phone || reviewedIds.has(d.id) || d.remindersConsent !== "SIM") continue;
       const text = reviewMessage(d, reviewLink);
       reviews.push({ kind: "AVALIACAO", refId: d.id, customerName: d.customerName, context: `${d.number} entregue`, text, whatsappUrl: whatsappLinkWithMessage(phone, text) });
     }
@@ -128,6 +137,7 @@ export async function getMessageCenterService(now: Date = new Date()): Promise<M
     .map((row) => {
       const due = computeNextDue(row, row.vehicleMileage, now);
       if (!due || due.status === "EM_DIA") return null;
+      if (row.remindersConsent === "NAO") return null;
       const phone = phoneDigits(row.customerPhone);
       if (!phone) return null;
       const lastDay = row.lastAt.toISOString().slice(0, 10);
@@ -136,7 +146,7 @@ export async function getMessageCenterService(now: Date = new Date()): Promise<M
     .filter((x): x is NonNullable<typeof x> => x !== null);
   const dueLogged = await listLoggedRefIds("TROCA", dueCandidates.map((c) => c.refId));
   const trocas: MessageItem[] = dueCandidates
-    .filter((c) => !dueLogged.has(c.refId))
+    .filter((c) => !dueLogged.has(c.refId) && c.row.remindersConsent === "SIM")
     .map(({ row, due, phone, refId }) => {
       const text = serviceDueMessage({
         customerName: row.customerName,
@@ -155,14 +165,48 @@ export async function getMessageCenterService(now: Date = new Date()): Promise<M
       };
     });
 
+  // Pedido de permissão: um por cliente ainda não perguntado que teria lembrete (troca) ou avaliação.
+  const askCandidates = new Map<string, { customerName: string; phone: string; context: string }>();
+  for (const d of delivered) {
+    const phone = phoneDigits(d.customerPhone);
+    if (!phone || d.remindersConsent !== null || askCandidates.has(d.customerId)) continue;
+    askCandidates.set(d.customerId, { customerName: d.customerName, phone, context: `${d.number} entregue · pedir permissão para avisos` });
+  }
+  for (const c of dueCandidates) {
+    if (c.row.remindersConsent !== null) continue;
+    askCandidates.set(c.row.customerId, {
+      customerName: c.row.customerName,
+      phone: c.phone,
+      context: `${c.row.serviceName} ${c.due.status === "VENCIDA" ? "vencida" : "chegando"} · pedir permissão para avisar`,
+    });
+  }
+  const askActions = await listLoggedActions("PERMISSAO", [...askCandidates.keys()]);
+  const permissions: PermissionItem[] = [];
+  for (const [customerId, c] of askCandidates) {
+    const action = askActions.get(customerId);
+    if (action === "PULADA") continue;
+    const text = permissionMessage({ customerName: c.customerName });
+    permissions.push({
+      kind: "PERMISSAO",
+      refId: customerId,
+      customerName: c.customerName,
+      context: c.context,
+      text,
+      whatsappUrl: whatsappLinkWithMessage(c.phone, text),
+      state: action === "ENVIADA" ? "AGUARDANDO" : "PEDIR",
+    });
+  }
+
   return {
+    permissions,
     confirmations,
     reminders,
     reviews,
     balances,
     trocas,
     reviewLinkConfigured: Boolean(reviewLink),
-    total: confirmations.length + reminders.length + reviews.length + balances.length + trocas.length,
+    total:
+      permissions.length + confirmations.length + reminders.length + reviews.length + balances.length + trocas.length,
   };
 }
 
