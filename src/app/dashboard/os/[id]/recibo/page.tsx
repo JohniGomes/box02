@@ -6,7 +6,7 @@ import { getVehicleService } from "@/lib/vehicles/service";
 import { formatBRL } from "@/lib/money";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
-import { PrintButton } from "@/components/PrintButton";
+import { PrintPanelButton } from "@/components/PrintPanelButton";
 import { formatDateBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
@@ -105,7 +105,15 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
               Enviar resumo no WhatsApp
             </a>
           ) : null}
-          <PrintButton label="Imprimir / salvar PDF" />
+          <PrintPanelButton
+            docKey="recibo"
+            label="Imprimir / salvar PDF"
+            options={[
+              { id: "itemPrices", label: "Valor e quantidade de cada item", defaultOn: true },
+              { id: "discount", label: "Desconto e acréscimo", defaultOn: true },
+              { id: "payments", label: "Formas de pagamento", defaultOn: true },
+            ]}
+          />
         </div>
       </div>
 
@@ -156,16 +164,16 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
                   <span>
                     <span className="block text-xs text-muted">{ITEM_TYPE_LABEL[item.type]}</span>
                     {item.description}
-                    <span className="block text-xs text-muted">
+                    <span data-print-section="itemPrices" className="block text-xs text-muted">
                       {Number(item.quantity)} × {formatBRL(item.unitPriceCents)}
                     </span>
                   </span>
-                  <span className="font-semibold">{formatBRL(item.totalCents)}</span>
+                  <span data-print-section="itemPrices" className="font-semibold">{formatBRL(item.totalCents)}</span>
                 </li>
               ))}
             </ul>
             {workOrder.discountTotalCents > 0 || workOrder.surchargeTotalCents > 0 ? (
-              <div className="mt-3 border-t border-border pt-3 text-sm text-muted">
+              <div data-print-section="discount" className="mt-3 border-t border-border pt-3 text-sm text-muted">
                 {workOrder.discountTotalCents > 0 ? (
                   <div className="flex justify-between">
                     <span>Desconto</span>
@@ -186,7 +194,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-surface p-6">
+          <div data-print-section="payments" className="rounded-2xl border border-border bg-surface p-6">
             <h2 className="mb-3 text-sm font-semibold">Pagamento</h2>
             {receiptPayments.length === 0 ? (
               <p className="text-sm text-muted">Nenhum pagamento registrado.</p>
