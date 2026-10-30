@@ -62,6 +62,13 @@ describe("leitura do CRLV", () => {
     expect(data.confianca).toBe("BAIXA");
   });
 
+  it("campos que a IA omite (em vez de mandar null) não derrubam a leitura", async () => {
+    const runner = async () => JSON.stringify({ placa: "abc1234" });
+    const data = await extractVehicleFromCrlv(photo, "image/jpeg", { runner, models: ["m"] });
+    expect(data).toMatchObject({ placa: "ABC-1234", confianca: "BAIXA" });
+    expect(data.anoModelo).toBeUndefined();
+  });
+
   it("resposta que não é JSON vira erro amigável", async () => {
     const runner = async () => "não consegui ler";
     await expect(extractVehicleFromCrlv(photo, "image/jpeg", { runner, models: ["m"] })).rejects.toBeInstanceOf(GeminiBadResponseError);

@@ -80,13 +80,13 @@ function toNumber(v: unknown): number | undefined {
 }
 
 const optText = z.string().nullish().transform((v) => (v ? v : undefined));
-const optNumber = z.unknown().transform(toNumber);
+const optNumber = z.unknown().optional().transform(toNumber);
 
 const ItemSchema = z.object({
   tipo: z.enum(["SERVICO", "PECA", "OUTRO"]).catch("OUTRO"),
   descricao: z.string().nullish().transform((v) => v ?? ""),
-  quantidade: z.unknown().transform((v) => toNumber(v) ?? 1),
-  precoUnitarioCentavos: z.unknown().transform((v) => toNumber(v) ?? null),
+  quantidade: z.unknown().optional().transform((v) => toNumber(v) ?? 1),
+  precoUnitarioCentavos: z.unknown().optional().transform((v) => toNumber(v) ?? null),
 });
 
 /** Formato que o Gemini deve devolver; tolerante com campos nulos/texto, rígido no que importa. */

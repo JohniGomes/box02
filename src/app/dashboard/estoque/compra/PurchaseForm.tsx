@@ -3,8 +3,11 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatBRL, reaisToCents } from "@/lib/money";
-import { registerPurchaseAction } from "./actions";
+import { centsToReais, formatBRL, reaisToCents } from "@/lib/money";
+import { readPurchaseInvoiceAction, registerPurchaseAction } from "./actions";
+import type { PurchaseInvoice } from "@/lib/gemini/invoice";
+import { fileToResizedJpegBase64 } from "@/lib/imageResize";
+import { bestPartMatch, matchSupplier } from "@/lib/purchases/nameMatch";
 import { DraftBar, useDraft } from "@/components/DraftControls";
 import { useRememberedChoice } from "@/lib/useRemembered";
 
@@ -47,6 +50,48 @@ function newRow(): Row {
   };
 }
 
+/** "Preencher com foto da nota": a IA lê fornecedor, data, itens e valores; a pessoa confere e escolhe o pagamento. */
+function InvoicePhotoButton({ onRead, info }: { onRead: (d: PurchaseInvoice) => void; info: string | null }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { base64, mimeType } = await fileToResizedJpegBase64(file);
+      const result = await readPurchaseInvoiceAction(base64, mimeType);
+      if (!result.success || !result.data) {
+        setError(result.error ?? "Não consegui ler a foto. Preencha à mão.");
+      } else {
+        onRead(result.data);
+      }
+    } catch {
+      setError("Não consegui ler essa foto. Tente outra ou preencha à mão.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-border p-4">
+      <label className="flex h-12 cursor-pointer items-center justify-center rounded-xl border border-accent/50 text-sm font-semibold text-accent">
+        {busy ? "Lendo a nota…" : "Preencher com foto da nota"}
+        <input type="file" accept="image/*" capture="environment" onChange={handleFile} disabled={busy} className="hidden" />
+      </label>
+      <p className="text-xs text-muted">
+        A IA lê fornecedor, data, itens e valores da nota. Nada é registrado sem você conferir, e a foto não fica guardada. O pagamento
+        (já paguei, depois ou parcelado) é sempre você que escolhe.
+      </p>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {info ? <p className="rounded-lg bg-accent/10 px-3 py-2 text-xs">{info}</p> : null}
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
@@ -86,6 +131,7 @@ export function PurchaseForm({
   const [dueDate, setDueDate] = useState("");
   const [installments, setInstallments] = useState("1");
 
+  const [invoiceInfo, setInvoiceInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ totalCents: number; itemCount: number; expenseCount: number } | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -131,6 +177,47 @@ export function PurchaseForm({
       setInstallments(p.installments ?? "1");
     },
   });
+
+  /** Preenche com o que a nota trouxe; o que já estava digitado é mantido (as linhas da nota entram depois). */
+  function applyInvoice(d: PurchaseInvoice) {
+    if (d.fornecedor) {
+      const match = matchSupplier(d.fornecedor, suppliers);
+      if (match) {
+        setSupplierChoice(match.id);
+        setNewSupplier("");
+      } else {
+        setSupplierChoice(NEW_SUPPLIER);
+        setNewSupplier(d.fornecedor);
+      }
+    }
+    if (d.data) setPurchaseDate(d.data);
+    let linked = 0;
+    const fromInvoice: Row[] = d.itens.map((it) => {
+      const match = bestPartMatch(it.descricao, parts);
+      if (match) linked++;
+      return {
+        ...newRow(),
+        kind: match ? "STOCK" : "NEW",
+        partId: match?.id ?? "",
+        newName: match ? "" : it.descricao,
+        quantity: String(it.quantidade),
+        total: it.totalCents !== null ? centsToReais(it.totalCents) : "",
+      };
+    });
+    if (fromInvoice.length > 0) {
+      setRows((prev) => {
+        const untouched = prev.length === 1 && prev[0].kind === "STOCK" && !prev[0].partId && !prev[0].newName && !prev[0].total;
+        return untouched ? fromInvoice : [...prev, ...fromInvoice];
+      });
+    }
+    if (d.ajusteCents) setAdjustment(`${d.ajusteCents < 0 ? "-" : ""}${centsToReais(Math.abs(d.ajusteCents))}`);
+    const n = d.itens.length;
+    setInvoiceInfo(
+      n === 0
+        ? "Não achei itens legíveis na foto. Tente de novo mais de perto, com boa luz."
+        : `Li ${n} ${n === 1 ? "item" : "itens"}${d.fornecedor ? ` de ${d.fornecedor}` : ""}. ${linked} ${linked === 1 ? "foi ligado" : "foram ligados"} a peças do estoque (escolha conferida abaixo); os outros entram como peça nova. Confira tudo e escolha o pagamento antes de registrar — a IA pode errar.`,
+    );
+  }
 
   function updateRow(key: string, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -222,6 +309,8 @@ export function PurchaseForm({
 
   return (
     <div className="flex flex-col gap-5">
+      <InvoicePhotoButton onRead={applyInvoice} info={invoiceInfo} />
+
       <Section title="1. Fornecedor e data">
         <select value={supplierChoice} onChange={(e) => setSupplierChoice(e.target.value)} className={inputClass}>
           <option value="">Sem fornecedor</option>
