@@ -14,9 +14,12 @@ const CONFIDENCE_LABEL: Record<PartCodeResult["confianca"], { text: string; clas
 export function PartCodesPanel({
   vehicle,
   part,
+  onUseCode,
 }: {
   vehicle: { marca: string; modelo: string; ano: string; versao: string };
   part: string;
+  /** Quando informado, cada card ganha "Usar como SKU" (só preenche o campo; quem grava é a pessoa). */
+  onUseCode?: (code: string, marca: string) => void;
 }) {
   const [data, setData] = useState<PartConsultResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,13 +98,24 @@ export function PartCodesPanel({
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="break-all font-mono text-xl font-bold">{r.codigo}</span>
-                    <button
-                      type="button"
-                      onClick={() => copy(r.codigo)}
-                      className="h-9 shrink-0 rounded-lg border border-border px-3 text-xs font-medium"
-                    >
-                      {copiedCode === r.codigo ? "Copiado!" : "Copiar"}
-                    </button>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copy(r.codigo)}
+                        className="h-9 rounded-lg border border-border px-3 text-xs font-medium"
+                      >
+                        {copiedCode === r.codigo ? "Copiado!" : "Copiar"}
+                      </button>
+                      {onUseCode ? (
+                        <button
+                          type="button"
+                          onClick={() => onUseCode(r.codigo, r.marca)}
+                          className="h-9 rounded-lg bg-accent px-3 text-xs font-semibold text-accent-foreground"
+                        >
+                          Usar como SKU
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   {r.descricao ? <p className="text-sm">{r.descricao}</p> : null}
                   {r.aplicacao ? <p className="text-xs text-muted">{r.aplicacao}</p> : null}

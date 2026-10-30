@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPartAction, updatePartAction, type InventoryActionResult } from "./actions";
 import { calculateSalePriceCents, centsToReais, formatBRL, markupPercentForPrice, reaisToCents } from "@/lib/money";
 import type { PartFormValues } from "./partFormValues";
+import { SkuSuggest } from "./SkuSuggest";
 
 const inputClass =
   "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
@@ -146,6 +147,8 @@ export function PartForm({
           />
         </Field>
       </div>
+
+      <SkuSuggest partName={values.name} hasSku={values.sku.trim() !== ""} onUse={(code) => update("sku", code)} />
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Custo unitário (opcional)" htmlFor="costReais">
