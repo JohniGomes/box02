@@ -44,7 +44,7 @@ async function cleanAll() {
     `TRUNCATE "work_order_discounts", "work_order_closures", "work_order_items", "work_orders", "stock_movements", "parts", "services",
       "vehicles", "customers", "audit_logs", "user_roles", "role_permissions", "users", "roles", "permissions" CASCADE`,
   );
-  await pool.query(`DELETE FROM app_settings WHERE key = 'work_order_number_seq'`);
+  await pool.query(`DELETE FROM app_settings WHERE key IN ('work_order_number_seq', 'card_fee_percent')`);
 }
 
 beforeAll(async () => {
