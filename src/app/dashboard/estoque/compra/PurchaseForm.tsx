@@ -80,7 +80,7 @@ function InvoicePhotoButton({ onRead, info }: { onRead: (d: PurchaseInvoice) => 
     <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-border p-4">
       <label className="flex h-12 cursor-pointer items-center justify-center rounded-xl border border-accent/50 text-sm font-semibold text-accent">
         {busy ? "Lendo a nota…" : "Preencher com foto da nota"}
-        <input type="file" accept="image/*" capture="environment" onChange={handleFile} disabled={busy} className="hidden" />
+        <input type="file" accept="image/*" onChange={handleFile} disabled={busy} className="hidden" />
       </label>
       <p className="text-xs text-muted">
         A IA lê fornecedor, data, itens e valores da nota. Nada é registrado sem você conferir, e a foto não fica guardada. O pagamento
