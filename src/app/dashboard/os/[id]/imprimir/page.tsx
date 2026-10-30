@@ -7,7 +7,7 @@ import { formatBRL } from "@/lib/money";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { WORK_ORDER_STATUS_LABEL } from "../../statusLabels";
-import { PrintButton } from "@/components/PrintButton";
+import { PrintPanelButton } from "@/components/PrintPanelButton";
 import { vehicleDisplayName } from "@/lib/vehicles/label";
 import { computeQuoteTotals } from "@/lib/money";
 import { formatDateTimeBR } from "@/lib/dateBr";
@@ -68,7 +68,17 @@ export default async function PrintWorkOrderPage({
         <Link href={`/dashboard/os/${workOrder.id}`} className="text-sm text-muted hover:underline">
           ← Voltar para a OS
         </Link>
-        <PrintButton label="Imprimir OS" />
+        <PrintPanelButton
+          docKey="os"
+          label="Imprimir OS"
+          options={[
+            { id: "diagnosis", label: "Diagnóstico", defaultOn: true },
+            { id: "itemPrices", label: "Valor e quantidade de cada item", defaultOn: true },
+            { id: "subtotals", label: "Subtotais (serviços, peças, mão de obra)", defaultOn: true },
+            { id: "financial", label: "Financeiro (pago e saldo)", defaultOn: true },
+            { id: "signature", label: "Assinatura", defaultOn: true },
+          ]}
+        />
       </div>
 
       <div className="hidden text-center print:block">
@@ -112,7 +122,7 @@ export default async function PrintWorkOrderPage({
       </div>
 
       {workOrder.diagnosis ? (
-        <div className="rounded-2xl border border-border bg-surface p-6">
+        <div data-print-section="diagnosis" className="rounded-2xl border border-border bg-surface p-6">
           <h2 className="mb-1 text-sm font-semibold">Diagnóstico</h2>
           <p className="whitespace-pre-wrap text-sm">{workOrder.diagnosis}</p>
         </div>
@@ -125,10 +135,10 @@ export default async function PrintWorkOrderPage({
             <li key={item.id} className="rounded-xl border border-border bg-background p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[item.type]}</span>
-                <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
+                <span data-print-section="itemPrices" className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
               </div>
               <p className="text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
-              <p className="text-xs text-muted">
+              <p data-print-section="itemPrices" className="text-xs text-muted">
                 {Number(item.quantity)} × {formatBRL(item.unitPriceCents)}
               </p>
             </li>
@@ -136,9 +146,11 @@ export default async function PrintWorkOrderPage({
         </ul>
 
         <div className="mt-4 rounded-xl bg-background p-4 text-sm">
-          <Row label="Serviços" value={formatBRL(servicesCents)} />
-          <Row label="Peças" value={formatBRL(partsCents)} />
-          <Row label="Mão de obra" value={formatBRL(laborCents)} />
+          <div data-print-section="subtotals">
+            <Row label="Serviços" value={formatBRL(servicesCents)} />
+            <Row label="Peças" value={formatBRL(partsCents)} />
+            <Row label="Mão de obra" value={formatBRL(laborCents)} />
+          </div>
           {discountCents > 0 ? (
             <Row label="Desconto" value={`- ${formatBRL(discountCents)}`} />
           ) : null}
@@ -153,7 +165,7 @@ export default async function PrintWorkOrderPage({
       </div>
 
       {paymentsSummary ? (
-        <div className="rounded-2xl border border-border bg-surface p-6">
+        <div data-print-section="financial" className="rounded-2xl border border-border bg-surface p-6">
           <h2 className="mb-3 text-sm font-semibold">Financeiro</h2>
           <div className="text-sm">
             <Row label="Total devido" value={formatBRL(paymentsSummary.dueCents)} />
@@ -166,7 +178,7 @@ export default async function PrintWorkOrderPage({
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div data-print-section="signature" className="rounded-2xl border border-border bg-surface p-6">
         <h2 className="mb-2 text-sm font-semibold">Assinatura</h2>
         <p className="text-sm text-muted">
           Declaro ter recebido o veículo e conferido os serviços acima descritos.

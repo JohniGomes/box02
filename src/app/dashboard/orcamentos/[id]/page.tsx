@@ -31,7 +31,7 @@ import { ConvertQuoteToWorkOrderForm } from "./ConvertQuoteToWorkOrderForm";
 import { QuoteCheckInEditor } from "./QuoteCheckInEditor";
 import { RegisterApprovalForm } from "./RegisterApprovalForm";
 import { CopyLinkButton } from "./CopyLinkButton";
-import { PrintButton } from "@/components/PrintButton";
+import { PrintPanelButton } from "@/components/PrintPanelButton";
 import { formatDateBR, formatDateTimeBR } from "@/lib/dateBr";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
@@ -96,7 +96,18 @@ export default async function QuoteDetailPage({
           ← Orçamentos
         </Link>
         <div className="flex items-center gap-2">
-          <PrintButton label="Imprimir orçamento" />
+          <PrintPanelButton
+            docKey="orcamento"
+            label="Imprimir orçamento"
+            options={[
+              { id: "itemPrices", label: "Valor e quantidade de cada item", defaultOn: true },
+              { id: "subtotals", label: "Subtotais (serviços, peças, mão de obra)", defaultOn: true },
+              { id: "itemNotes", label: "Observações dos itens", defaultOn: true },
+              { id: "customerMessage", label: "Mensagem para o cliente", defaultOn: true },
+              { id: "discountReason", label: "Motivo do desconto", defaultOn: false, internal: true },
+              { id: "internalNotes", label: "Observação interna", defaultOn: false, internal: true },
+            ]}
+          />
           {isDraft ? (
             <Link
               href={`/dashboard/orcamentos/${quote.id}/editar`}
@@ -186,11 +197,11 @@ export default async function QuoteDetailPage({
             <li key={item.id} className="rounded-xl border border-border bg-background p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[item.type]}</span>
-                <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
+                <span data-print-section="itemPrices" className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
               </div>
               <p className="text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
-              {item.notes ? <p className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
-              <p className="text-xs text-muted">
+              {item.notes ? <p data-print-section="itemNotes" className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
+              <p data-print-section="itemPrices" className="text-xs text-muted">
                 {Number(item.quantity)} × {formatBRL(item.unitPriceCents)}
               </p>
             </li>
@@ -198,14 +209,16 @@ export default async function QuoteDetailPage({
         </ul>
 
         <div className="mt-4 rounded-xl bg-background p-4 text-sm">
-          <Row label="Serviços" value={formatBRL(version.subtotalServicesCents)} />
-          <Row label="Peças" value={formatBRL(version.subtotalPartsCents)} />
-          <Row label="Mão de obra" value={formatBRL(version.subtotalLaborCents)} />
+          <div data-print-section="subtotals">
+            <Row label="Serviços" value={formatBRL(version.subtotalServicesCents)} />
+            <Row label="Peças" value={formatBRL(version.subtotalPartsCents)} />
+            <Row label="Mão de obra" value={formatBRL(version.subtotalLaborCents)} />
+          </div>
           {version.discountTotalCents > 0 ? (
             <Row label="Desconto" value={`- ${formatBRL(version.discountTotalCents)}`} />
           ) : null}
           {version.discountTotalCents > 0 && version.discountReason ? (
-            <p className="py-1 text-xs text-muted print:hidden">Motivo do desconto (interno): {version.discountReason}</p>
+            <p data-print-section="discountReason" className="py-1 text-xs text-muted print:hidden">Motivo do desconto (interno): {version.discountReason}</p>
           ) : null}
           {version.surchargeTotalCents > 0 ? (
             <Row label="Acréscimo" value={`+ ${formatBRL(version.surchargeTotalCents)}`} />
@@ -218,7 +231,7 @@ export default async function QuoteDetailPage({
       </section>
 
       {version.customerMessage ? (
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section data-print-section="customerMessage" className="rounded-2xl border border-border bg-surface p-5">
           <h2 className="mb-2 text-sm font-semibold">Mensagem para o cliente</h2>
           <p className="whitespace-pre-wrap text-sm">{version.customerMessage}</p>
         </section>
@@ -234,7 +247,7 @@ export default async function QuoteDetailPage({
       ) : null}
 
       {version.internalNotes ? (
-        <section className="rounded-2xl border border-border bg-surface p-5 print:hidden">
+        <section data-print-section="internalNotes" className="rounded-2xl border border-border bg-surface p-5 print:hidden">
           <h2 className="mb-2 text-sm font-semibold">Observação interna</h2>
           <p className="whitespace-pre-wrap text-sm">{version.internalNotes}</p>
         </section>
