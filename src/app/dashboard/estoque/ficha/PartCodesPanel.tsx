@@ -15,9 +15,12 @@ export function PartCodesPanel({
   vehicle,
   part,
   onUseCode,
+  compact,
 }: {
   vehicle: { marca: string; modelo: string; ano: string; versao: string };
   part: string;
+  /** Em espaço estreito (robô flutuante): um card por linha, sem moldura própria. */
+  compact?: boolean;
   /** Quando informado, cada card ganha "Usar como SKU" (só preenche o campo; quem grava é a pessoa). */
   onUseCode?: (code: string, marca: string) => void;
 }) {
@@ -60,12 +63,12 @@ export function PartCodesPanel({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+    <section className={compact ? "flex flex-col gap-3" : "flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4"}>
       <div>
         <h2 className="text-sm font-semibold">Sugerir códigos com IA</h2>
         <p className="text-xs text-muted">
           Pesquisa códigos das marcas Mahle, Metal Leve, Bosch, Fras-le, Magneti Marelli, Cofap, Nakata, LUK e Sachs para o veículo e a
-          peça acima.
+          peça {compact ? "informados" : "acima"}.
         </p>
       </div>
       <button
@@ -87,7 +90,7 @@ export function PartCodesPanel({
           {data.resultados.length === 0 ? (
             <p className="text-sm text-muted">Não encontrei códigos confiáveis para essa peça. Tente outro nome ou confira com o fornecedor.</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ul className={compact ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
               {data.resultados.map((r) => (
                 <li key={`${r.marca}-${r.codigo}`} className="flex flex-col gap-2 rounded-2xl border border-border bg-background p-4">
                   <div className="flex items-start justify-between gap-2">

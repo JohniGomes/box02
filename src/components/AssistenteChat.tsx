@@ -9,11 +9,50 @@ import {
   analisarTextoAction,
   analisarImagemAction,
   confirmarLancamentoAction,
+  type AssistenteResult,
+  type ConsultaPeca,
   type ReconciledData,
 } from "@/app/dashboard/assistente/actions";
+import { PartCodesPanel } from "@/app/dashboard/estoque/ficha/PartCodesPanel";
 import { useRouter } from "next/navigation";
 
-type Etapa = "idle" | "analisando" | "revisao" | "confirmando" | "concluido";
+type Etapa = "idle" | "analisando" | "revisao" | "confirmando" | "concluido" | "consulta";
+
+/** Confere o que o robô entendeu (veículo e peça, editáveis) e mostra os cards de código. */
+function ConsultaPecaBox({ consulta }: { consulta: ConsultaPeca }) {
+  const [marca, setMarca] = useState(consulta.veiculo.marca);
+  const [modelo, setModelo] = useState(consulta.veiculo.modelo);
+  const [ano, setAno] = useState(consulta.veiculo.ano);
+  const [peca, setPeca] = useState(consulta.peca);
+  const falta = !marca.trim() || !modelo.trim();
+  const campo = (falhando: boolean) =>
+    `w-full rounded-lg border bg-background px-2 py-1.5 text-xs ${falhando ? "border-yellow-500" : "border-border"}`;
+
+  return (
+    <>
+      {falta ? <p className="rounded-lg bg-yellow-100 p-2 text-xs text-yellow-800">Faltou a marca ou o modelo do veículo. Complete abaixo.</p> : null}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Marca
+          <input value={marca} onChange={(e) => setMarca(e.target.value)} className={campo(!marca.trim())} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Modelo
+          <input value={modelo} onChange={(e) => setModelo(e.target.value)} className={campo(!modelo.trim())} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Ano
+          <input value={ano} onChange={(e) => setAno(e.target.value)} className={campo(false)} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Peça
+          <input value={peca} onChange={(e) => setPeca(e.target.value)} className={campo(peca.trim().length < 2)} />
+        </label>
+      </div>
+      <PartCodesPanel vehicle={{ marca, modelo, ano, versao: consulta.veiculo.versao }} part={peca} compact />
+    </>
+  );
+}
 
 export function AssistenteChat() {
   const [aberto, setAberto] = useState(false);
@@ -21,6 +60,7 @@ export function AssistenteChat() {
   const [etapa, setEtapa] = useState<Etapa>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [reconciliado, setReconciliado] = useState<ReconciledData | null>(null);
+  const [consulta, setConsulta] = useState<ConsultaPeca | null>(null);
   const [tipoLancamento, setTipoLancamento] = useState<"ORCAMENTO" | "OS">("ORCAMENTO");
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -31,6 +71,22 @@ export function AssistenteChat() {
     setEtapa("idle");
     setErro(null);
     setReconciliado(null);
+    setConsulta(null);
+  }
+
+  function receber(result: AssistenteResult, erroPadrao: string) {
+    if (result.success && result.consulta) {
+      setConsulta(result.consulta);
+      setEtapa("consulta");
+      return;
+    }
+    if (!result.success || !result.reconciliado) {
+      setErro(result.error ?? erroPadrao);
+      setEtapa("idle");
+      return;
+    }
+    setReconciliado(result.reconciliado);
+    setEtapa("revisao");
   }
 
   function handleEnviarTexto() {
@@ -38,14 +94,7 @@ export function AssistenteChat() {
     setEtapa("analisando");
     setErro(null);
     startTransition(async () => {
-      const result = await analisarTextoAction(texto);
-      if (!result.success || !result.reconciliado) {
-        setErro(result.error ?? "Erro desconhecido.");
-        setEtapa("idle");
-        return;
-      }
-      setReconciliado(result.reconciliado);
-      setEtapa("revisao");
+      receber(await analisarTextoAction(texto), "Erro desconhecido.");
     });
   }
 
@@ -65,14 +114,7 @@ export function AssistenteChat() {
         setEtapa("idle");
         return;
       }
-      const result = await analisarImagemAction(foto.base64, foto.mimeType, texto || undefined);
-      if (!result.success || !result.reconciliado) {
-        setErro(result.error ?? "Erro ao analisar imagem.");
-        setEtapa("idle");
-        return;
-      }
-      setReconciliado(result.reconciliado);
-      setEtapa("revisao");
+      receber(await analisarImagemAction(foto.base64, foto.mimeType, texto || undefined), "Erro ao analisar imagem.");
     });
   }
 
@@ -128,7 +170,7 @@ export function AssistenteChat() {
             {(etapa === "idle" || etapa === "analisando") && (
               <>
                 <p className="text-xs text-muted">
-                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente.
+                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente. Também dá para pedir o código de uma peça (ex.: &quot;código do freio dianteiro do HR-V 2017&quot;).
                 </p>
                 <textarea
                   value={texto}
@@ -304,6 +346,17 @@ export function AssistenteChat() {
                 >
                   {isPending ? "Preparando..." : `Montar rascunho de ${tipoLancamento === "ORCAMENTO" ? "Orçamento" : "OS"}`}
                 </button>
+              </div>
+            )}
+
+            {/* Estado: pedido de código de peça */}
+            {etapa === "consulta" && consulta && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Código de peça</p>
+                  <button onClick={reset} className="text-xs text-muted hover:underline">Voltar</button>
+                </div>
+                <ConsultaPecaBox consulta={consulta} />
               </div>
             )}
 
