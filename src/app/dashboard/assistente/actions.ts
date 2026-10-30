@@ -20,11 +20,35 @@ async function requireUserId(): Promise<string> {
   return session.user.id;
 }
 
+/** Pedido de código de peça: o robô mostra a consulta (com o que já entendeu) em vez de montar rascunho. */
+export interface ConsultaPeca {
+  peca: string;
+  veiculo: { marca: string; modelo: string; ano: string; versao: string };
+}
+
 export interface AssistenteResult {
   success: boolean;
   error?: string;
   data?: ExtractedData;
   reconciliado?: ReconciledData;
+  consulta?: ConsultaPeca;
+}
+
+/** Junta o que a IA entendeu do pedido com o cadastro do veículo (pela placa), quando houver. */
+async function montarConsulta(data: ExtractedData): Promise<ConsultaPeca | undefined> {
+  const c = data.consultaPeca;
+  if (!c?.peca) return undefined;
+  const v = data.veiculo;
+  const cadastrado = v?.placa ? await findVehicleByPlate(v.placa) : null;
+  return {
+    peca: c.peca,
+    veiculo: {
+      marca: cadastrado?.brand ?? c.marca ?? v?.marca ?? "",
+      modelo: cadastrado?.model ?? c.modelo ?? v?.modelo ?? "",
+      ano: String(cadastrado?.yearModel ?? cadastrado?.yearManufacture ?? c.ano ?? v?.ano ?? ""),
+      versao: cadastrado?.version ?? c.versao ?? "",
+    },
+  };
 }
 
 export interface ReconciledItem {
@@ -61,6 +85,8 @@ export async function analisarTextoAction(text: string): Promise<AssistenteResul
   try {
     await requireUserId();
     const data = await extractFromText(text);
+    const consulta = await montarConsulta(data);
+    if (consulta) return { success: true, data, consulta };
     const reconciliado = await reconciliarDados(data);
     return { success: true, data, reconciliado };
   } catch (err) {
@@ -76,6 +102,8 @@ export async function analisarImagemAction(
   try {
     await requireUserId();
     const data = await extractFromImage(imageBase64, mimeType, textoAdicional);
+    const consulta = await montarConsulta(data);
+    if (consulta) return { success: true, data, consulta };
     const reconciliado = await reconciliarDados(data);
     return { success: true, data, reconciliado };
   } catch (err) {

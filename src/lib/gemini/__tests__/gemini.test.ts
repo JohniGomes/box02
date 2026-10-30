@@ -109,5 +109,20 @@ describe("assistente de lançamento sobre a camada nova", () => {
     expect(out.observacoes).toBe("");
     expect(out.confianca).toBe("BAIXA");
     expect(out.textoOriginal).toBe("texto qualquer");
+    expect(out.consultaPeca).toBeNull();
+  });
+
+  it("reconhece pedido de código de peça (e ignora consultaPeca sem peça)", async () => {
+    const pedido = JSON.stringify({
+      cliente: null,
+      veiculo: { marca: "Honda", modelo: "HR-V", ano: "2017" },
+      itens: [],
+      consultaPeca: { peca: "Pastilha de freio dianteira", marca: "Honda", modelo: "HR-V", ano: "2017", versao: null },
+    });
+    const out = await extractFromText("código do freio dianteiro do HR-V 2017", { models: ["m"], runner: async () => pedido });
+    expect(out.consultaPeca).toMatchObject({ peca: "Pastilha de freio dianteira", marca: "Honda", modelo: "HR-V", ano: 2017 });
+
+    const vazio = JSON.stringify({ cliente: null, veiculo: null, itens: [], consultaPeca: { peca: "  ", marca: "Honda" } });
+    expect((await extractFromText("x", { models: ["m"], runner: async () => vazio })).consultaPeca).toBeNull();
   });
 });

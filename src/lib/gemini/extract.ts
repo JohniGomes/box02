@@ -24,6 +24,14 @@ export interface ExtractedData {
     quilometragem?: number;
   } | null;
   itens: ExtractedItem[];
+  /** Preenchido só quando a pessoa pede o código/referência de uma peça (não é lançamento). */
+  consultaPeca?: {
+    peca: string;
+    marca?: string;
+    modelo?: string;
+    ano?: number;
+    versao?: string;
+  } | null;
   observacoes: string;
   confianca: "ALTA" | "MEDIA" | "BAIXA";
   textoOriginal: string;
@@ -55,11 +63,19 @@ Retorne APENAS um JSON válido, sem markdown, sem explicações, com a estrutura
       "precoUnitarioCentavos": "número em centavos ou null se não informado"
     }
   ],
+  "consultaPeca": {
+    "peca": "nome da peça procurada",
+    "marca": "marca do veículo ou null",
+    "modelo": "modelo do veículo ou null",
+    "ano": "número ou null",
+    "versao": "motor/versão ou null"
+  } ou null,
   "observacoes": "qualquer outra informação relevante",
   "confianca": "ALTA, MEDIA ou BAIXA dependendo da legibilidade/clareza"
 }
 
 Regras importantes:
+- consultaPeca: preencha SOMENTE quando a pessoa pede o código, a referência ou o número de catálogo de uma peça para um veículo (ex.: "código do freio dianteiro do HR-V 2017"). Nesse caso deixe "itens" vazio. Em qualquer outro caso use null. Se souber a marca pelo modelo (ex.: HR-V é Honda), preencha a marca.
 - Se um campo não estiver presente ou não for legível, use null
 - Peças (ex: filtro de óleo, pastilha de freio, pneu) → tipo PECA
 - Serviços (ex: troca de óleo, alinhamento, revisão) → tipo SERVICO
@@ -103,6 +119,16 @@ export const ExtractedCoreSchema = z.object({
     .array(ItemSchema)
     .nullish()
     .transform((items) => (items ?? []).filter((i) => i.descricao.trim() !== "")),
+  consultaPeca: z
+    .object({
+      peca: z.string().nullish().transform((v) => (v ?? "").trim()),
+      marca: optText,
+      modelo: optText,
+      ano: optNumber,
+      versao: optText,
+    })
+    .nullish()
+    .transform((v) => (v && v.peca ? v : null)),
   observacoes: z.string().nullish().transform((v) => v ?? ""),
   confianca: z.enum(["ALTA", "MEDIA", "BAIXA"]).catch("BAIXA"),
 });
