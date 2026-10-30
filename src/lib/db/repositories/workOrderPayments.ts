@@ -95,3 +95,16 @@ export async function sumWorkOrderPayments(workOrderId: string, db: Queryable = 
   );
   return Number(result.rows[0]?.total ?? 0);
 }
+
+/** Total pago no cartão nesta OS, já sem os estornos de pagamentos no cartão (base da taxa da maquininha). */
+export async function sumCardPaymentsNet(workOrderId: string, db: Queryable = pool): Promise<number> {
+  const result = await db.query<{ net: string | null }>(
+    `SELECT
+       COALESCE((SELECT SUM(p."amountCents") FROM work_order_payments p WHERE p."workOrderId" = $1 AND p.method = 'CARTAO'), 0)
+       - COALESCE((SELECT SUM(r."refundCents") FROM work_order_payment_refunds r
+                   JOIN work_order_payments p ON p.id = r."paymentId"
+                   WHERE p."workOrderId" = $1 AND p.method = 'CARTAO'), 0) AS net`,
+    [workOrderId],
+  );
+  return Number(result.rows[0]?.net ?? 0);
+}

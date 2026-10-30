@@ -84,3 +84,23 @@ export async function setDefaultMarkupPercent(percent: number): Promise<void> {
   await setSetting(PRICING_DEFAULT_MARKUP_PERCENT_KEY, String(percent));
 }
 
+// ============================================================
+// Taxa do cartão (maquininha)
+// ============================================================
+
+export const CARD_FEE_PERCENT_KEY = "card_fee_percent";
+/** Taxa informada pelos donos em 2026-10-30 (vale para débito e crédito até dizerem o contrário). */
+export const DEFAULT_CARD_FEE_PERCENT = 6.83;
+
+export async function getCardFeePercent(): Promise<number> {
+  const raw = await getSetting(CARD_FEE_PERCENT_KEY);
+  const parsed = raw === null ? NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 30 ? parsed : DEFAULT_CARD_FEE_PERCENT;
+}
+
+export async function setCardFeePercent(percent: number): Promise<void> {
+  if (!Number.isFinite(percent) || percent < 0 || percent > 30) {
+    throw new Error("A taxa do cartão precisa ser um número entre 0 e 30.");
+  }
+  await setSetting(CARD_FEE_PERCENT_KEY, String(percent));
+}

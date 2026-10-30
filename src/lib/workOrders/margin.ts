@@ -21,17 +21,24 @@ export interface Margin {
   itemsWithoutCost: number;
   /** Itens ainda planejados (a margem é parcial enquanto houver). */
   pendingItems: number;
+  /** Taxa estimada da maquininha sobre o que foi pago no cartão (já descontada do lucro). */
+  cardFeeCents: number;
 }
 
 export function marginPercentOf(profitCents: number, revenueCents: number): number | null {
   return revenueCents > 0 ? Math.round((profitCents / revenueCents) * 100) : null;
 }
 
-export function computeMargin(items: MarginItem[], discountCents: number): Margin {
+/** Taxa estimada da maquininha: o pago no cartão (já sem estornos) vezes a porcentagem. */
+export function cardFeeOf(cardPaidCents: number, percent: number): number {
+  return Math.max(0, Math.round((cardPaidCents * percent) / 100));
+}
+
+export function computeMargin(items: MarginItem[], discountCents: number, cardFeeCents = 0): Margin {
   const executed = items.filter((i) => i.status === "EXECUTADO");
   const revenueCents = executed.reduce((sum, i) => sum + i.totalCents, 0) - discountCents;
   const costCents = executed.reduce((sum, i) => sum + Math.round(Number(i.quantity) * (i.unitCostCents ?? 0)), 0);
-  const profitCents = revenueCents - costCents;
+  const profitCents = revenueCents - costCents - cardFeeCents;
   return {
     revenueCents,
     costCents,
@@ -39,5 +46,6 @@ export function computeMargin(items: MarginItem[], discountCents: number): Margi
     marginPercent: marginPercentOf(profitCents, revenueCents),
     itemsWithoutCost: executed.filter((i) => i.unitCostCents === null).length,
     pendingItems: items.filter((i) => i.status === "PLANEJADO").length,
+    cardFeeCents,
   };
 }

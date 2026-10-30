@@ -1,5 +1,6 @@
 import { getMonthFinanceRaw, getMonthMarginRaw } from "@/lib/db/repositories/monthlyFinance";
-import { marginPercentOf } from "@/lib/workOrders/margin";
+import { cardFeeOf, marginPercentOf } from "@/lib/workOrders/margin";
+import { getCardFeePercent } from "@/lib/settings/service";
 import { shiftMonth } from "./month";
 
 export interface MonthFinance {
@@ -15,6 +16,9 @@ export interface MonthFinance {
   expensesByCategory: { category: string; cents: number }[];
   unpaidDueCents: number;
   unpaidDueCount: number;
+  /** Taxa da maquininha (%) e a taxa estimada sobre o que entrou no cartão no mês. */
+  cardFeePercent: number;
+  cardFeeCents: number;
   /** Margem das OS entregues no mês (estimada pelo custo gravado nos itens). */
   margin: {
     osCount: number;
@@ -23,12 +27,15 @@ export interface MonthFinance {
     profitCents: number;
     marginPercent: number | null;
     itemsWithoutCost: number;
+    /** Taxa estimada do cartão das OS entregues (já descontada do lucro). */
+    cardFeeCents: number;
   };
 }
 
 async function loadMonth(month: string): Promise<MonthFinance> {
-  const [raw, marginRaw] = await Promise.all([getMonthFinanceRaw(month), getMonthMarginRaw(month)]);
-  const profitCents = marginRaw.revenueCents - marginRaw.costCents;
+  const [raw, marginRaw, cardFeePercent] = await Promise.all([getMonthFinanceRaw(month), getMonthMarginRaw(month), getCardFeePercent()]);
+  const marginCardFeeCents = cardFeeOf(marginRaw.cardPaidCents, cardFeePercent);
+  const profitCents = marginRaw.revenueCents - marginRaw.costCents - marginCardFeeCents;
   const gross = Object.values(raw.paymentsByMethod).reduce((a, b) => a + b, 0);
   const revenueCents = gross - raw.refundsCents;
   const expensesCents = raw.expensesByCategory.reduce((a, b) => a + b.cents, 0);
@@ -50,7 +57,17 @@ async function loadMonth(month: string): Promise<MonthFinance> {
     expensesByCategory: raw.expensesByCategory,
     unpaidDueCents: raw.unpaidDueCents,
     unpaidDueCount: raw.unpaidDueCount,
-    margin: { ...marginRaw, profitCents, marginPercent: marginPercentOf(profitCents, marginRaw.revenueCents) },
+    cardFeePercent,
+    cardFeeCents: cardFeeOf(raw.paymentsByMethod.CARTAO ?? 0, cardFeePercent),
+    margin: {
+      osCount: marginRaw.osCount,
+      revenueCents: marginRaw.revenueCents,
+      costCents: marginRaw.costCents,
+      itemsWithoutCost: marginRaw.itemsWithoutCost,
+      cardFeeCents: marginCardFeeCents,
+      profitCents,
+      marginPercent: marginPercentOf(profitCents, marginRaw.revenueCents),
+    },
   };
 }
 

@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
+import { getCardFeePercent, isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
 import { RulesForm } from "./RulesForm";
+import { CardFeeForm } from "./CardFeeForm";
 
 export default async function RegrasPage() {
-  const [reception, deliveryChecklist] = await Promise.all([
+  const [reception, deliveryChecklist, cardFeePercent] = await Promise.all([
     isReceptionRequiredForExecution(),
     isDeliveryChecklistRequired(),
+    getCardFeePercent(),
   ]);
 
   return (
@@ -21,6 +23,8 @@ export default async function RegrasPage() {
       </p>
 
       <RulesForm initial={{ reception, deliveryChecklist }} />
+
+      <CardFeeForm initialPercent={cardFeePercent} />
     </div>
   );
 }
