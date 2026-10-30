@@ -210,7 +210,7 @@ function CrlvPhotoButton({ onRead, filled }: { onRead: (d: CrlvVehicle) => void;
     <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-border p-4">
       <label className="flex h-12 cursor-pointer items-center justify-center rounded-xl border border-accent/50 text-sm font-semibold text-accent">
         {busy ? "Lendo a foto…" : "Preencher com foto do CRLV"}
-        <input type="file" accept="image/*" capture="environment" onChange={handleFile} disabled={busy} className="hidden" />
+        <input type="file" accept="image/*" onChange={handleFile} disabled={busy} className="hidden" />
       </label>
       <p className="text-xs text-muted">
         A IA lê só os dados do veículo (placa, chassi, marca, modelo, anos, cor, combustível). Nome e CPF do dono não são lidos, e a foto não

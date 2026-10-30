@@ -81,7 +81,6 @@ export function EntryPhotoSlots({
                 }}
                 type="file"
                 accept="image/jpeg,image/png,image/heic"
-                capture="environment"
                 className="hidden"
                 onChange={(e) => handleFileChange(slot.key, slot.type, e.target.files?.[0])}
               />

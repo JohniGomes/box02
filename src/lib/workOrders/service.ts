@@ -1,4 +1,5 @@
 import { withTransaction } from "@/lib/db/transaction";
+import { joinNames } from "@/lib/executors/value";
 import {
   closeWorkOrder,
   createWorkOrder,
@@ -936,7 +937,26 @@ export async function undoWorkOrderItemExecutionService(
 async function resolveExecutorInput(input: {
   executedByUserId?: string;
   executorId?: string;
+  executorIds?: string[];
 }): Promise<{ executedByUserId?: string; executedByName: string | null }> {
+  // Executaram juntos: guarda os nomes juntos ("Carlos Eduardo e Mateus"). Cada um é validado.
+  if (input.executorIds && input.executorIds.length > 1) {
+    const names: string[] = [];
+    for (const id of input.executorIds) {
+      const executor = await findExecutorById(id);
+      if (executor && executor.status === "ATIVO") {
+        names.push(executor.name);
+        continue;
+      }
+      const user = await findUserById(id);
+      if (user && user.status === "ATIVO") {
+        names.push(user.name);
+        continue;
+      }
+      throw new InvalidExecutorUserError();
+    }
+    return { executedByName: joinNames([...new Set(names)]) };
+  }
   if (input.executorId) {
     const executor = await findExecutorById(input.executorId);
     if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();

@@ -15,7 +15,8 @@ import { priceToleranceWarning } from "@/lib/services/priceTolerance";
 import { ServicePickerButton } from "@/components/ServicePickerButton";
 import { PartPickerButton } from "@/components/PartPickerButton";
 import { PurchasedPartButton } from "@/components/PurchasedPartButton";
-import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { defaultExecutorOptionId, sanitizeExecutorValue } from "@/lib/executors/value";
+import { ExecutorPicker } from "@/components/ExecutorPicker";
 import { useRememberedChoice } from "@/lib/useRemembered";
 import { WorkOrderItemExecutorInfo, type ActiveUserOption } from "./WorkOrderActions";
 
@@ -571,11 +572,9 @@ function ExecuteOrCancelButtons({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [executorId, setExecutorId] = useRememberedChoice(
-    "box02.lastExecutor",
-    defaultExecutorOptionId(users, currentUserId),
-    users.map((u) => u.id),
-  );
+  const defaultExecutor = defaultExecutorOptionId(users, currentUserId);
+  const [executorChoice, setExecutorId] = useRememberedChoice("box02.lastExecutor", defaultExecutor);
+  const executorId = sanitizeExecutorValue(executorChoice, users, defaultExecutor);
   const [error, setError] = useState<string | null>(null);
 
   function markExecuted() {
@@ -594,20 +593,7 @@ function ExecuteOrCancelButtons({
 
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      <label className="flex flex-col gap-1">
-        <span className="text-[11px] font-medium text-muted">Executado por</span>
-        <select
-          value={executorId}
-          onChange={(e) => setExecutorId(e.target.value)}
-          className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
-        >
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <ExecutorPicker options={users} value={executorId} onChange={setExecutorId} />
       <button
         onClick={markExecuted}
         disabled={isPending}

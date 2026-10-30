@@ -14,7 +14,8 @@ import {
   undoWorkOrderItemExecutionAction,
 } from "../actions";
 import type { StockEntryDefaults } from "@/lib/workOrders/stockEntry";
-import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { defaultExecutorOptionId, sanitizeExecutorValue, selectedFromNames } from "@/lib/executors/value";
+import { ExecutorPicker } from "@/components/ExecutorPicker";
 import { useRememberedChoice } from "@/lib/useRemembered";
 import {
   PurchasePaymentFields,
@@ -123,11 +124,9 @@ export function WorkOrderItemActions({
   const [isPending, startTransition] = useTransition();
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
-  const [executorId, setExecutorId] = useRememberedChoice(
-    "box02.lastExecutor",
-    defaultExecutorOptionId(users, currentUserId),
-    users.map((u) => u.id),
-  );
+  const defaultExecutor = defaultExecutorOptionId(users, currentUserId);
+  const [executorChoice, setExecutorId] = useRememberedChoice("box02.lastExecutor", defaultExecutor);
+  const executorId = sanitizeExecutorValue(executorChoice, users, defaultExecutor);
   const [error, setError] = useState<string | null>(null);
   // Falta de estoque: em vez de só travar, oferece dar a entrada e executar.
   const [shortage, setShortage] = useState<StockEntryDefaults | null>(null);
@@ -268,7 +267,7 @@ export function WorkOrderItemActions({
 
   return (
     <div className="flex flex-col gap-2">
-      <ExecutorSelect users={users} value={executorId} onChange={setExecutorId} />
+      <ExecutorPicker options={users} value={executorId} onChange={setExecutorId} />
       <div className="flex gap-2">
         <button
           onClick={markExecuted}
@@ -292,33 +291,6 @@ export function WorkOrderItemActions({
 
 /** Seletor de "quem executou" — reutilizado tanto ao marcar um item como
  * executado quanto ao corrigir o executor depois. */
-function ExecutorSelect({
-  users,
-  value,
-  onChange,
-}: {
-  users: ActiveUserOption[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-medium text-muted">Executado por</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
-      >
-        {users.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 /** Ciclo L — exibe quem executou um item já EXECUTADO, com opção de
  * corrigir (campo editável, não write-once — DEC de governança 3.5).
  * Reaproveitado tanto pelos itens do orçamento/OS quanto pelos adicionais. */
@@ -344,7 +316,7 @@ export function WorkOrderItemExecutorInfo({
   const [undoing, setUndoing] = useState(false);
   const [undoReason, setUndoReason] = useState("");
   const [newExecutorId, setNewExecutorId] = useState(
-    users.find((u) => u.name === executedByName)?.id ?? defaultExecutorOptionId(users, executedByUserId ?? ""),
+    selectedFromNames(users, executedByName) || defaultExecutorOptionId(users, executedByUserId ?? ""),
   );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -411,7 +383,7 @@ export function WorkOrderItemExecutorInfo({
   if (correcting) {
     return (
       <div className="mt-1 flex flex-col gap-1.5">
-        <ExecutorSelect users={users} value={newExecutorId} onChange={setNewExecutorId} />
+        <ExecutorPicker options={users} value={newExecutorId} onChange={setNewExecutorId} />
         <div className="flex gap-2">
           <button
             onClick={confirmCorrection}

@@ -157,9 +157,11 @@ export const cancelWorkOrderItemSchema = z.object({
 const executorChoiceShape = {
   executedByUserId: z.string().trim().optional(),
   executorId: z.string().trim().optional(),
+  /** Duas ou mais pessoas executaram juntas. */
+  executorIds: z.array(z.string().trim().min(1)).max(10).optional(),
 };
-const executorChoiceRefine = (d: { executedByUserId?: string; executorId?: string }) =>
-  Boolean(d.executedByUserId) || Boolean(d.executorId);
+const executorChoiceRefine = (d: { executedByUserId?: string; executorId?: string; executorIds?: string[] }) =>
+  Boolean(d.executedByUserId) || Boolean(d.executorId) || (d.executorIds?.length ?? 0) > 0;
 const executorChoiceMessage = { message: "Selecione quem executou", path: ["executedByUserId"] };
 
 export const executeWorkOrderItemSchema = z.object(executorChoiceShape).refine(executorChoiceRefine, executorChoiceMessage);
