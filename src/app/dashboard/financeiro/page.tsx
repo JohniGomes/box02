@@ -51,6 +51,7 @@ function Cards({ cur, prev }: { cur: MonthFinance; prev: MonthFinance }) {
       </Card>
       <Card label="Resultado do mês" value={formatBRL(cur.resultCents)}>
         <Delta current={cur.resultCents} previous={prev.resultCents} />
+        {cur.cardFeeCents > 0 ? <p className="text-xs text-muted">depois da taxa do cartão: {formatBRL(cur.resultCents - cur.cardFeeCents)}</p> : null}
       </Card>
       <Card label="Resultado antes do pró-labore" value={formatBRL(cur.resultBeforeProLaboreCents)}>
         <Delta current={cur.resultBeforeProLaboreCents} previous={prev.resultBeforeProLaboreCents} />
@@ -106,6 +107,12 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
             </li>
           ))}
         </ul>
+        {cur.cardFeeCents > 0 ? (
+          <p className="mt-2 text-xs text-muted">
+            Taxa estimada da maquininha ({String(cur.cardFeePercent).replace(".", ",")}% do cartão): {formatBRL(cur.cardFeeCents)}. Os valores acima são os
+            cheios que o cliente pagou. A taxa muda em Configurações → Regras.
+          </p>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-5">
@@ -148,6 +155,7 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
                 <p className="text-xs text-muted">
                   {cur.margin.osCount} {cur.margin.osCount === 1 ? "OS entregue" : "OS entregues"} · receita {formatBRL(cur.margin.revenueCents)} · custo{" "}
                   {formatBRL(cur.margin.costCents)}
+                  {cur.margin.cardFeeCents > 0 ? ` · taxa do cartão ${formatBRL(cur.margin.cardFeeCents)}` : ""}
                 </p>
               </Card>
             </div>

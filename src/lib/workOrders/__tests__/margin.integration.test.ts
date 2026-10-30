@@ -8,7 +8,8 @@ import { createPartService, createStockMovementService } from "@/lib/inventory/s
 import { createServiceService } from "@/lib/services/service";
 import { getMonthFinanceService } from "@/lib/finance/service";
 import { currentMonthBr } from "@/lib/finance/month";
-import { computeMargin } from "../margin";
+import { cardFeeOf, computeMargin } from "../margin";
+import { getCardFeePercent, setCardFeePercent } from "@/lib/settings/service";
 import { getWorkOrderMarginService } from "../marginService";
 import {
   closeWorkOrderService,
@@ -108,5 +109,50 @@ describe("margem de uma OS e do mês, com o custo gravado na execução", () => 
   it("mês sem entrega volta zerado", async () => {
     const { current } = await getMonthFinanceService("2020-01");
     expect(current.margin).toMatchObject({ osCount: 0, revenueCents: 0, costCents: 0, profitCents: 0, marginPercent: null });
+  });
+});
+
+describe("taxa da maquininha (6,83% por padrão, vale para todo pagamento no cartão)", () => {
+  it("cálculo: porcentagem sobre o pago no cartão, nunca negativa", () => {
+    expect(cardFeeOf(10000, 6.83)).toBe(683);
+    expect(cardFeeOf(8000, 6.83)).toBe(546);
+    expect(cardFeeOf(0, 6.83)).toBe(0);
+    expect(cardFeeOf(-500, 6.83)).toBe(0);
+    expect(computeMargin([{ status: "EXECUTADO", totalCents: 10000, quantity: 1, unitCostCents: 2000 }], 0, 683)).toMatchObject({ profitCents: 7317, cardFeeCents: 683 });
+  });
+
+  it("padrão 6,83, grava outro valor e recusa valor absurdo", async () => {
+    expect(await getCardFeePercent()).toBe(6.83);
+    await setCardFeePercent(5);
+    expect(await getCardFeePercent()).toBe(5);
+    await expect(setCardFeePercent(50)).rejects.toThrow();
+    await expect(setCardFeePercent(-1)).rejects.toThrow();
+    await pool.query(`DELETE FROM app_settings WHERE key = 'card_fee_percent'`);
+    expect(await getCardFeePercent()).toBe(6.83);
+  });
+
+  it("OS e mês descontam a taxa só do que foi pago no cartão, sem contar estornos", async () => {
+    // até aqui o lucro da OS é R$ 160,00 (receita 260 − desconto já incluído − custo 100)
+    expect((await getWorkOrderMarginService(osId)).cardFeeCents).toBe(0); // sem pagamento no cartão: sem taxa
+
+    await pool.query(
+      `INSERT INTO work_order_payments (id, "workOrderId", "amountCents", method, "registeredByUserId", "receivedAt") VALUES ('pc1', $1, 10000, 'CARTAO', $2, NOW()), ('pp1', $1, 5000, 'PIX', $2, NOW())`,
+      [osId, actorUserId],
+    );
+    let m = await getWorkOrderMarginService(osId);
+    expect(m).toMatchObject({ cardPaidCents: 10000, cardFeePercent: 6.83, cardFeeCents: 683, profitCents: 16000 - 683 });
+
+    await pool.query(
+      `INSERT INTO work_order_payment_refunds (id, "paymentId", "workOrderId", "refundCents", reason, "refundedByUserId") VALUES ('rf1', 'pc1', $1, 2000, 'teste', $2)`,
+      [osId, actorUserId],
+    );
+    m = await getWorkOrderMarginService(osId);
+    expect(m).toMatchObject({ cardPaidCents: 8000, cardFeeCents: 546, profitCents: 16000 - 546 });
+
+    const { current } = await getMonthFinanceService(currentMonthBr());
+    expect(current.margin).toMatchObject({ cardFeeCents: 546, profitCents: 16000 - 546 });
+    // taxa estimada sobre o que entrou no cartão no mês (valor cheio, sem estornos): 6,83% de R$ 100,00
+    expect(current.cardFeePercent).toBe(6.83);
+    expect(current.cardFeeCents).toBe(683);
   });
 });

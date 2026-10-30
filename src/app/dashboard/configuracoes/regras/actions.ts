@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { setDeliveryChecklistRequired, setReceptionRequiredForExecution } from "@/lib/settings/service";
+import { setCardFeePercent, setDeliveryChecklistRequired, setReceptionRequiredForExecution } from "@/lib/settings/service";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 
 export interface RulesActionResult {
@@ -55,5 +55,28 @@ export async function setRuleAction(rule: RuleKey, required: boolean): Promise<R
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Não foi possível salvar a regra." };
+  }
+}
+
+/** Taxa da maquininha (%), usada só para estimar o lucro. Aceita "6,83" ou "6.83". */
+export async function setCardFeeAction(text: string): Promise<RulesActionResult> {
+  try {
+    const userId = await requireUserId();
+    const percent = Number(text.trim().replace(",", "."));
+    if (text.trim() === "" || !Number.isFinite(percent)) return { success: false, error: "Digite a taxa, por exemplo 6,83." };
+    await setCardFeePercent(percent);
+    await recordAuditLog({
+      userId,
+      action: "CARD_FEE_PERCENT_UPDATED",
+      entityType: "app_setting",
+      entityId: "card_fee_percent",
+      metadata: { percent },
+    });
+    revalidatePath("/dashboard/configuracoes/regras");
+    revalidatePath("/dashboard/financeiro");
+    revalidatePath("/dashboard/os", "layout");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Não foi possível salvar a taxa." };
   }
 }

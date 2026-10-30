@@ -355,6 +355,14 @@ export default async function WorkOrderDetailsPage({
               <span className="text-muted">Custo</span>
               <span className="font-medium">{formatBRL(margin.costCents)}</span>
             </div>
+            {margin.cardFeeCents > 0 ? (
+              <div className="flex justify-between">
+                <span className="text-muted">
+                  Taxa do cartão ({String(margin.cardFeePercent).replace(".", ",")}% de {formatBRL(margin.cardPaidCents)} pagos no cartão)
+                </span>
+                <span className="font-medium">{formatBRL(margin.cardFeeCents)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between text-base font-semibold">
               <span>Lucro{margin.marginPercent === null ? "" : ` (${margin.marginPercent}%)`}</span>
               <span>{formatBRL(margin.profitCents)}</span>
