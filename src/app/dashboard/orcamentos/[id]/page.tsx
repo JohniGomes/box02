@@ -104,6 +104,7 @@ export default async function QuoteDetailPage({
               { id: "subtotals", label: "Subtotais (serviços, peças, mão de obra)", defaultOn: true },
               { id: "itemNotes", label: "Observações dos itens", defaultOn: true },
               { id: "customerMessage", label: "Mensagem para o cliente", defaultOn: true },
+              { id: "approval", label: "Aprovação do cliente", defaultOn: false },
               { id: "discountReason", label: "Motivo do desconto", defaultOn: false, internal: true },
               { id: "internalNotes", label: "Observação interna", defaultOn: false, internal: true },
             ]}
@@ -253,7 +254,7 @@ export default async function QuoteDetailPage({
         </section>
       ) : null}
 
-      <section className={`rounded-2xl border border-border p-5 ${approval ? "" : "print:hidden"}`}>
+      <section data-print-section="approval" className={`rounded-2xl border border-border p-5 ${approval ? "" : "print:hidden"}`}>
         <h2 className="mb-1 text-sm font-semibold">Aprovação do cliente</h2>
         {approval ? (
           <div className="mt-2 flex flex-col gap-1 text-sm">
