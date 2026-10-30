@@ -18,6 +18,8 @@ import {
 } from "@/lib/vehicles/errors";
 import { searchCustomersService } from "@/lib/customers/service";
 import { formatDocument } from "@/lib/validation/document";
+import { extractVehicleFromCrlv, type CrlvVehicle } from "@/lib/gemini/crlv";
+import { friendlyAiMessage } from "@/lib/gemini/errors";
 
 export interface ActionResult {
   success: boolean;
@@ -160,4 +162,20 @@ export async function searchCustomersForPickerAction(
     id: c.id,
     label: c.document ? `${c.legalName} · ${formatDocument(c.document)}` : c.legalName,
   }));
+}
+
+/** Lê uma foto do CRLV (só dados do veículo, nada do proprietário) para pré-preencher o cadastro. Não grava nada. */
+export async function readCrlvPhotoAction(
+  imageBase64: string,
+  mimeType: string,
+): Promise<{ success: boolean; error?: string; data?: CrlvVehicle }> {
+  try {
+    await requireUserId();
+    if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) return { success: false, error: "Envie uma foto (JPG, PNG ou WebP)." };
+    if (!imageBase64 || imageBase64.length > 4_000_000) return { success: false, error: "A foto ficou grande demais. Tire outra, mais de perto." };
+    const data = await extractVehicleFromCrlv(imageBase64, mimeType);
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: friendlyAiMessage(err) };
+  }
 }

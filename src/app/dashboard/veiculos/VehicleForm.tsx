@@ -2,7 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { createVehicleAction, updateVehicleAction, type ActionResult } from "./actions";
+import { createVehicleAction, readCrlvPhotoAction, updateVehicleAction, type ActionResult } from "./actions";
+import type { CrlvVehicle } from "@/lib/gemini/crlv";
+import { fileToResizedJpegBase64 } from "@/lib/imageResize";
 import { CustomerPicker } from "./CustomerPicker";
 import { emptyVehicleFormValues, type VehicleFormValues } from "./vehicleFormValues";
 
@@ -36,9 +38,33 @@ export function VehicleForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [crlvFilled, setCrlvFilled] = useState<string[] | null>(null);
 
   function update<K extends keyof VehicleFormValues>(key: K, value: VehicleFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  /** Preenche o formulário com o que a foto trouxe (só o que veio preenchido); a pessoa confere antes de cadastrar. */
+  function applyCrlv(d: CrlvVehicle) {
+    const patch: Partial<VehicleFormValues> = {};
+    const filled: string[] = [];
+    const set = (key: keyof VehicleFormValues, label: string, value: string | number | undefined) => {
+      if (value === undefined || value === "") return;
+      (patch as Record<string, string>)[key] = String(value);
+      filled.push(label);
+    };
+    set("plate", "placa", d.placa);
+    set("brand", "marca", d.marca);
+    set("model", "modelo", d.modelo);
+    set("version", "versão", d.versao);
+    set("yearManufacture", "ano de fabricação", d.anoFabricacao);
+    set("yearModel", "ano do modelo", d.anoModelo);
+    set("color", "cor", d.cor);
+    set("fuelType", "combustível", d.combustivel);
+    set("chassis", "chassi", d.chassi);
+    set("renavam", "RENAVAM", d.renavam);
+    setValues((prev) => ({ ...prev, ...patch }));
+    setCrlvFilled(filled);
   }
 
   const steps = fixedCustomer ? STEPS.slice(1) : STEPS;
@@ -105,6 +131,8 @@ export function VehicleForm({
         </FieldGroup>
       ) : null}
 
+      {step === 1 && mode === "create" ? <CrlvPhotoButton onRead={applyCrlv} filled={crlvFilled} /> : null}
+
       {step === 1 ? (
         <FieldsIdentificacao values={values} update={update} errors={fieldErrors} fixedCustomer={fixedCustomer} />
       ) : null}
@@ -148,6 +176,54 @@ export function VehicleForm({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** "Preencher com foto do CRLV": a IA lê só os dados do veículo; a foto não fica guardada e nada é cadastrado sem você conferir. */
+function CrlvPhotoButton({ onRead, filled }: { onRead: (d: CrlvVehicle) => void; filled: string[] | null }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { base64, mimeType } = await fileToResizedJpegBase64(file);
+      const result = await readCrlvPhotoAction(base64, mimeType);
+      if (!result.success || !result.data) {
+        setError(result.error ?? "Não consegui ler a foto. Preencha à mão.");
+      } else {
+        onRead(result.data);
+      }
+    } catch {
+      setError("Não consegui ler essa foto. Tente outra ou preencha à mão.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-border p-4">
+      <label className="flex h-12 cursor-pointer items-center justify-center rounded-xl border border-accent/50 text-sm font-semibold text-accent">
+        {busy ? "Lendo a foto…" : "Preencher com foto do CRLV"}
+        <input type="file" accept="image/*" capture="environment" onChange={handleFile} disabled={busy} className="hidden" />
+      </label>
+      <p className="text-xs text-muted">
+        A IA lê só os dados do veículo (placa, chassi, marca, modelo, anos, cor, combustível). Nome e CPF do dono não são lidos, e a foto não
+        fica guardada.
+      </p>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {filled ? (
+        <p className="rounded-lg bg-accent/10 px-3 py-2 text-xs">
+          {filled.length > 0
+            ? `Preenchi: ${filled.join(", ")}. Confira cada campo nas etapas antes de cadastrar — a IA pode errar.`
+            : "Não achei dados legíveis na foto. Tente de novo mais de perto, com boa luz."}
+        </p>
+      ) : null}
     </div>
   );
 }

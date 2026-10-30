@@ -7,6 +7,8 @@ import { updateVehicleSheetService } from "@/lib/vehicles/service";
 import { VehicleNotFoundError } from "@/lib/vehicles/errors";
 import { consultPartsService, type PartConsultResponse } from "@/lib/parts/consult";
 import { GeminiBadResponseError, GeminiUnavailableError } from "@/lib/gemini/errors";
+import { findVehicleByPlate } from "@/lib/db/repositories/vehicles";
+import { formatPlate } from "@/lib/validation/plate";
 
 /** Guarda no cadastro do veículo o que foi preenchido na ficha, para a próxima compra já vir pronto. */
 export async function saveVehicleSheetAction(
@@ -47,4 +49,23 @@ export async function consultPartCodesAction(
     }
     return { success: false, error: "Não foi possível consultar agora. Use o Auto Experts ou pergunte ao fornecedor." };
   }
+}
+
+/** Dados do veículo já cadastrado, pela placa, para a sugestão de código da peça. */
+export async function lookupVehicleForPartsAction(
+  plate: string,
+): Promise<{ success: boolean; error?: string; vehicle?: { marca: string; modelo: string; ano: string; versao: string } }> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Não autenticado." };
+  const found = plate.trim() ? await findVehicleByPlate(formatPlate(plate)) : null;
+  if (!found) return { success: false, error: "Placa não encontrada no cadastro. Preencha marca e modelo à mão." };
+  return {
+    success: true,
+    vehicle: {
+      marca: found.brand ?? "",
+      modelo: found.model ?? "",
+      ano: String(found.yearModel ?? found.yearManufacture ?? ""),
+      versao: found.version ?? "",
+    },
+  };
 }
