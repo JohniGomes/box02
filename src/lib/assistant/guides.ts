@@ -125,6 +125,22 @@ export const GUIAS: Guia[] = [
     link: { texto: "Abrir Mensagens", href: "/dashboard/mensagens" },
   },
   {
+    id: "INTERVALO_SERVICO",
+    titulo: "Configurar um serviço para lembrar a próxima troca (por tempo ou por KM)",
+    sobre: "configurar serviço controlado por km ou por tempo, intervalo de troca de óleo, lembrete de próxima troca, repetir a cada meses ou quilômetros",
+    passos: [
+      "Vá em Configurações → Serviços e toque no serviço (por exemplo, Troca de óleo). Se ele ainda não existir, crie em \"Novo serviço\".",
+      "Na tela do serviço toque em \"Editar\".",
+      "Em \"Repetir a cada…\" preencha os Meses, os Quilômetros, ou os dois. Exemplo: 6 meses e 10.000 km (vale o que vencer primeiro). Salve.",
+      "Ao montar o orçamento ou a OS, escolha o serviço da lista do catálogo, em vez de escrever um texto livre. Só o serviço do catálogo entra na conta das próximas trocas.",
+      "Anote o KM do carro na recepção. Para serviço só por KM, o KM da OS é o que o sistema usa para calcular.",
+      "Depois que a OS é entregue, a ficha do veículo mostra \"Próximas trocas\" e, quando chega a hora, o lembrete aparece em Mensagens.",
+    ],
+    aviso:
+      "O lembrete só aparece para clientes que já aceitaram receber lembretes (veja o pedido de permissão em Mensagens). Serviços já feitos antes de você configurar o intervalo passam a contar, desde que tenham sido escolhidos do catálogo.",
+    link: { texto: "Abrir Serviços", href: "/dashboard/configuracoes/servicos" },
+  },
+  {
     id: "QR_CAR",
     titulo: "Gerar e imprimir o QR Car de um veículo",
     sobre: "QR Code do carro, etiqueta com QR, página do cliente com histórico e próximas trocas, QR no recibo",
