@@ -79,6 +79,33 @@ export async function getMonthMarginRaw(month: string): Promise<MonthMarginRaw> 
   };
 }
 
+export interface PartWithoutCostRow {
+  itemId: string;
+  workOrderId: string;
+  number: string;
+  customerName: string;
+  description: string;
+  quantity: number;
+  totalCents: number;
+}
+
+/** Peças executadas sem custo informado, nas OS entregues no mês (para corrigir uma a uma). */
+export async function listPartsWithoutCost(month: string, limit = 50): Promise<PartWithoutCostRow[]> {
+  const r = await pool.query<PartWithoutCostRow>(
+    `SELECT i.id AS "itemId", wo.id AS "workOrderId", wo.number, c."legalName" AS "customerName",
+            i.description, i.quantity::float AS quantity, i."totalCents"::int AS "totalCents"
+     FROM work_order_items i
+     JOIN work_orders wo ON wo.id = i."workOrderId"
+     JOIN customers c ON c.id = wo."customerId"
+     WHERE wo.status = 'ENTREGUE' AND ${IN_MONTH('wo."deliveredAt"')}
+       AND i.status = 'EXECUTADO' AND i.type = 'PECA' AND i."unitCostCents" IS NULL
+     ORDER BY wo."deliveredAt" DESC, wo.number DESC, i.description
+     LIMIT $2`,
+    [`${month}-01`, limit],
+  );
+  return r.rows;
+}
+
 /** `month` no formato "AAAA-MM" (já validado por quem chama). */
 export async function getMonthFinanceRaw(month: string): Promise<MonthFinanceRaw> {
   const start = `${month}-01`;

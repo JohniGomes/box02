@@ -9,6 +9,7 @@ import {
   closeWorkOrderService,
   correctWorkOrderItemExecutorService,
   correctWorkOrderItemService,
+  correctWorkOrderItemCostService,
   createAdditionalItemService,
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
@@ -209,6 +210,24 @@ export async function correctWorkOrderItemAction(
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível corrigir o item.");
+  }
+}
+
+/** Corrige o custo gravado num item já executado (uso interno; muda só a margem). */
+export async function correctWorkOrderItemCostAction(
+  workOrderId: string,
+  itemId: string,
+  input: { unitCostReais?: string; reason?: string },
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await correctWorkOrderItemCostService(userId, workOrderId, itemId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath(`/dashboard/os/${workOrderId}/detalhes`);
+    revalidatePath("/dashboard/financeiro");
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível corrigir o custo.");
   }
 }
 

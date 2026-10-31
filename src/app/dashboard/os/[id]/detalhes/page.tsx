@@ -31,6 +31,7 @@ import {
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
 import { EditItemForm } from "../EditItemForm";
+import { EditItemCostForm } from "../EditItemCostForm";
 import { getQuoteSyncPreviewService } from "@/lib/workOrders/quoteSyncService";
 import { SaveKitFromOrder } from "../SaveKitFromOrder";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
@@ -374,7 +375,7 @@ export default async function WorkOrderDetailsPage({
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Margem desta OS (uso interno)" defaultOpen={false}>
+      <CollapsibleSection title="Margem desta OS (uso interno)" defaultOpen={margin.itemsWithoutCost > 0}>
         {margin.revenueCents === 0 && margin.costCents === 0 ? (
           <p className="text-sm text-muted">Nada executado ainda: a margem aparece quando o primeiro item for marcado como executado.</p>
         ) : (
@@ -409,6 +410,28 @@ export default async function WorkOrderDetailsPage({
             </div>
           </div>
         )}
+        {workOrder.status !== "CANCELADA" && items.some((i) => i.status === "EXECUTADO") ? (
+          <div className="mt-3 flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Custo de cada item executado</p>
+            <ul className="flex flex-col gap-2">
+              {items
+                .filter((i) => i.status === "EXECUTADO")
+                .map((item) => (
+                  <li key={item.id} className="rounded-xl border border-border bg-background p-3 text-xs">
+                    <p>
+                      <span className="text-muted">{ITEM_TYPE_LABEL[item.type]} ·</span> {item.description}{" "}
+                      <span className="text-muted">× {Number(item.quantity)}</span>
+                    </p>
+                    <EditItemCostForm
+                      workOrderId={workOrder.id}
+                      itemId={item.id}
+                      currentCostReais={item.unitCostCents === null ? "" : (item.unitCostCents / 100).toFixed(2).replace(".", ",")}
+                    />
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : null}
         {margin.itemsWithoutCost > 0 ? (
           <p className="mt-3 rounded-lg bg-accent/10 px-3 py-2 text-xs">
             {margin.itemsWithoutCost} {margin.itemsWithoutCost === 1 ? "peça executada está" : "peças executadas estão"} sem custo informado: o lucro das

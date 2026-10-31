@@ -221,6 +221,19 @@ export async function updateWorkOrderItemTextAndPrice(
   return result.rows[0] ?? null;
 }
 
+/** Corrige só o custo unitário gravado num item (não mexe em valor, estoque nem status). */
+export async function setWorkOrderItemUnitCost(
+  id: string,
+  unitCostCents: number,
+  db: Queryable = pool,
+): Promise<WorkOrderItemRecord | null> {
+  const result = await db.query<WorkOrderItemRecord>(
+    `UPDATE work_order_items SET "unitCostCents" = $2, "updatedAt" = NOW() WHERE id = $1 RETURNING ${COLUMNS}`,
+    [id, unitCostCents],
+  );
+  return result.rows[0] ?? null;
+}
+
 /** Aponta um item da OS para o item correspondente da versão do orçamento que passou a valer. */
 export async function setWorkOrderItemSourceQuoteItem(
   id: string,
