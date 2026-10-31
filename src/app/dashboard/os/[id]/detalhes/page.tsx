@@ -31,6 +31,7 @@ import {
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
 import { EditItemForm } from "../EditItemForm";
+import { getQuoteSyncPreviewService } from "@/lib/workOrders/quoteSyncService";
 import { SaveKitFromOrder } from "../SaveKitFromOrder";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
 import { WorkOrderCorrections } from "../WorkOrderCorrections";
@@ -99,6 +100,8 @@ export default async function WorkOrderDetailsPage({
   // Modo simples: entrega de qualquer etapa aberta. Etapas detalhadas: só quando a OS está "Pronta".
   const canClose = workOrder.status === "PRONTA" || (!detailedStages && isOpenForCancel);
   const plannedCount = items.filter((i) => i.status === "PLANEJADO").length;
+  // Existe uma versão nova do orçamento, já aprovada, que a OS ainda não acompanha?
+  const quoteSync = isOpenForCancel && workOrder.sourceQuoteVersionId ? await getQuoteSyncPreviewService(workOrder.id) : null;
   const canManageAdditionals = isOpenForCancel;
   const baseItems = items.filter((i) => i.origin !== "ADICIONAL_DURANTE_EXECUCAO");
   const additionalItems = items.filter((i) => i.origin === "ADICIONAL_DURANTE_EXECUCAO");
@@ -245,6 +248,21 @@ export default async function WorkOrderDetailsPage({
       </section>
 
       <MethodStageHeader stage="EXECUTAMOS" />
+
+      {quoteSync?.available ? (
+        <Link
+          href={`/dashboard/os/${workOrder.id}/sincronizar`}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent/10 p-4 text-sm print:hidden"
+        >
+          <span>
+            <span className="block font-semibold">
+              Há uma versão {quoteSync.toVersionNumber} do orçamento já aprovada, e a OS ainda segue a versão {quoteSync.fromVersionNumber}.
+            </span>
+            <span className="block text-xs text-muted">Compare e atualize a OS, escolhendo o que muda.</span>
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-accent">Atualizar →</span>
+        </Link>
+      ) : null}
 
       <CollapsibleSection title="Itens do orçamento/OS" defaultOpen={baseItems.length <= 3}>
         {baseItems.length === 0 ? (

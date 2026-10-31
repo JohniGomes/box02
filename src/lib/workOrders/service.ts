@@ -729,7 +729,7 @@ export async function correctWorkOrderItemService(
 
 export interface WorkOrderCorrectionEntry {
   id: string;
-  kind: "DATA" | "REABERTURA" | "ITEM";
+  kind: "DATA" | "REABERTURA" | "ITEM" | "SINCRONIZACAO";
   at: Date;
   by: string | null;
   reason: string | null;
@@ -743,10 +743,23 @@ export async function listWorkOrderCorrectionsService(workOrderId: string): Prom
     "WORK_ORDER_SERVICE_DATE_CORRECTED",
     "WORK_ORDER_REOPENED",
     "WORK_ORDER_ITEM_EDITED",
+    "WORK_ORDER_QUOTE_SYNCED",
   ]);
   const fmt = (v: unknown) => (typeof v === "string" || v instanceof Date ? formatDateTimeBR(v) : null);
   return rows.map((r) => {
     const m = r.metadata ?? {};
+    if (r.action === "WORK_ORDER_QUOTE_SYNCED") {
+      const n = (v: unknown) => (typeof v === "number" ? v : 0);
+      return {
+        id: r.id,
+        kind: "SINCRONIZACAO" as const,
+        at: r.createdAt,
+        by: r.userName,
+        reason: null,
+        from: `Orçamento versão ${n(m.fromVersionNumber)}`,
+        to: `versão ${n(m.toVersionNumber)}: ${n(m.updated) + n(m.descriptionsOnly)} atualizado(s), ${n(m.removed)} cancelado(s), ${n(m.added)} novo(s)`,
+      };
+    }
     if (r.action === "WORK_ORDER_ITEM_EDITED") {
       const before = (m.before ?? {}) as { description?: string; unitPriceCents?: number };
       const after = (m.after ?? {}) as { description?: string; unitPriceCents?: number };
