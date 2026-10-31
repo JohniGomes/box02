@@ -181,6 +181,12 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
                 <span className="text-muted">Mão de obra e serviços (antes do pró-labore)</span>
                 <span className="font-medium">{formatBRL(cur.margin.laborRevenueCents)}</span>
               </li>
+              {cur.margin.laborCostCents > 0 ? (
+                <li className="flex justify-between gap-2">
+                  <span className="text-muted">Custo informado em serviços (ex.: terceirizado)</span>
+                  <span className="font-medium">− {formatBRL(cur.margin.laborCostCents)}</span>
+                </li>
+              ) : null}
               {cur.margin.discountsCents > 0 ? (
                 <li className="flex justify-between gap-2">
                   <span className="text-muted">Descontos dados</span>
