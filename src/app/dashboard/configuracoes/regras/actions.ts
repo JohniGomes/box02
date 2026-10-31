@@ -7,6 +7,7 @@ import {
   setDeliveryChecklistRequired,
   setDetailedStagesEnabled,
   setReceptionRequiredForExecution,
+  setShopWhatsapp,
 } from "@/lib/settings/service";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 
@@ -65,6 +66,24 @@ export async function setRuleAction(rule: RuleKey, required: boolean): Promise<R
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Não foi possível salvar a regra." };
+  }
+}
+
+/** WhatsApp da oficina, usado nos botões da página pública do QR Car. Vazio apaga. */
+export async function setShopWhatsappAction(text: string): Promise<RulesActionResult> {
+  try {
+    const userId = await requireUserId();
+    await setShopWhatsapp(text);
+    await recordAuditLog({
+      userId,
+      action: "SHOP_WHATSAPP_UPDATED",
+      entityType: "app_setting",
+      entityId: "shop_whatsapp",
+    });
+    revalidatePath("/dashboard/configuracoes/regras");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Não foi possível salvar o WhatsApp." };
   }
 }
 

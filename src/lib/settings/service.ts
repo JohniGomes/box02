@@ -101,6 +101,28 @@ export async function setDefaultMarkupPercent(percent: number): Promise<void> {
 }
 
 // ============================================================
+// WhatsApp da oficina (QR Car)
+// ============================================================
+
+export const SHOP_WHATSAPP_KEY = "shop_whatsapp";
+
+/** WhatsApp da oficina só com dígitos (DDD + número), ou null se ainda não foi informado. */
+export async function getShopWhatsapp(): Promise<string | null> {
+  const raw = await getSetting(SHOP_WHATSAPP_KEY);
+  const digits = (raw ?? "").replace(/\D/g, "");
+  return digits.length === 10 || digits.length === 11 ? digits : null;
+}
+
+/** Texto vazio apaga o número; senão precisa ter DDD + número (10 ou 11 dígitos). */
+export async function setShopWhatsapp(raw: string): Promise<void> {
+  const digits = raw.replace(/\D/g, "");
+  if (digits !== "" && digits.length !== 10 && digits.length !== 11) {
+    throw new Error("Digite o WhatsApp com DDD, por exemplo (62) 99999-0000.");
+  }
+  await setSetting(SHOP_WHATSAPP_KEY, digits);
+}
+
+// ============================================================
 // Taxa do cartão (maquininha)
 // ============================================================
 

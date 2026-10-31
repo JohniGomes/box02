@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { formatPhone } from "@/lib/validation/phone";
+import { ShopWhatsappForm } from "./ShopWhatsappForm";
 import {
   getCardFeePercent,
+  getShopWhatsapp,
   isDeliveryChecklistRequired,
   isDetailedStagesEnabled,
   isReceptionRequiredForExecution,
@@ -9,11 +12,12 @@ import { RulesForm } from "./RulesForm";
 import { CardFeeForm } from "./CardFeeForm";
 
 export default async function RegrasPage() {
-  const [reception, deliveryChecklist, detailedStages, cardFeePercent] = await Promise.all([
+  const [reception, deliveryChecklist, detailedStages, cardFeePercent, shopWhatsapp] = await Promise.all([
     isReceptionRequiredForExecution(),
     isDeliveryChecklistRequired(),
     isDetailedStagesEnabled(),
     getCardFeePercent(),
+    getShopWhatsapp(),
   ]);
 
   return (
@@ -31,6 +35,8 @@ export default async function RegrasPage() {
       <RulesForm initial={{ reception, deliveryChecklist, detailedStages }} />
 
       <CardFeeForm initialPercent={cardFeePercent} />
+
+      <ShopWhatsappForm initial={shopWhatsapp ? formatPhone(shopWhatsapp) : ""} />
     </div>
   );
 }
