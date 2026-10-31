@@ -212,6 +212,12 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
                     <span>
                       {METHOD_LABEL[p.method] ?? p.method}
                       <span className="text-muted"> · {formatDate(p.receivedAt)}</span>
+                      {p.cardFeeCents != null ? (
+                        <span className="block text-xs text-muted">
+                          Passado no cartão: {formatBRL(p.netCents + p.cardFeeCents)}
+                          {p.installments ? ` em ${p.installments}x` : ""} (inclui taxa da maquininha de {formatBRL(p.cardFeeCents)})
+                        </span>
+                      ) : null}
                     </span>
                     <span className="font-semibold">{formatBRL(p.netCents)}</span>
                   </li>

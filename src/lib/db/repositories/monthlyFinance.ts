@@ -12,6 +12,10 @@ export interface MonthFinanceRaw {
   /** Despesas ainda não pagas que vencem no mês. */
   unpaidDueCents: number;
   unpaidDueCount: number;
+  /** Recebido no cartão no mês SEM taxa repassada registrada: é a base da taxa estimada da maquininha. */
+  cardNoFeeCents: number;
+  /** Taxa da maquininha repassada ao cliente nos recebimentos do mês (fica fora das entradas). */
+  cardFeePassedCents: number;
 }
 
 const BR = (col: string) => `((${col} AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')`;
@@ -39,8 +43,8 @@ export async function getMonthMarginRaw(month: string): Promise<MonthMarginRaw> 
        COALESCE((SELECT SUM(ROUND(i.quantity::numeric * COALESCE(i."unitCostCents", 0))) FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO'), 0) AS cost,
        (SELECT COUNT(*) FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO' AND i."unitCostCents" IS NULL) AS nocost,
        COALESCE((SELECT SUM(d."amountCents") FROM work_order_discounts d JOIN wo ON wo.id = d."workOrderId"), 0) AS discounts,
-       COALESCE((SELECT SUM(p."amountCents") FROM work_order_payments p JOIN wo ON wo.id = p."workOrderId" WHERE p.method = 'CARTAO'), 0)
-       - COALESCE((SELECT SUM(r."refundCents") FROM work_order_payment_refunds r JOIN work_order_payments p ON p.id = r."paymentId" JOIN wo ON wo.id = p."workOrderId" WHERE p.method = 'CARTAO'), 0) AS card_paid`,
+       COALESCE((SELECT SUM(p."amountCents") FROM work_order_payments p JOIN wo ON wo.id = p."workOrderId" WHERE p.method = 'CARTAO' AND p."cardFeeCents" IS NULL), 0)
+       - COALESCE((SELECT SUM(r."refundCents") FROM work_order_payment_refunds r JOIN work_order_payments p ON p.id = r."paymentId" JOIN wo ON wo.id = p."workOrderId" WHERE p.method = 'CARTAO' AND p."cardFeeCents" IS NULL), 0) AS card_paid`,
     [`${month}-01`],
   );
   const row = r.rows[0];
@@ -56,7 +60,7 @@ export async function getMonthMarginRaw(month: string): Promise<MonthMarginRaw> 
 /** `month` no formato "AAAA-MM" (já validado por quem chama). */
 export async function getMonthFinanceRaw(month: string): Promise<MonthFinanceRaw> {
   const start = `${month}-01`;
-  const [pay, ref, exp, unpaid] = await Promise.all([
+  const [pay, ref, exp, unpaid, cardFee] = await Promise.all([
     pool.query<{ method: string; cents: string }>(
       `SELECT method, COALESCE(SUM("amountCents"), 0) AS cents FROM work_order_payments WHERE ${IN_MONTH('"receivedAt"')} GROUP BY method`,
       [start],
@@ -74,6 +78,13 @@ export async function getMonthFinanceRaw(month: string): Promise<MonthFinanceRaw
        WHERE "paidAt" IS NULL AND "dueDate" >= $1::date AND "dueDate" < ($1::date + interval '1 month')::date`,
       [start],
     ),
+    pool.query<{ no_fee: string; passed: string }>(
+      `SELECT
+         COALESCE(SUM("amountCents") FILTER (WHERE method = 'CARTAO' AND "cardFeeCents" IS NULL), 0) AS no_fee,
+         COALESCE(SUM("cardFeeCents"), 0) AS passed
+       FROM work_order_payments WHERE ${IN_MONTH('"receivedAt"')}`,
+      [start],
+    ),
   ]);
   return {
     paymentsByMethod: Object.fromEntries(pay.rows.map((r) => [r.method, Number(r.cents)])),
@@ -81,5 +92,7 @@ export async function getMonthFinanceRaw(month: string): Promise<MonthFinanceRaw
     expensesByCategory: exp.rows.map((r) => ({ category: r.category, cents: Number(r.cents) })),
     unpaidDueCents: Number(unpaid.rows[0].cents),
     unpaidDueCount: Number(unpaid.rows[0].n),
+    cardNoFeeCents: Number(cardFee.rows[0].no_fee),
+    cardFeePassedCents: Number(cardFee.rows[0].passed),
   };
 }

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { useRememberedChoice } from "@/lib/useRemembered";
-import { refundWorkOrderPaymentAction, registerWorkOrderPaymentsAction } from "../paymentActions";
+import { refundWorkOrderPaymentAction, registerWorkOrderPaymentsAction, setPaymentCardFeeAction } from "../paymentActions";
+import { effectivePercent, feeFromNet, netFromGross, parseFeePercent } from "@/lib/cardFee";
 import { formatDateBR } from "@/lib/dateBr";
 
 const METHOD_LABEL: Record<string, string> = {
@@ -29,10 +30,85 @@ const STATUS_CLASS: Record<string, string> = {
 
 export interface WorkOrderPaymentView {
   id: string;
+  /** Valor DO SERVIÇO recebido (abate o saldo da OS). */
   amountCents: number;
   method: string;
   notes: string | null;
   receivedAt: string;
+  /** Cartão: taxa da maquininha repassada ao cliente (o cliente passou amountCents + cardFeeCents). */
+  cardFeeCents: number | null;
+  installments: number | null;
+}
+
+/** Linha do formulário de recebimento. `amount` é sempre o valor do serviço (líquido). */
+interface PayRow {
+  key: string;
+  method: string;
+  amount: string;
+  /** Cartão: taxa % que a maquininha cobra (sobre o valor passado no cartão). */
+  rate: string;
+  /** Cartão: valor total passado no cartão (opcional). */
+  gross: string;
+  installments: string;
+}
+
+function newPayRow(key: string, method: string, amount: string): PayRow {
+  return { key, method, amount, rate: "", gross: "", installments: "" };
+}
+
+const toReais = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
+
+/** Taxa repassada (centavos) desta linha: pelo valor passado no cartão, ou pela % sobre o valor do serviço. */
+function cardFeeOfRow(row: PayRow): number {
+  if (row.method !== "CARTAO") return 0;
+  const net = reaisToCents(row.amount || "0");
+  const gross = reaisToCents(row.gross || "0");
+  const rate = parseFeePercent(row.rate);
+  if (gross > 0) return Math.max(0, gross - net);
+  if (rate && rate > 0 && net > 0) return feeFromNet(net, rate);
+  return 0;
+}
+
+/** Ao mexer na taxa ou no valor passado no cartão: se vierem os dois, o valor do serviço sai deles (bruto × (1 − taxa)). */
+function applyCardFeePatch(row: PayRow, patch: Partial<Pick<PayRow, "rate" | "gross" | "installments">>): PayRow {
+  const next = { ...row, ...patch };
+  const rate = parseFeePercent(next.rate);
+  const gross = reaisToCents(next.gross || "0");
+  if (("rate" in patch || "gross" in patch) && rate && rate > 0 && gross > 0) {
+    next.amount = toReais(netFromGross(gross, rate));
+  }
+  return next;
+}
+
+/** Campos da taxa da maquininha para um recebimento no cartão (opcionais). */
+function CardFeeFields({ row, onChange }: { row: PayRow; onChange: (patch: Partial<Pick<PayRow, "rate" | "gross" | "installments">>) => void }) {
+  const net = reaisToCents(row.amount || "0");
+  const fee = cardFeeOfRow(row);
+  const small = "h-10 min-w-0 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent";
+  return (
+    <details className="rounded-xl border border-border bg-surface px-3 py-2" open={Boolean(row.rate || row.gross || row.installments)}>
+      <summary className="cursor-pointer text-xs font-medium">Taxa da maquininha repassada ao cliente (opcional)</summary>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Taxa (%)
+          <input value={row.rate} onChange={(e) => onChange({ rate: e.target.value })} inputMode="decimal" placeholder="6,69" className={small} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Passou no cartão (R$)
+          <input value={row.gross} onChange={(e) => onChange({ gross: e.target.value })} inputMode="decimal" placeholder="1.250,68" className={small} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+          Parcelas
+          <input value={row.installments} onChange={(e) => onChange({ installments: e.target.value })} inputMode="numeric" placeholder="4" className={small} />
+        </label>
+      </div>
+      <p className="mt-2 text-[11px] text-muted">
+        {fee > 0
+          ? `Taxa ${formatBRL(fee)} · o cliente passa ${formatBRL(net + fee)} no cartão · ${formatBRL(net)} é o valor do serviço (abate o saldo da OS).`
+          : "Preencha a taxa % (ela incide sobre o valor passado no cartão) ou o valor passado no cartão. O campo de valor acima é sempre o valor do serviço."}
+      </p>
+    </details>
+  );
 }
 
 /** Ciclo M */
@@ -75,7 +151,7 @@ export function WorkOrderPaymentsSection({
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   // Uma ou mais formas de pagamento no mesmo lançamento (ex.: Pix + cartão).
-  const [rows, setRows] = useState([{ key: "p1", method: "DINHEIRO", amount: "" }]);
+  const [rows, setRows] = useState<PayRow[]>([newPayRow("p1", "DINHEIRO", "")]);
   const [lastMethod, setLastMethod] = useRememberedChoice("box02.lastPayMethod", "DINHEIRO", [
     "DINHEIRO",
     "PIX",
@@ -101,7 +177,16 @@ export function WorkOrderPaymentsSection({
       const result = await registerWorkOrderPaymentsAction(workOrderId, {
         payments: rows
           .filter((r) => reaisToCents(r.amount || "0") > 0)
-          .map((r) => ({ amountReais: r.amount, method: r.method })),
+          .map((r) => {
+            const fee = cardFeeOfRow(r);
+            return {
+              amountReais: r.amount,
+              method: r.method,
+              // Taxa repassada ao cliente: valor à parte; o valor acima continua sendo o do serviço.
+              cardFeeReais: fee > 0 ? (fee / 100).toFixed(2).replace(".", ",") : undefined,
+              installments: r.method === "CARTAO" && r.installments.trim() ? r.installments.trim() : undefined,
+            };
+          }),
         discountReais: discountCents > 0 ? discount : undefined,
         notes: notes || undefined,
         // Só envia quando é um dia anterior; hoje continua sendo "agora".
@@ -112,7 +197,7 @@ export function WorkOrderPaymentsSection({
         return;
       }
       setLastMethod(rows[0]?.method ?? lastMethod);
-      setRows([{ key: "p1", method: "DINHEIRO", amount: "" }]);
+      setRows([newPayRow("p1", "DINHEIRO", "")]);
       setNotes("");
       setDiscount("");
       setReceivedOn(today);
@@ -200,11 +285,11 @@ export function WorkOrderPaymentsSection({
             onClick={() => {
               // Já abre com o saldo da OS e a última forma de pagamento usada.
               setRows([
-                {
-                  key: "p1",
-                  method: lastMethod,
-                  amount: summary.remainingCents > 0 ? (summary.remainingCents / 100).toFixed(2).replace(".", ",") : "",
-                },
+                newPayRow(
+                  "p1",
+                  lastMethod,
+                  summary.remainingCents > 0 ? (summary.remainingCents / 100).toFixed(2).replace(".", ",") : "",
+                ),
               ]);
               setShowForm(true);
             }}
@@ -215,7 +300,8 @@ export function WorkOrderPaymentsSection({
         ) : (
           <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3">
             {rows.map((row) => (
-              <div key={row.key} className="flex gap-2">
+              <div key={row.key} className="flex flex-col gap-1.5">
+              <div className="flex gap-2">
                 <select
                   value={row.method}
                   onChange={(e) =>
@@ -246,6 +332,13 @@ export function WorkOrderPaymentsSection({
                   </button>
                 ) : null}
               </div>
+              {row.method === "CARTAO" ? (
+                <CardFeeFields
+                  row={row}
+                  onChange={(patch) => setRows((prev) => prev.map((r) => (r.key === row.key ? applyCardFeePatch(r, patch) : r)))}
+                />
+              ) : null}
+              </div>
             ))}
             <div className="flex gap-2">
               <button
@@ -253,11 +346,11 @@ export function WorkOrderPaymentsSection({
                 onClick={() =>
                   setRows((prev) => [
                     ...prev,
-                    {
-                      key: `p${prev.length + 1}-${Date.now()}`,
-                      method: "PIX",
-                      amount: leftCents > 0 ? (leftCents / 100).toFixed(2).replace(".", ",") : "",
-                    },
+                    newPayRow(
+                      `p${prev.length + 1}-${Date.now()}`,
+                      "PIX",
+                      leftCents > 0 ? (leftCents / 100).toFixed(2).replace(".", ",") : "",
+                    ),
                   ])
                 }
                 className="h-10 flex-1 rounded-xl border border-dashed border-border text-sm font-medium text-muted"
@@ -362,6 +455,34 @@ function PaymentRow({
 
   const availableCents = payment.amountCents - refundedCents;
 
+  // Taxa da maquininha repassada ao cliente (só cartão): ver ou corrigir, inclusive em recebimentos antigos.
+  const [editingFee, setEditingFee] = useState(false);
+  const [feeRate, setFeeRate] = useState("");
+  const [feeGross, setFeeGross] = useState(
+    payment.cardFeeCents != null ? toReais(payment.amountCents + payment.cardFeeCents) : "",
+  );
+  const [feeInstallments, setFeeInstallments] = useState(payment.installments != null ? String(payment.installments) : "");
+  const feeGrossCents = reaisToCents(feeGross || "0");
+  const feeRateNum = parseFeePercent(feeRate);
+  const newFeeCents =
+    feeGrossCents > 0 ? Math.max(0, feeGrossCents - payment.amountCents) : feeRateNum && feeRateNum > 0 ? feeFromNet(payment.amountCents, feeRateNum) : 0;
+
+  function saveFee() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setPaymentCardFeeAction(workOrderId, payment.id, {
+        cardFeeReais: newFeeCents > 0 ? toReais(newFeeCents) : "",
+        installments: feeInstallments.trim(),
+      });
+      if (!result.success) {
+        setError(result.error ?? "Não foi possível salvar a taxa.");
+        return;
+      }
+      setEditingFee(false);
+      router.refresh();
+    });
+  }
+
   function confirmRefund() {
     setError(null);
     startTransition(async () => {
@@ -416,11 +537,64 @@ function PaymentRow({
     );
   }
 
+  if (editingFee) {
+    const small = "h-10 min-w-0 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-accent";
+    return (
+      <li className="rounded-xl border border-border bg-background p-2.5 text-sm">
+        <p className="mb-2 text-xs text-muted">
+          Taxa da maquininha deste recebimento de {formatBRL(payment.amountCents)} (valor do serviço). A taxa incide sobre o valor passado no cartão.
+          Deixe tudo vazio para apagar.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+            Taxa (%)
+            <input value={feeRate} onChange={(e) => setFeeRate(e.target.value)} inputMode="decimal" placeholder="6,69" className={small} />
+          </label>
+          <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+            Passou no cartão (R$)
+            <input value={feeGross} onChange={(e) => setFeeGross(e.target.value)} inputMode="decimal" placeholder="1.250,68" className={small} />
+          </label>
+          <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+            Parcelas
+            <input value={feeInstallments} onChange={(e) => setFeeInstallments(e.target.value)} inputMode="numeric" placeholder="4" className={small} />
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-muted">
+          {newFeeCents > 0
+            ? `Taxa ${formatBRL(newFeeCents)} (${String(effectivePercent(payment.amountCents, newFeeCents)).replace(".", ",")}% do valor passado no cartão).`
+            : "Sem taxa registrada."}
+        </p>
+        {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={saveFee}
+            disabled={isPending}
+            className="h-9 flex-1 rounded-lg bg-accent text-xs font-semibold text-accent-foreground disabled:opacity-50"
+          >
+            {isPending ? "Salvando…" : "Salvar taxa"}
+          </button>
+          <button onClick={() => setEditingFee(false)} className="h-9 flex-1 rounded-lg border border-border text-xs">
+            Voltar
+          </button>
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background p-2.5 text-sm">
       <div>
         <span className="font-medium">{formatBRL(payment.amountCents)}</span>{" "}
         <span className="text-xs text-muted">{METHOD_LABEL[payment.method]}</span>
+        {payment.cardFeeCents != null ? (
+          <p className="text-xs text-muted">
+            Cliente passou {formatBRL(payment.amountCents + payment.cardFeeCents)} no cartão
+            {payment.installments ? ` em ${payment.installments}x` : ""} · taxa repassada {formatBRL(payment.cardFeeCents)} (
+            {String(effectivePercent(payment.amountCents, payment.cardFeeCents)).replace(".", ",")}%)
+          </p>
+        ) : payment.installments ? (
+          <p className="text-xs text-muted">{payment.installments}x no cartão</p>
+        ) : null}
         {refundedCents > 0 ? (
           <p className="text-xs text-danger">Estornado: {formatBRL(refundedCents)}</p>
         ) : null}
@@ -428,6 +602,11 @@ function PaymentRow({
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted">{formatDateBR(payment.receivedAt)}</span>
+        {payment.method === "CARTAO" ? (
+          <button onClick={() => setEditingFee(true)} className="text-xs font-medium text-accent">
+            {payment.cardFeeCents != null ? "Taxa" : "+ Taxa"}
+          </button>
+        ) : null}
         {availableCents > 0 ? (
           <button onClick={() => setRefunding(true)} className="text-xs font-medium text-danger">
             Estornar

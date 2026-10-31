@@ -270,8 +270,12 @@ export const registerWorkOrderPaymentsSchema = z.object({
   payments: z
     .array(
       z.object({
+        /** Valor DO SERVIÇO recebido (o que abate o saldo da OS). */
         amountReais: z.union([z.string(), z.number()]),
         method: z.enum(["DINHEIRO", "PIX", "CARTAO", "OUTRO"], { message: "Selecione a forma de pagamento" }),
+        /** Só cartão: taxa da maquininha repassada ao cliente (R$) e parcelas. */
+        cardFeeReais: z.union([z.string(), z.number()]).optional(),
+        installments: z.union([z.string(), z.number()]).optional(),
       }),
     )
     .default([]),
@@ -281,6 +285,12 @@ export const registerWorkOrderPaymentsSchema = z.object({
   receivedOn: registerWorkOrderPaymentSchema.shape.receivedOn,
 });
 export type RegisterWorkOrderPaymentsInput = z.infer<typeof registerWorkOrderPaymentsSchema>;
+
+/** Corrigir a taxa da maquininha (e as parcelas) de um recebimento no cartão já feito. Vazio apaga. */
+export const setPaymentCardFeeSchema = z.object({
+  cardFeeReais: z.union([z.string(), z.number()]).optional(),
+  installments: z.union([z.string(), z.number()]).optional(),
+});
 
 // ============================================================
 // Ciclo M — Estorno de recebimento (DEC-I6 revisitada)

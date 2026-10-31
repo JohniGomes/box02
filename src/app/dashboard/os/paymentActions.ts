@@ -7,6 +7,7 @@ import {
   refundWorkOrderPaymentService,
   registerWorkOrderPaymentService,
   registerWorkOrderPaymentsService,
+  setWorkOrderPaymentCardFeeService,
 } from "@/lib/workOrders/service";
 import {
   WorkOrderNotDeliveredError,
@@ -61,7 +62,12 @@ export async function registerWorkOrderPaymentAction(
 
 export async function registerWorkOrderPaymentsAction(
   workOrderId: string,
-  input: { payments: { amountReais: string; method: string }[]; discountReais?: string; notes?: string; receivedOn?: string },
+  input: {
+    payments: { amountReais: string; method: string; cardFeeReais?: string; installments?: string }[];
+    discountReais?: string;
+    notes?: string;
+    receivedOn?: string;
+  },
 ): Promise<PaymentActionResult> {
   try {
     const userId = await requireUserId();
@@ -86,10 +92,40 @@ export async function registerWorkOrderPaymentsAction(
     ) {
       return { success: false, error: err.message };
     }
-    if (err instanceof Error && err.message.startsWith("O valor do recebimento")) {
+    if (
+      err instanceof Error &&
+      (err.message.startsWith("O valor do recebimento") ||
+        err.message.startsWith("O valor da taxa") ||
+        err.message.startsWith("As parcelas") ||
+        err.message.startsWith("Taxa da maquininha"))
+    ) {
       return { success: false, error: err.message };
     }
     return { success: false, error: "Não foi possível registrar o recebimento." };
+  }
+}
+
+/** Registra, corrige ou apaga (campos vazios) a taxa da maquininha e as parcelas de um recebimento no cartão. */
+export async function setPaymentCardFeeAction(
+  workOrderId: string,
+  paymentId: string,
+  input: { cardFeeReais?: string; installments?: string },
+): Promise<PaymentActionResult> {
+  try {
+    const userId = await requireUserId();
+    await setWorkOrderPaymentCardFeeService(userId, workOrderId, paymentId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/financeiro");
+    return { success: true };
+  } catch (err) {
+    if (err instanceof WorkOrderPaymentNotFoundError) return { success: false, error: err.message };
+    if (
+      err instanceof Error &&
+      (err.message.startsWith("O valor da taxa") || err.message.startsWith("As parcelas") || err.message.startsWith("Taxa da maquininha"))
+    ) {
+      return { success: false, error: err.message };
+    }
+    return { success: false, error: "Não foi possível salvar a taxa." };
   }
 }
 

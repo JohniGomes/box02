@@ -19,6 +19,8 @@ export interface MonthFinance {
   /** Taxa da maquininha (%) e a taxa estimada sobre o que entrou no cartão no mês. */
   cardFeePercent: number;
   cardFeeCents: number;
+  /** Taxa da maquininha repassada ao cliente neste mês (já fora das entradas). */
+  cardFeePassedCents: number;
   /** Margem das OS entregues no mês (estimada pelo custo gravado nos itens). */
   margin: {
     osCount: number;
@@ -58,7 +60,9 @@ async function loadMonth(month: string): Promise<MonthFinance> {
     unpaidDueCents: raw.unpaidDueCents,
     unpaidDueCount: raw.unpaidDueCount,
     cardFeePercent,
-    cardFeeCents: cardFeeOf(raw.paymentsByMethod.CARTAO ?? 0, cardFeePercent),
+    // Estimativa só sobre o cartão SEM taxa repassada registrada; onde a taxa foi repassada, a oficina não paga.
+    cardFeeCents: cardFeeOf(raw.cardNoFeeCents, cardFeePercent),
+    cardFeePassedCents: raw.cardFeePassedCents,
     margin: {
       osCount: marginRaw.osCount,
       revenueCents: marginRaw.revenueCents,
