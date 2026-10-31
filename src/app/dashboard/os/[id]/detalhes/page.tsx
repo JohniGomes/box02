@@ -379,14 +379,22 @@ export default async function WorkOrderDetailsPage({
           <p className="text-sm text-muted">Nada executado ainda: a margem aparece quando o primeiro item for marcado como executado.</p>
         ) : (
           <div className="flex flex-col gap-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted">Receita (itens executados, menos descontos)</span>
-              <span className="font-medium">{formatBRL(margin.revenueCents)}</span>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">
+                Peças: venda {formatBRL(margin.partsRevenueCents)} − custo {formatBRL(margin.partsCostCents)}
+              </span>
+              <span className="font-medium">{formatBRL(margin.partsRevenueCents - margin.partsCostCents)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Custo</span>
-              <span className="font-medium">{formatBRL(margin.costCents)}</span>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">Mão de obra e serviços (antes do pró-labore)</span>
+              <span className="font-medium">{formatBRL(margin.laborRevenueCents)}</span>
             </div>
+            {margin.revenueCents !== margin.partsRevenueCents + margin.laborRevenueCents ? (
+              <div className="flex justify-between gap-2">
+                <span className="text-muted">Descontos</span>
+                <span className="font-medium">− {formatBRL(margin.partsRevenueCents + margin.laborRevenueCents - margin.revenueCents)}</span>
+              </div>
+            ) : null}
             {margin.cardFeeCents > 0 ? (
               <div className="flex justify-between">
                 <span className="text-muted">
@@ -396,15 +404,15 @@ export default async function WorkOrderDetailsPage({
               </div>
             ) : null}
             <div className="flex justify-between text-base font-semibold">
-              <span>Lucro{margin.marginPercent === null ? "" : ` (${margin.marginPercent}%)`}</span>
+              <span>Lucro antes do pró-labore{margin.marginPercent === null ? "" : ` (${margin.marginPercent}%)`}</span>
               <span>{formatBRL(margin.profitCents)}</span>
             </div>
           </div>
         )}
         {margin.itemsWithoutCost > 0 ? (
           <p className="mt-3 rounded-lg bg-accent/10 px-3 py-2 text-xs">
-            {margin.itemsWithoutCost} {margin.itemsWithoutCost === 1 ? "item executado está" : "itens executados estão"} sem custo informado: a margem real pode
-            ser menor. É só um aviso.
+            {margin.itemsWithoutCost} {margin.itemsWithoutCost === 1 ? "peça executada está" : "peças executadas estão"} sem custo informado: o lucro das
+            peças pode ser menor. É só um aviso.
           </p>
         ) : null}
         {margin.pendingItems > 0 ? (

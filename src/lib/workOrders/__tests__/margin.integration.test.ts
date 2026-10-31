@@ -34,6 +34,18 @@ describe("cálculo da margem", () => {
     expect(computeMargin([item("EXECUTADO", 10000, 1, null)], 0)).toMatchObject({ costCents: 0, itemsWithoutCost: 1, marginPercent: 100 });
     expect(computeMargin([], 0)).toMatchObject({ revenueCents: 0, profitCents: 0, marginPercent: null });
   });
+
+  it("separa peças (custo real) de mão de obra/serviço; só peça sem custo gera aviso", () => {
+    const typed = (type: string, totalCents: number, unitCostCents: number | null) => ({ status: "EXECUTADO", type, totalCents, quantity: 1, unitCostCents });
+    const m = computeMargin([typed("PECA", 10000, 4000), typed("PECA", 5000, null), typed("MAO_DE_OBRA", 20000, null), typed("SERVICO", 8000, null)], 0);
+    expect(m).toMatchObject({
+      partsRevenueCents: 15000,
+      partsCostCents: 4000,
+      laborRevenueCents: 28000,
+      itemsWithoutCost: 1,
+      revenueCents: 43000,
+    });
+  });
 });
 
 let actorUserId: string;
@@ -89,13 +101,16 @@ describe("margem de uma OS e do mês, com o custo gravado na execução", () => 
   it("OS: peça pelo custo do estoque, serviço pelo custo estimado, item digitado sem custo", async () => {
     const m = await getWorkOrderMarginService(osId);
     // receita 100 + 100 + 80 = R$ 280; custo 2 x 30 + 0 (sem custo) + 40 = R$ 100
-    expect(m).toMatchObject({ revenueCents: 28000, costCents: 10000, profitCents: 18000, marginPercent: 64, itemsWithoutCost: 1, pendingItems: 0 });
+    // mão de obra sem custo não gera aviso: só peça sem custo conta
+    expect(m).toMatchObject({ revenueCents: 28000, costCents: 10000, profitCents: 18000, marginPercent: 64, itemsWithoutCost: 0, pendingItems: 0 });
+    expect(m).toMatchObject({ partsRevenueCents: 10000, partsCostCents: 6000, laborRevenueCents: 18000 });
   });
 
   it("mês: soma as OS entregues e o desconto abate a receita", async () => {
     const month = currentMonthBr();
     let { current } = await getMonthFinanceService(month);
-    expect(current.margin).toMatchObject({ osCount: 1, revenueCents: 28000, costCents: 10000, profitCents: 18000, marginPercent: 64, itemsWithoutCost: 1 });
+    expect(current.margin).toMatchObject({ osCount: 1, revenueCents: 28000, costCents: 10000, profitCents: 18000, marginPercent: 64, itemsWithoutCost: 0 });
+    expect(current.margin).toMatchObject({ partsRevenueCents: 10000, partsCostCents: 6000, laborRevenueCents: 18000, discountsCents: 0 });
 
     await pool.query(
       `INSERT INTO work_order_discounts (id, "workOrderId", "amountCents", reason, "createdByUserId") VALUES ('d1', $1, 2000, 'teste', $2)`,
@@ -103,7 +118,7 @@ describe("margem de uma OS e do mês, com o custo gravado na execução", () => 
     );
     expect((await getWorkOrderMarginService(osId)).profitCents).toBe(16000);
     ({ current } = await getMonthFinanceService(month));
-    expect(current.margin).toMatchObject({ revenueCents: 26000, profitCents: 16000 });
+    expect(current.margin).toMatchObject({ revenueCents: 26000, profitCents: 16000, discountsCents: 2000, laborRevenueCents: 18000 });
   });
 
   it("mês sem entrega volta zerado", async () => {

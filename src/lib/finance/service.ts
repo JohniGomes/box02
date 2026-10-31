@@ -28,7 +28,14 @@ export interface MonthFinance {
     costCents: number;
     profitCents: number;
     marginPercent: number | null;
+    /** Só peças sem custo informado. */
     itemsWithoutCost: number;
+    /** Peças: venda, custo e lucro (margem real). */
+    partsRevenueCents: number;
+    partsCostCents: number;
+    /** Serviço/mão de obra executados, antes do pró-labore (sem custo por OS). */
+    laborRevenueCents: number;
+    discountsCents: number;
     /** Taxa estimada do cartão das OS entregues (já descontada do lucro). */
     cardFeeCents: number;
   };
@@ -68,6 +75,10 @@ async function loadMonth(month: string): Promise<MonthFinance> {
       revenueCents: marginRaw.revenueCents,
       costCents: marginRaw.costCents,
       itemsWithoutCost: marginRaw.itemsWithoutCost,
+      partsRevenueCents: marginRaw.partsRevenueCents,
+      partsCostCents: marginRaw.partsCostCents,
+      laborRevenueCents: marginRaw.laborRevenueCents,
+      discountsCents: marginRaw.discountsCents,
       cardFeeCents: marginCardFeeCents,
       profitCents,
       marginPercent: marginPercentOf(profitCents, marginRaw.revenueCents),

@@ -26,14 +26,30 @@ export interface MonthMarginRaw {
   osCount: number;
   revenueCents: number;
   costCents: number;
+  /** Só peças executadas sem custo; mão de obra não tem custo por OS (é o pró-labore, em Despesas). */
   itemsWithoutCost: number;
+  /** Peças executadas: venda e custo; serviço/mão de obra executados: venda (sem custo por OS). */
+  partsRevenueCents: number;
+  partsCostCents: number;
+  laborRevenueCents: number;
+  /** Descontos dados nas OS entregues no mês (já abatidos de `revenueCents`). */
+  discountsCents: number;
   /** Pago no cartão (sem estornos) nas OS entregues no mês: base da taxa da maquininha. */
   cardPaidCents: number;
 }
 
 /** Margem das OS ENTREGUES no mês (pela data de entrega): itens executados menos descontos, e o custo gravado em cada item. */
 export async function getMonthMarginRaw(month: string): Promise<MonthMarginRaw> {
-  const r = await pool.query<{ n: string; revenue: string; cost: string; nocost: string; discounts: string; card_paid: string }>(
+  const r = await pool.query<{
+    n: string;
+    revenue: string;
+    cost: string;
+    nocost: string;
+    discounts: string;
+    card_paid: string;
+    parts_revenue: string;
+    parts_cost: string;
+  }>(
     `WITH wo AS (
        SELECT id FROM work_orders WHERE status = 'ENTREGUE' AND ${IN_MONTH('"deliveredAt"')}
      )
@@ -41,7 +57,9 @@ export async function getMonthMarginRaw(month: string): Promise<MonthMarginRaw> 
        (SELECT COUNT(*) FROM wo) AS n,
        COALESCE((SELECT SUM(i."totalCents") FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO'), 0) AS revenue,
        COALESCE((SELECT SUM(ROUND(i.quantity::numeric * COALESCE(i."unitCostCents", 0))) FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO'), 0) AS cost,
-       (SELECT COUNT(*) FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO' AND i."unitCostCents" IS NULL) AS nocost,
+       (SELECT COUNT(*) FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO' AND i.type = 'PECA' AND i."unitCostCents" IS NULL) AS nocost,
+       COALESCE((SELECT SUM(i."totalCents") FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO' AND i.type = 'PECA'), 0) AS parts_revenue,
+       COALESCE((SELECT SUM(ROUND(i.quantity::numeric * COALESCE(i."unitCostCents", 0))) FROM work_order_items i JOIN wo ON wo.id = i."workOrderId" WHERE i.status = 'EXECUTADO' AND i.type = 'PECA'), 0) AS parts_cost,
        COALESCE((SELECT SUM(d."amountCents") FROM work_order_discounts d JOIN wo ON wo.id = d."workOrderId"), 0) AS discounts,
        COALESCE((SELECT SUM(p."amountCents") FROM work_order_payments p JOIN wo ON wo.id = p."workOrderId" WHERE p.method = 'CARTAO' AND p."cardFeeCents" IS NULL), 0)
        - COALESCE((SELECT SUM(r."refundCents") FROM work_order_payment_refunds r JOIN work_order_payments p ON p.id = r."paymentId" JOIN wo ON wo.id = p."workOrderId" WHERE p.method = 'CARTAO' AND p."cardFeeCents" IS NULL), 0) AS card_paid`,
@@ -53,6 +71,10 @@ export async function getMonthMarginRaw(month: string): Promise<MonthMarginRaw> 
     revenueCents: Number(row.revenue) - Number(row.discounts),
     costCents: Number(row.cost),
     itemsWithoutCost: Number(row.nocost),
+    partsRevenueCents: Number(row.parts_revenue),
+    partsCostCents: Number(row.parts_cost),
+    laborRevenueCents: Number(row.revenue) - Number(row.parts_revenue),
+    discountsCents: Number(row.discounts),
     cardPaidCents: Number(row.card_paid),
   };
 }
