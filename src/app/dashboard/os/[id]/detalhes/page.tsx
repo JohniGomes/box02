@@ -31,7 +31,6 @@ import {
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
 import { EditItemForm } from "../EditItemForm";
-import { toPaymentsSummaryView } from "../paymentsView";
 import { getQuoteSyncPreviewService } from "@/lib/workOrders/quoteSyncService";
 import { SaveKitFromOrder } from "../SaveKitFromOrder";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
@@ -40,7 +39,7 @@ import { WorkOrderChecklistPanel, type WorkOrderChecklistView } from "../WorkOrd
 import { WorkOrderExplanationSection } from "../WorkOrderExplanationSection";
 import { WorkOrderEvidenceSection } from "../WorkOrderEvidenceSection";
 import { WorkOrderTechnicalNotesSection } from "../WorkOrderTechnicalNotesSection";
-import { WorkOrderPaymentsSection } from "../WorkOrderPaymentsSection";
+import { WorkOrderPaymentsSummaryCard } from "../WorkOrderPaymentsSummary";
 import { MethodStepper } from "../MethodStepper";
 import { MethodStageHeader } from "../MethodStageHeader";
 import { CollapsibleSection } from "../CollapsibleSection";
@@ -460,11 +459,7 @@ export default async function WorkOrderDetailsPage({
       />
 
       {paymentsSummary ? (
-        <WorkOrderPaymentsSection
-          workOrderId={workOrder.id}
-          entryDate={workOrder.entryAt.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })}
-          summary={toPaymentsSummaryView(paymentsSummary)}
-        />
+        <WorkOrderPaymentsSummaryCard workOrderId={workOrder.id} summary={paymentsSummary} />
       ) : null}
 
       {workOrder.status === "CANCELADA" && workOrder.cancelReason ? (

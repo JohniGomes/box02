@@ -47,7 +47,7 @@ export const GUIAS: Guia[] = [
     titulo: "Dar desconto no recebimento",
     sobre: "dar desconto na hora de receber, cliente pagou menos, desconto no pagamento da OS",
     passos: [
-      "Abra a OS entregue e vá na parte de pagamentos; toque em \"Registrar recebimento\".",
+      "Abra a aba Recebimentos (ou, na OS entregue, toque em \"Receber / ver pagamentos\"), ache a OS pela busca e toque em \"Registrar recebimento\".",
       "Escolha a forma de pagamento e o valor que o cliente pagou. Para mais de uma forma, toque em \"+ Outra forma de pagamento\".",
       "No campo \"Desconto (R$)\" digite o valor do desconto. Ele abate do saldo e não conta como dinheiro recebido.",
       "Confira a linha \"Saldo da OS … · Lançando … · Desconto …\": deve fechar em R$ 0,00 em aberto.",
