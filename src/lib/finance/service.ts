@@ -35,6 +35,8 @@ export interface MonthFinance {
     partsCostCents: number;
     /** Serviço/mão de obra executados, antes do pró-labore (sem custo por OS). */
     laborRevenueCents: number;
+    /** Custo gravado em serviço/mão de obra executados (ex.: serviço terceirizado); entra no lucro. */
+    laborCostCents: number;
     discountsCents: number;
     /** Taxa estimada do cartão das OS entregues (já descontada do lucro). */
     cardFeeCents: number;
@@ -78,6 +80,7 @@ async function loadMonth(month: string): Promise<MonthFinance> {
       partsRevenueCents: marginRaw.partsRevenueCents,
       partsCostCents: marginRaw.partsCostCents,
       laborRevenueCents: marginRaw.laborRevenueCents,
+      laborCostCents: marginRaw.costCents - marginRaw.partsCostCents,
       discountsCents: marginRaw.discountsCents,
       cardFeeCents: marginCardFeeCents,
       profitCents,
