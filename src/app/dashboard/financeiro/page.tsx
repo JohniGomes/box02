@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMonthFinanceService, type MonthFinance } from "@/lib/finance/service";
 import { currentMonthBr, monthLabel, parseMonth, percentChange, shiftMonth } from "@/lib/finance/month";
 import { listReceivablesService } from "@/lib/workOrders/service";
+import { marginPercentOf } from "@/lib/workOrders/margin";
 import { formatBRL } from "@/lib/money";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -153,28 +154,52 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
           <p className="text-sm text-muted">Nenhuma OS entregue neste mês.</p>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Card label="Lucro estimado" value={formatBRL(cur.margin.profitCents)}>
-                <Delta current={cur.margin.profitCents} previous={prev.margin.profitCents} />
-              </Card>
-              <Card label="Margem" value={cur.margin.marginPercent === null ? "—" : `${cur.margin.marginPercent}%`}>
-                <p className="text-xs text-muted">
-                  {cur.margin.osCount} {cur.margin.osCount === 1 ? "OS entregue" : "OS entregues"} · receita {formatBRL(cur.margin.revenueCents)} · custo{" "}
-                  {formatBRL(cur.margin.costCents)}
-                  {cur.margin.cardFeeCents > 0 ? ` · taxa do cartão ${formatBRL(cur.margin.cardFeeCents)}` : ""}
-                </p>
-              </Card>
-            </div>
+            <Card label="Lucro das OS, antes do pró-labore" value={formatBRL(cur.margin.profitCents)}>
+              <Delta current={cur.margin.profitCents} previous={prev.margin.profitCents} />
+              <p className="text-xs text-muted">
+                {cur.margin.osCount} {cur.margin.osCount === 1 ? "OS entregue" : "OS entregues"} no mês
+              </p>
+            </Card>
+            <ul className="mt-3 flex flex-col gap-1.5 text-sm">
+              <li className="flex justify-between gap-2">
+                <span className="text-muted">
+                  Peças: venda {formatBRL(cur.margin.partsRevenueCents)} − custo {formatBRL(cur.margin.partsCostCents)}
+                </span>
+                <span className="font-medium">
+                  {formatBRL(cur.margin.partsRevenueCents - cur.margin.partsCostCents)}
+                  {cur.margin.partsRevenueCents > 0
+                    ? ` (${marginPercentOf(cur.margin.partsRevenueCents - cur.margin.partsCostCents, cur.margin.partsRevenueCents)}%)`
+                    : ""}
+                </span>
+              </li>
+              <li className="flex justify-between gap-2">
+                <span className="text-muted">Mão de obra e serviços (antes do pró-labore)</span>
+                <span className="font-medium">{formatBRL(cur.margin.laborRevenueCents)}</span>
+              </li>
+              {cur.margin.discountsCents > 0 ? (
+                <li className="flex justify-between gap-2">
+                  <span className="text-muted">Descontos dados</span>
+                  <span className="font-medium">− {formatBRL(cur.margin.discountsCents)}</span>
+                </li>
+              ) : null}
+              {cur.margin.cardFeeCents > 0 ? (
+                <li className="flex justify-between gap-2">
+                  <span className="text-muted">Taxa do cartão (estimada)</span>
+                  <span className="font-medium">− {formatBRL(cur.margin.cardFeeCents)}</span>
+                </li>
+              ) : null}
+            </ul>
             {cur.margin.itemsWithoutCost > 0 ? (
               <p className="mt-3 rounded-lg bg-accent/10 px-3 py-2 text-xs">
-                {cur.margin.itemsWithoutCost} {cur.margin.itemsWithoutCost === 1 ? "item executado está" : "itens executados estão"} sem custo informado: a
-                margem real pode ser menor. É só um aviso.
+                {cur.margin.itemsWithoutCost} {cur.margin.itemsWithoutCost === 1 ? "peça executada está" : "peças executadas estão"} sem custo informado: o
+                lucro das peças pode ser menor. É só um aviso.
               </p>
             ) : null}
           </>
         )}
         <p className="mt-2 text-xs text-muted">
-          Receita = itens executados menos descontos. Custo = o custo gravado em cada item na hora da execução (peça do estoque, custo estimado do serviço).
+          O lucro das peças é real (custo vem do estoque). Mão de obra não tem custo por OS: o que sai para quem executa é o pró-labore, que você lança em
+          Despesas (categoria Salários/Pró-labore) e aparece no resultado do mês. Receita = itens executados menos descontos.
         </p>
       </section>
 

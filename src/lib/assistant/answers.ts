@@ -92,12 +92,14 @@ async function resumoMes(month: string): Promise<Resposta> {
     { rotulo: "Saiu (despesas pagas)", valor: formatBRL(c.expensesCents) },
     { rotulo: "Resultado do mês", valor: formatBRL(c.resultCents), destaque: true },
     { rotulo: "Resultado antes do pró-labore", valor: formatBRL(c.resultBeforeProLaboreCents) },
-    { rotulo: `Lucro das ${c.margin.osCount} OS entregues`, valor: `${formatBRL(c.margin.profitCents)}${c.margin.marginPercent != null ? ` (${c.margin.marginPercent}%)` : ""}` },
+    { rotulo: `Lucro das ${c.margin.osCount} OS entregues (antes do pró-labore)`, valor: formatBRL(c.margin.profitCents) },
+    { rotulo: "  · só das peças (custo real)", valor: formatBRL(c.margin.partsRevenueCents - c.margin.partsCostCents) },
+    { rotulo: "  · mão de obra e serviços", valor: formatBRL(c.margin.laborRevenueCents) },
     { rotulo: `Resultado em ${monthLabel(p.month)}`, valor: `${formatBRL(p.resultCents)}${change != null ? ` (${change > 0 ? "+" : ""}${change}% no mês)` : ""}` },
   ];
   const avisos: string[] = [];
   if (c.unpaidDueCount > 0) avisos.push(`Ainda há ${c.unpaidDueCount} despesa(s) a pagar neste mês, somando ${formatBRL(c.unpaidDueCents)}, que não entram em "Saiu".`);
-  if (c.margin.itemsWithoutCost > 0) avisos.push(`${c.margin.itemsWithoutCost} item(ns) executado(s) sem custo informado: o lucro real pode ser menor.`);
+  if (c.margin.itemsWithoutCost > 0) avisos.push(`${c.margin.itemsWithoutCost} peça(s) executada(s) sem custo informado: o lucro das peças pode ser menor.`);
   return {
     titulo: `Financeiro de ${monthLabel(month)}`,
     linhas,
@@ -129,7 +131,7 @@ async function lucroOs(os: string | undefined): Promise<Resposta> {
   if (!found) return { titulo: `Lucro da ${number}`, linhas: [], links: [], aviso: `Não achei a ${number}.` };
   const m = await getWorkOrderMarginService(found.id);
   const avisos: string[] = [];
-  if (m.itemsWithoutCost > 0) avisos.push(`${m.itemsWithoutCost} item(ns) sem custo informado: o lucro real pode ser menor.`);
+  if (m.itemsWithoutCost > 0) avisos.push(`${m.itemsWithoutCost} peça(s) sem custo informado: o lucro das peças pode ser menor.`);
   if (m.pendingItems > 0) avisos.push(`${m.pendingItems} item(ns) ainda planejado(s): o valor é parcial.`);
   return {
     titulo: `Lucro da ${found.number} · ${found.customerName}`,
