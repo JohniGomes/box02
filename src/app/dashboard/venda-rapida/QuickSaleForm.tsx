@@ -265,11 +265,9 @@ export function QuickSaleForm({
         return;
       }
       void draft.finish();
-      // Sem pagamento não há recibo: abre a OS já na parte de recebimentos.
+      // Sem pagamento não há recibo: abre a ficha de pagamento da OS.
       router.push(
-        paidCents > 0
-          ? `/dashboard/os/${result.workOrderId}/recibo`
-          : `/dashboard/os/${result.workOrderId}/detalhes#recebimentos`,
+        paidCents > 0 ? `/dashboard/os/${result.workOrderId}/recibo` : `/dashboard/recebimentos/${result.workOrderId}`,
       );
       router.refresh();
     });

@@ -167,7 +167,7 @@ export default async function DashboardHomePage() {
               return (
                 <li key={r.id}>
                   <Link
-                    href={`/dashboard/os/${r.id}/detalhes#recebimentos`}
+                    href={`/dashboard/recebimentos/${r.id}`}
                     className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
                   >
                     <span className="min-w-0 truncate">

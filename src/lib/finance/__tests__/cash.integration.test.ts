@@ -68,10 +68,21 @@ describe("períodos do caixa", () => {
   });
 
   it("valor desconhecido vira 'hoje'; todos os períodos têm nome", () => {
-    expect(parseCashPeriod(undefined)).toBe("hoje");
-    expect(parseCashPeriod("qualquer")).toBe("hoje");
-    expect(parseCashPeriod("mes")).toBe("mes");
-    expect(CASH_PERIODS.map((p) => p.id)).toEqual(["hoje", "semana", "mes", "mes-passado"]);
+    expect(parseCashPeriod(undefined).period).toBe("hoje");
+    expect(parseCashPeriod("qualquer").period).toBe("hoje");
+    expect(parseCashPeriod("mes").period).toBe("mes");
+    expect(parseCashPeriod("tudo").period).toBe("tudo");
+    expect(CASH_PERIODS.map((p) => p.id)).toEqual(["hoje", "semana", "mes", "mes-passado", "tudo"]);
+  });
+
+  it("período personalizado: datas válidas, invertidas viram o intervalo certo, inválidas voltam a 'hoje'", () => {
+    const now = new Date("2026-10-31T15:00:00.000Z");
+    const ok = parseCashPeriod(undefined, "2026-08-01", "2026-08-31");
+    expect(ok).toEqual({ period: "personalizado", custom: { from: "2026-08-01", to: "2026-08-31" } });
+    expect(cashRange("personalizado", now, ok.custom)).toMatchObject({ from: "2026-08-01", to: "2026-09-01" });
+    expect(parseCashPeriod(undefined, "2026-08-31", "2026-08-01").custom).toEqual({ from: "2026-08-01", to: "2026-08-31" });
+    expect(parseCashPeriod(undefined, "ontem", "2026-08-01").period).toBe("hoje");
+    expect(cashRange("tudo", now).from).toBe("1900-01-01");
   });
 
   it("à meia-noite de Brasília já é o dia seguinte", () => {
@@ -122,6 +133,26 @@ describe("caixa: a receber e recebido", () => {
     expect(cash.payments).toHaveLength(3);
     const cardRow = cash.payments.find((p) => p.id === card.id)!;
     expect(cardRow).toMatchObject({ cardFeeCents: 2100, installments: 3, refundedCents: 5000, customerName: "Cliente Caixa" });
+  });
+
+  it("busca por número da OS, cliente (sem acento) ou placa filtra pagamentos, a receber e OS encontradas", async () => {
+    const os = await deliveredOs("120,00");
+    await registerWorkOrderPaymentsService(actorUserId, os.id, { payments: [{ amountReais: "20,00", method: "PIX" }] });
+
+    const byNumber = await getCashSummaryService("tudo", new Date(), { q: os.number.toLowerCase() });
+    expect(byNumber.orders.map((o) => o.id)).toContain(os.id);
+    const found = byNumber.orders.find((o) => o.id === os.id)!;
+    expect(found).toMatchObject({ dueCents: 12000, paidCents: 2000, balanceCents: 10000 });
+    expect(byNumber.payments.every((p) => p.number === os.number)).toBe(true);
+    expect(byNumber.receivables.map((r) => r.id)).toEqual([os.id]);
+
+    expect((await getCashSummaryService("tudo", new Date(), { q: "caixa" })).orders.length).toBeGreaterThan(0);
+    expect((await getCashSummaryService("tudo", new Date(), { q: "cxa-1a23" })).orders.length).toBeGreaterThan(0);
+    const none = await getCashSummaryService("tudo", new Date(), { q: "zzzinexistente" });
+    expect(none.orders).toHaveLength(0);
+    expect(none.payments).toHaveLength(0);
+    expect(none.receivables).toHaveLength(0);
+    expect((await getCashSummaryService("tudo", new Date(), { q: "   " })).orders).toHaveLength(0);
   });
 
   it("recebimento de outro dia não entra em 'hoje', mas entra em '7 dias' e no mês", async () => {
