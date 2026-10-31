@@ -33,7 +33,7 @@ export interface ExtractedData {
     versao?: string;
   } | null;
   /** Preenchido só quando a pessoa FAZ UMA PERGUNTA sobre o negócio (o sistema responde com os números do banco). */
-  pergunta?: { consulta: string; mes?: string; os?: string } | null;
+  pergunta?: { consulta: string; mes?: string; os?: string; peca?: string; cliente?: string; dia?: string } | null;
   observacoes: string;
   confianca: "ALTA" | "MEDIA" | "BAIXA";
   textoOriginal: string;
@@ -73,16 +73,19 @@ Retorne APENAS um JSON válido, sem markdown, sem explicações, com a estrutura
     "versao": "motor/versão ou null"
   } ou null,
   "pergunta": {
-    "consulta": "RESUMO_MES, A_RECEBER, LUCRO_OS, TAXA_CARTAO ou DESCONHECIDA",
+    "consulta": "RESUMO_MES, A_RECEBER, LUCRO_OS, TAXA_CARTAO, OS_ABERTAS, PECAS_ACABANDO, PECA_ESTOQUE, HISTORICO_CLIENTE, AGENDA, MENSAGENS, TROCAS ou DESCONHECIDA",
     "mes": "ATUAL, ANTERIOR ou AAAA-MM, ou null",
-    "os": "número da OS citada (ex.: OS-20) ou null"
+    "os": "número da OS citada (ex.: OS-20) ou null",
+    "peca": "nome da peça citada (PECA_ESTOQUE) ou null",
+    "cliente": "nome do cliente citado (HISTORICO_CLIENTE) ou null",
+    "dia": "HOJE, AMANHA ou AAAA-MM-DD (AGENDA) ou null"
   } ou null,
   "observacoes": "qualquer outra informação relevante",
   "confianca": "ALTA, MEDIA ou BAIXA dependendo da legibilidade/clareza"
 }
 
 Regras importantes:
-- pergunta: preencha SOMENTE quando a pessoa faz uma PERGUNTA sobre o negócio (não é um lançamento nem pedido de código de peça). Use RESUMO_MES para quanto entrou/saiu/sobrou/faturou/lucro do mês (mes: ATUAL para "esse mês", ANTERIOR para "mês passado", ou AAAA-MM se citar um mês); A_RECEBER para quanto tem a receber/quem deve; LUCRO_OS para lucro/margem de uma OS (preencha "os" com o número citado); TAXA_CARTAO para taxa de cartão/maquininha. Se for uma pergunta sobre o negócio que não se encaixa em nenhuma, use DESCONHECIDA. Nesse caso deixe "itens" vazio. Caso contrário, use null.
+- pergunta: preencha SOMENTE quando a pessoa faz uma PERGUNTA sobre o negócio (não é um lançamento nem pedido de código de peça). Use RESUMO_MES para quanto entrou/saiu/sobrou/faturou/lucro do mês (mes: ATUAL para "esse mês", ANTERIOR para "mês passado", ou AAAA-MM se citar um mês); A_RECEBER para quanto tem a receber/quem deve; LUCRO_OS para lucro/margem de uma OS (preencha "os" com o número citado); TAXA_CARTAO para taxa de cartão/maquininha; OS_ABERTAS para quais OS estão abertas/em andamento/no pátio; PECAS_ACABANDO para quais peças estão acabando/zeradas/no mínimo; PECA_ESTOQUE para saldo, custo ou último fornecedor de UMA peça (preencha "peca"; NÃO confunda com pedir código/referência de catálogo, que é consultaPeca); HISTORICO_CLIENTE para o que um cliente já fez/gastou/última visita (preencha "cliente"); AGENDA para quem está agendado (dia: HOJE, AMANHA ou a data); MENSAGENS para quantas mensagens estão pendentes de enviar; TROCAS para quais clientes estão com troca de óleo/correia/serviço chegando ou vencida. Se for uma pergunta sobre o negócio que não se encaixa em nenhuma, use DESCONHECIDA. Nesse caso deixe "itens" vazio. Caso contrário, use null.
 - consultaPeca: preencha SOMENTE quando a pessoa pede o código, a referência ou o número de catálogo de uma peça para um veículo (ex.: "código do freio dianteiro do HR-V 2017"). Nesse caso deixe "itens" vazio. Em qualquer outro caso use null. Se souber a marca pelo modelo (ex.: HR-V é Honda), preencha a marca.
 - Se um campo não estiver presente ou não for legível, use null
 - Peças (ex: filtro de óleo, pastilha de freio, pneu) → tipo PECA
@@ -142,6 +145,9 @@ export const ExtractedCoreSchema = z.object({
       consulta: z.string().nullish().transform((v) => (v ?? "").trim().toUpperCase()),
       mes: optText,
       os: optText,
+      peca: optText,
+      cliente: optText,
+      dia: optText,
     })
     .nullish()
     .transform((v) => (v && v.consulta ? v : null)),
