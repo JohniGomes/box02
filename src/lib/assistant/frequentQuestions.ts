@@ -17,6 +17,8 @@ export const GRUPOS_PERGUNTAS: { grupo: string; perguntas: PerguntaFrequente[] }
       { rotulo: "Quanto tenho a receber?", texto: "Quanto tenho a receber e de quem?", enviar: true },
       { rotulo: "Taxa de cartão do mês", texto: "Quanto paguei de taxa de cartão esse mês?", enviar: true },
       { rotulo: "Lucro de uma OS…", texto: "Qual o lucro da OS-", enviar: false },
+      { rotulo: "OS mais lucrativas do mês", texto: "Quais as 5 OS com maior lucro esse mês?", enviar: true },
+      { rotulo: "OS com pior margem", texto: "Quais as OS com pior margem esse mês?", enviar: true },
     ],
   },
   {
@@ -33,6 +35,18 @@ export const GRUPOS_PERGUNTAS: { grupo: string; perguntas: PerguntaFrequente[] }
     perguntas: [
       { rotulo: "Quais peças estão acabando?", texto: "Quais peças estão acabando?", enviar: true },
       { rotulo: "Saldo de uma peça…", texto: "Quanto tenho de ", enviar: false },
+    ],
+  },
+  {
+    grupo: "Como usar o sistema",
+    perguntas: [
+      { rotulo: "Cancelar OS e devolver peça", texto: "Como cancelo uma OS e devolvo a peça ao estoque?", enviar: true },
+      { rotulo: "Registrar compra de peças", texto: "Como registro uma compra de peças?", enviar: true },
+      { rotulo: "Desconto no recebimento", texto: "Como dou desconto na hora de receber?", enviar: true },
+      { rotulo: "Desfazer execução de item", texto: "Como desfaço a execução de um item da OS?", enviar: true },
+      { rotulo: "Imprimir escolhendo o que sai", texto: "Como imprimo escolhendo o que sai no papel?", enviar: true },
+      { rotulo: "Corrigir quem executou", texto: "Como corrijo quem executou um serviço?", enviar: true },
+      { rotulo: "Cliente voltou (retorno)", texto: "Como abro um retorno quando o carro volta?", enviar: true },
     ],
   },
   {

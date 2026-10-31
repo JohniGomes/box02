@@ -297,6 +297,13 @@ export function AssistenteChat() {
                     ))}
                   </dl>
                 )}
+                {resposta.passos && resposta.passos.length > 0 && (
+                  <ol className="flex list-decimal flex-col gap-2 rounded-lg border border-border p-3 pl-7 text-xs">
+                    {resposta.passos.map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ol>
+                )}
                 {resposta.aviso && <p className="rounded-lg bg-yellow-100 p-2 text-xs text-yellow-900">{resposta.aviso}</p>}
                 {resposta.links.length > 0 && (
                   <div className="flex flex-wrap gap-2">

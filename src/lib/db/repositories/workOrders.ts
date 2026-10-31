@@ -190,6 +190,25 @@ export async function findWorkOrderById(
   return result.rows[0] ?? null;
 }
 
+/** OS entregues (no mês "AAAA-MM" pela data de entrega em Brasília, ou todas se `month` for null), para o ranking de lucro. */
+export async function listDeliveredForRanking(
+  month: string | null,
+  limit = 300,
+): Promise<{ id: string; number: string; customerName: string }[]> {
+  const result = await pool.query<{ id: string; number: string; customerName: string }>(
+    `SELECT wo.id, wo.number, c."legalName" AS "customerName"
+     FROM work_orders wo INNER JOIN customers c ON c.id = wo."customerId"
+     WHERE wo.status = 'ENTREGUE'
+       AND ($1::text IS NULL OR (
+         ((wo."deliveredAt" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo') >= ($1 || '-01')::timestamp
+         AND ((wo."deliveredAt" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo') < (($1 || '-01')::timestamp + interval '1 month')))
+     ORDER BY wo."deliveredAt" DESC NULLS LAST
+     LIMIT $2`,
+    [month, limit],
+  );
+  return result.rows;
+}
+
 /** OS pelo número exato ("OS-000020"). */
 export async function findWorkOrderByNumber(
   number: string,

@@ -132,6 +132,23 @@ describe("assistente de lançamento sobre a camada nova", () => {
     expect((await extractFromText("x", { models: ["m"], runner: async () => vazio })).pergunta).toBeNull();
   });
 
+  it("pergunta de ranking e de 'como fazer' chegam com seus campos; o prompt lista os guias", async () => {
+    let enviado = "";
+    const runner = async (_m: string, request: unknown) => {
+      enviado = typeof request === "string" ? request : JSON.stringify(request);
+      return JSON.stringify({
+        cliente: null,
+        veiculo: null,
+        itens: [],
+        pergunta: { consulta: "ranking_lucro", mes: "TODOS", ordem: "pior_margem", quantidade: 3 },
+      });
+    };
+    const out = await extractFromText("as 3 piores margens", { models: ["m"], runner });
+    expect(out.pergunta).toMatchObject({ consulta: "RANKING_LUCRO", mes: "TODOS", ordem: "pior_margem", quantidade: "3" });
+    expect(enviado).toContain("CANCELAR_OS");
+    expect(enviado).toContain("REGISTRAR_COMPRA");
+  });
+
   it("reconhece pedido de código de peça (e ignora consultaPeca sem peça)", async () => {
     const pedido = JSON.stringify({
       cliente: null,
