@@ -19,11 +19,23 @@ import { useRouter } from "next/navigation";
 type Etapa = "idle" | "analisando" | "revisao" | "confirmando" | "concluido" | "consulta";
 
 /** Confere o que o robô entendeu (veículo e peça, editáveis) e mostra os cards de código. */
-function ConsultaPecaBox({ consulta }: { consulta: ConsultaPeca }) {
-  const [marca, setMarca] = useState(consulta.veiculo.marca);
-  const [modelo, setModelo] = useState(consulta.veiculo.modelo);
-  const [ano, setAno] = useState(consulta.veiculo.ano);
+function ConsultaPecaBox({
+  consulta,
+  onVehicle,
+  onNewQuestion,
+}: {
+  consulta: ConsultaPeca;
+  /** Avisa o robô do veículo (já editado) para lembrar na próxima pergunta. */
+  onVehicle: (label: string) => void;
+  onNewQuestion: () => void;
+}) {
+  const [marca, setMarcaState] = useState(consulta.veiculo.marca);
+  const [modelo, setModeloState] = useState(consulta.veiculo.modelo);
+  const [ano, setAnoState] = useState(consulta.veiculo.ano);
   const [peca, setPeca] = useState(consulta.peca);
+  const setMarca = (v: string) => { setMarcaState(v); onVehicle([v, modelo, ano].filter(Boolean).join(" ")); };
+  const setModelo = (v: string) => { setModeloState(v); onVehicle([marca, v, ano].filter(Boolean).join(" ")); };
+  const setAno = (v: string) => { setAnoState(v); onVehicle([marca, modelo, v].filter(Boolean).join(" ")); };
   const falta = !marca.trim() || !modelo.trim();
   const campo = (falhando: boolean) =>
     `w-full rounded-lg border bg-background px-2 py-1.5 text-xs ${falhando ? "border-yellow-500" : "border-border"}`;
@@ -49,7 +61,7 @@ function ConsultaPecaBox({ consulta }: { consulta: ConsultaPeca }) {
           <input value={peca} onChange={(e) => setPeca(e.target.value)} className={campo(peca.trim().length < 2)} />
         </label>
       </div>
-      <PartCodesPanel vehicle={{ marca, modelo, ano, versao: consulta.veiculo.versao }} part={peca} compact />
+      <PartCodesPanel vehicle={{ marca, modelo, ano, versao: consulta.veiculo.versao }} part={peca} compact onNewQuestion={onNewQuestion} />
     </>
   );
 }
@@ -61,6 +73,8 @@ export function AssistenteChat() {
   const [erro, setErro] = useState<string | null>(null);
   const [reconciliado, setReconciliado] = useState<ReconciledData | null>(null);
   const [consulta, setConsulta] = useState<ConsultaPeca | null>(null);
+  /** Veículo de que a conversa já tratava ("Honda HR-V 2017"): vale para a próxima pergunta, até "Nova conversa". */
+  const [contexto, setContexto] = useState<string | null>(null);
   const [tipoLancamento, setTipoLancamento] = useState<"ORCAMENTO" | "OS">("ORCAMENTO");
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -72,10 +86,23 @@ export function AssistenteChat() {
     setErro(null);
     setReconciliado(null);
     setConsulta(null);
+    setContexto(null);
+  }
+
+  /** Outra pergunta na mesma conversa: limpa a tela, mas lembra o veículo. */
+  function novaPergunta() {
+    setTexto("");
+    setEtapa("idle");
+    setErro(null);
+    setReconciliado(null);
+    setConsulta(null);
   }
 
   function receber(result: AssistenteResult, erroPadrao: string) {
     if (result.success && result.consulta) {
+      const v = result.consulta.veiculo;
+      const label = [v.marca, v.modelo, v.ano].filter(Boolean).join(" ");
+      if (label) setContexto(label);
       setConsulta(result.consulta);
       setEtapa("consulta");
       return;
@@ -94,7 +121,7 @@ export function AssistenteChat() {
     setEtapa("analisando");
     setErro(null);
     startTransition(async () => {
-      receber(await analisarTextoAction(texto), "Erro desconhecido.");
+      receber(await analisarTextoAction(texto, contexto ?? undefined), "Erro desconhecido.");
     });
   }
 
@@ -172,6 +199,12 @@ export function AssistenteChat() {
                 <p className="text-xs text-muted">
                   Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente. Também dá para pedir o código de uma peça (ex.: &quot;código do freio dianteiro do HR-V 2017&quot;).
                 </p>
+                {contexto ? (
+                  <div className="flex items-center justify-between gap-2 rounded-lg bg-yellow-100 px-3 py-2 text-xs text-yellow-900">
+                    <span>Conversa sobre: <strong>{contexto}</strong></span>
+                    <button onClick={reset} className="shrink-0 font-semibold underline">Nova conversa</button>
+                  </div>
+                ) : null}
                 <textarea
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
@@ -354,9 +387,9 @@ export function AssistenteChat() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold">Código de peça</p>
-                  <button onClick={reset} className="text-xs text-muted hover:underline">Voltar</button>
+                  <button onClick={novaPergunta} className="text-xs text-muted hover:underline">Voltar</button>
                 </div>
-                <ConsultaPecaBox consulta={consulta} />
+                <ConsultaPecaBox consulta={consulta} onVehicle={(label) => setContexto(label || null)} onNewQuestion={novaPergunta} />
               </div>
             )}
 

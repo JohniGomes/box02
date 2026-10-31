@@ -112,6 +112,18 @@ describe("assistente de lançamento sobre a camada nova", () => {
     expect(out.consultaPeca).toBeNull();
   });
 
+  it("leva o veículo da conversa para a pergunta seguinte", async () => {
+    let enviado = "";
+    const runner = async (_model: string, request: unknown) => {
+      enviado = typeof request === "string" ? request : JSON.stringify(request);
+      return JSON.stringify({ cliente: null, veiculo: null, itens: [] });
+    };
+    await extractFromText("agora a pastilha traseira", { models: ["m"], runner, contexto: "Honda HR-V 2017" });
+    expect(enviado).toContain("Honda HR-V 2017");
+    await extractFromText("agora a pastilha traseira", { models: ["m"], runner });
+    expect(enviado).not.toContain("Contexto da conversa");
+  });
+
   it("reconhece pedido de código de peça (e ignora consultaPeca sem peça)", async () => {
     const pedido = JSON.stringify({
       cliente: null,

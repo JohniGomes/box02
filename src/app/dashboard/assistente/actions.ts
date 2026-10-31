@@ -81,10 +81,10 @@ export interface ReconciledData {
   itens: ReconciledItem[];
 }
 
-export async function analisarTextoAction(text: string): Promise<AssistenteResult> {
+export async function analisarTextoAction(text: string, contexto?: string): Promise<AssistenteResult> {
   try {
     await requireUserId();
-    const data = await extractFromText(text);
+    const data = await extractFromText(text, { contexto });
     const consulta = await montarConsulta(data);
     if (consulta) return { success: true, data, consulta };
     const reconciliado = await reconciliarDados(data);
