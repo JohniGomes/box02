@@ -13,10 +13,12 @@ import {
   type ConsultaPeca,
   type ReconciledData,
 } from "@/app/dashboard/assistente/actions";
+import type { Resposta } from "@/lib/assistant/answers";
+import { PERGUNTAS_FREQUENTES } from "@/lib/assistant/frequentQuestions";
 import { PartCodesPanel } from "@/app/dashboard/estoque/ficha/PartCodesPanel";
 import { useRouter } from "next/navigation";
 
-type Etapa = "idle" | "analisando" | "revisao" | "confirmando" | "concluido" | "consulta";
+type Etapa = "idle" | "analisando" | "revisao" | "confirmando" | "concluido" | "consulta" | "resposta";
 
 /** Confere o que o robô entendeu (veículo e peça, editáveis) e mostra os cards de código. */
 function ConsultaPecaBox({
@@ -73,6 +75,7 @@ export function AssistenteChat() {
   const [erro, setErro] = useState<string | null>(null);
   const [reconciliado, setReconciliado] = useState<ReconciledData | null>(null);
   const [consulta, setConsulta] = useState<ConsultaPeca | null>(null);
+  const [resposta, setResposta] = useState<Resposta | null>(null);
   /** Veículo de que a conversa já tratava ("Honda HR-V 2017"): vale para a próxima pergunta, até "Nova conversa". */
   const [contexto, setContexto] = useState<string | null>(null);
   const [tipoLancamento, setTipoLancamento] = useState<"ORCAMENTO" | "OS">("ORCAMENTO");
@@ -86,6 +89,7 @@ export function AssistenteChat() {
     setErro(null);
     setReconciliado(null);
     setConsulta(null);
+    setResposta(null);
     setContexto(null);
   }
 
@@ -96,9 +100,15 @@ export function AssistenteChat() {
     setErro(null);
     setReconciliado(null);
     setConsulta(null);
+    setResposta(null);
   }
 
   function receber(result: AssistenteResult, erroPadrao: string) {
+    if (result.success && result.resposta) {
+      setResposta(result.resposta);
+      setEtapa("resposta");
+      return;
+    }
     if (result.success && result.consulta) {
       const v = result.consulta.veiculo;
       const label = [v.marca, v.modelo, v.ano].filter(Boolean).join(" ");
@@ -116,12 +126,14 @@ export function AssistenteChat() {
     setEtapa("revisao");
   }
 
-  function handleEnviarTexto() {
-    if (!texto.trim()) return;
+  function handleEnviarTexto(override?: string) {
+    const enviado = override ?? texto;
+    if (!enviado.trim()) return;
+    setTexto(enviado);
     setEtapa("analisando");
     setErro(null);
     startTransition(async () => {
-      receber(await analisarTextoAction(texto, contexto ?? undefined), "Erro desconhecido.");
+      receber(await analisarTextoAction(enviado, contexto ?? undefined), "Erro desconhecido.");
     });
   }
 
@@ -197,7 +209,7 @@ export function AssistenteChat() {
             {(etapa === "idle" || etapa === "analisando") && (
               <>
                 <p className="text-xs text-muted">
-                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente. Também dá para pedir o código de uma peça (ex.: &quot;código do freio dianteiro do HR-V 2017&quot;).
+                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente. Também dá para pedir o código de uma peça (ex.: &quot;código do freio dianteiro do HR-V 2017&quot;) ou perguntar sobre dinheiro (ex.: &quot;quanto tenho a receber?&quot;).
                 </p>
                 {contexto ? (
                   <div className="flex items-center justify-between gap-2 rounded-lg bg-yellow-100 px-3 py-2 text-xs text-yellow-900">
@@ -215,7 +227,7 @@ export function AssistenteChat() {
                 />
                 <div className="flex gap-2">
                   <button
-                    onClick={handleEnviarTexto}
+                    onClick={() => handleEnviarTexto()}
                     disabled={!texto.trim() || etapa === "analisando"}
                     className="flex-1 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-40 hover:opacity-90"
                   >
@@ -242,7 +254,56 @@ export function AssistenteChat() {
                   />
                 </div>
                 {erro && <p className="text-xs text-red-500">{erro}</p>}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[11px] font-medium text-muted">Perguntas frequentes</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PERGUNTAS_FREQUENTES.map((q) => (
+                      <button
+                        key={q.rotulo}
+                        type="button"
+                        disabled={etapa === "analisando"}
+                        onClick={() => (q.enviar ? handleEnviarTexto(q.texto) : setTexto(q.texto))}
+                        className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted/10 disabled:opacity-40"
+                      >
+                        {q.rotulo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
+            )}
+
+            {/* Estado: resposta de uma pergunta sobre o negócio */}
+            {etapa === "resposta" && resposta && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">{resposta.titulo}</p>
+                  <button onClick={novaPergunta} className="text-xs text-muted hover:underline">Voltar</button>
+                </div>
+                {resposta.linhas.length > 0 && (
+                  <dl className="flex flex-col gap-1.5 rounded-lg border border-border p-3 text-xs">
+                    {resposta.linhas.map((l, i) => (
+                      <div key={i} className={`flex items-start justify-between gap-3 ${l.destaque ? "text-sm font-semibold" : ""}`}>
+                        <dt className={l.destaque ? "" : "text-muted"}>{l.rotulo}</dt>
+                        <dd className="shrink-0 text-right">{l.valor}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {resposta.aviso && <p className="rounded-lg bg-yellow-100 p-2 text-xs text-yellow-900">{resposta.aviso}</p>}
+                {resposta.links.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {resposta.links.map((l) => (
+                      <a key={l.href} href={l.href} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium underline">
+                        {l.texto}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                <button onClick={novaPergunta} className="h-11 rounded-xl border border-border text-sm font-semibold">
+                  Nova pergunta
+                </button>
+              </div>
             )}
 
             {/* Estado: revisão */}

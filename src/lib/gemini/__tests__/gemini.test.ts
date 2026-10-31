@@ -124,6 +124,14 @@ describe("assistente de lançamento sobre a camada nova", () => {
     expect(enviado).not.toContain("Contexto da conversa");
   });
 
+  it("reconhece pergunta sobre o negócio (e ignora pergunta vazia)", async () => {
+    const q = JSON.stringify({ cliente: null, veiculo: null, itens: [], pergunta: { consulta: "lucro_os", mes: null, os: "OS-20" } });
+    const out = await extractFromText("qual o lucro da OS 20?", { models: ["m"], runner: async () => q });
+    expect(out.pergunta).toMatchObject({ consulta: "LUCRO_OS", os: "OS-20" });
+    const vazio = JSON.stringify({ cliente: null, veiculo: null, itens: [], pergunta: { consulta: "  " } });
+    expect((await extractFromText("x", { models: ["m"], runner: async () => vazio })).pergunta).toBeNull();
+  });
+
   it("reconhece pedido de código de peça (e ignora consultaPeca sem peça)", async () => {
     const pedido = JSON.stringify({
       cliente: null,

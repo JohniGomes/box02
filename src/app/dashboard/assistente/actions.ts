@@ -13,6 +13,7 @@ import { buildAssistantDraft } from "@/lib/assistant/draft";
 import { draftResumeHref, saveDraftService } from "@/lib/drafts/service";
 import { formatPlate } from "@/lib/validation/plate";
 import { listActiveServices } from "@/lib/db/repositories/services";
+import { responderPergunta, type Resposta } from "@/lib/assistant/answers";
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -32,6 +33,13 @@ export interface AssistenteResult {
   data?: ExtractedData;
   reconciliado?: ReconciledData;
   consulta?: ConsultaPeca;
+  /** Resposta de uma pergunta sobre o negócio (números do banco; a IA só escolheu a consulta). */
+  resposta?: Resposta;
+}
+
+async function responderSePergunta(data: ExtractedData): Promise<Resposta | undefined> {
+  if (!data.pergunta) return undefined;
+  return responderPergunta(data.pergunta);
 }
 
 /** Junta o que a IA entendeu do pedido com o cadastro do veículo (pela placa), quando houver. */
@@ -87,6 +95,8 @@ export async function analisarTextoAction(text: string, contexto?: string): Prom
     const data = await extractFromText(text, { contexto });
     const consulta = await montarConsulta(data);
     if (consulta) return { success: true, data, consulta };
+    const resposta = await responderSePergunta(data);
+    if (resposta) return { success: true, data, resposta };
     const reconciliado = await reconciliarDados(data);
     return { success: true, data, reconciliado };
   } catch (err) {
