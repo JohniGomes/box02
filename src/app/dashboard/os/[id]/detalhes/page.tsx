@@ -31,6 +31,7 @@ import {
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
 import { EditItemForm } from "../EditItemForm";
+import { toPaymentsSummaryView } from "../paymentsView";
 import { getQuoteSyncPreviewService } from "@/lib/workOrders/quoteSyncService";
 import { SaveKitFromOrder } from "../SaveKitFromOrder";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
@@ -462,29 +463,7 @@ export default async function WorkOrderDetailsPage({
         <WorkOrderPaymentsSection
           workOrderId={workOrder.id}
           entryDate={workOrder.entryAt.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })}
-          summary={{
-            dueCents: paymentsSummary.dueCents,
-            paidCents: paymentsSummary.paidCents,
-            remainingCents: paymentsSummary.remainingCents,
-            discountCents: paymentsSummary.discountCents,
-            status: paymentsSummary.status,
-            payments: paymentsSummary.payments.map((p) => ({
-              id: p.id,
-              amountCents: p.amountCents,
-              method: p.method,
-              notes: p.notes,
-              receivedAt: p.receivedAt.toISOString(),
-              cardFeeCents: p.cardFeeCents,
-              installments: p.installments,
-            })),
-            refunds: paymentsSummary.refunds.map((r) => ({
-              id: r.id,
-              paymentId: r.paymentId,
-              refundCents: r.refundCents,
-              reason: r.reason,
-              createdAt: r.createdAt.toISOString(),
-            })),
-          }}
+          summary={toPaymentsSummaryView(paymentsSummary)}
         />
       ) : null}
 
