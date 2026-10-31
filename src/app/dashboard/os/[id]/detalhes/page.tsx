@@ -12,7 +12,7 @@ import { getWorkOrderChecklistsService } from "@/lib/workOrders/checklistService
 import { getCustomerService } from "@/lib/customers/service";
 import { getVehicleService } from "@/lib/vehicles/service";
 import { getServiceService } from "@/lib/services/service";
-import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
+import { isDeliveryChecklistRequired, isDetailedStagesEnabled, isReceptionRequiredForExecution } from "@/lib/settings/service";
 import { listExecutorOptionsService } from "@/lib/executors/service";
 import { findQuoteVersionById } from "@/lib/db/repositories/quoteVersions";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
@@ -24,6 +24,7 @@ import {
   CancelWorkOrderForm,
   ReactivateWorkOrderForm,
   CloseWorkOrderForm,
+  MarkAllExecutedButton,
   WorkOrderItemActions,
   WorkOrderItemExecutorInfo,
   WorkOrderStatusActions,
@@ -81,7 +82,7 @@ export default async function WorkOrderDetailsPage({
   const corrections = await listWorkOrderCorrectionsService(workOrder.id);
   const returnableParts = await listReturnablePartsService(workOrder.id);
   const margin = await getWorkOrderMarginService(workOrder.id);
-  const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired, deliveryChecklistRequired] = await Promise.all([
+  const [customer, vehicle, workOrderChecklists, activeUsers, receptionRequired, deliveryChecklistRequired, detailedStages] = await Promise.all([
     getCustomerService(workOrder.customerId),
     getVehicleService(workOrder.vehicleId),
     getWorkOrderChecklistsService(workOrder.id),
@@ -90,10 +91,13 @@ export default async function WorkOrderDetailsPage({
     listExecutorOptionsService(),
     isReceptionRequiredForExecution(),
     isDeliveryChecklistRequired(),
+    isDetailedStagesEnabled(),
   ]);
 
   const isOpenForCancel = workOrder.status !== "ENTREGUE" && workOrder.status !== "CANCELADA";
-  const canClose = workOrder.status === "PRONTA";
+  // Modo simples: entrega de qualquer etapa aberta. Etapas detalhadas: só quando a OS está "Pronta".
+  const canClose = workOrder.status === "PRONTA" || (!detailedStages && isOpenForCancel);
+  const plannedCount = items.filter((i) => i.status === "PLANEJADO").length;
   const canManageAdditionals = isOpenForCancel;
   const baseItems = items.filter((i) => i.origin !== "ADICIONAL_DURANTE_EXECUCAO");
   const additionalItems = items.filter((i) => i.origin === "ADICIONAL_DURANTE_EXECUCAO");
@@ -392,7 +396,7 @@ export default async function WorkOrderDetailsPage({
       <WorkOrderTechnicalNotesSection
         workOrderId={workOrder.id}
         technicalNotes={workOrder.technicalNotes}
-        applicable={workOrder.status === "PRONTA" || workOrder.status === "ENTREGUE"}
+        applicable={workOrder.status !== "CANCELADA"}
       />
 
       {workOrder.status === "ENTREGUE" ? (
@@ -467,7 +471,16 @@ export default async function WorkOrderDetailsPage({
           status={workOrder.status}
           receptionAccepted={workOrder.receptionAcceptedAt !== null}
           receptionRequired={receptionRequired}
+          detailedStages={detailedStages}
         />
+        {canClose && plannedCount > 0 ? (
+          <MarkAllExecutedButton
+            workOrderId={workOrder.id}
+            plannedCount={plannedCount}
+            users={activeUsers}
+            currentUserId={currentUserId}
+          />
+        ) : null}
         {canClose ? (
           <CloseWorkOrderForm
             workOrderId={workOrder.id}

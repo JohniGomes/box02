@@ -1,12 +1,18 @@
 import Link from "next/link";
-import { getCardFeePercent, isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
+import {
+  getCardFeePercent,
+  isDeliveryChecklistRequired,
+  isDetailedStagesEnabled,
+  isReceptionRequiredForExecution,
+} from "@/lib/settings/service";
 import { RulesForm } from "./RulesForm";
 import { CardFeeForm } from "./CardFeeForm";
 
 export default async function RegrasPage() {
-  const [reception, deliveryChecklist, cardFeePercent] = await Promise.all([
+  const [reception, deliveryChecklist, detailedStages, cardFeePercent] = await Promise.all([
     isReceptionRequiredForExecution(),
     isDeliveryChecklistRequired(),
+    isDetailedStagesEnabled(),
     getCardFeePercent(),
   ]);
 
@@ -22,7 +28,7 @@ export default async function RegrasPage() {
         &quot;Precisa de atenção&quot; no Início.
       </p>
 
-      <RulesForm initial={{ reception, deliveryChecklist }} />
+      <RulesForm initial={{ reception, deliveryChecklist, detailedStages }} />
 
       <CardFeeForm initialPercent={cardFeePercent} />
     </div>

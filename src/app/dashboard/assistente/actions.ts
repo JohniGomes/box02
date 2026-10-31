@@ -83,7 +83,10 @@ export interface ReconciledData {
   veiculo: {
     id?: string;
     placa?: string;
+    marca?: string;
     modelo?: string;
+    ano?: string;
+    cor?: string;
     acao: "USAR_EXISTENTE" | "CRIAR_NOVO" | "SEM_VEICULO";
   };
   itens: ReconciledItem[];
@@ -162,7 +165,10 @@ async function reconciliarDados(data: ExtractedData): Promise<ReconciledData> {
     veiculoRec = {
       id: found?.id,
       placa: found?.plate ?? data.veiculo.placa ?? undefined,
+      marca: found?.brand ?? data.veiculo.marca ?? undefined,
       modelo: found?.model ?? data.veiculo.modelo ?? undefined,
+      ano: String(found?.yearModel ?? found?.yearManufacture ?? data.veiculo.ano ?? "") || undefined,
+      cor: found?.color ?? data.veiculo.cor ?? undefined,
       acao: found ? "USAR_EXISTENTE" : "CRIAR_NOVO",
     };
   }

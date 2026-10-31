@@ -56,6 +56,22 @@ export async function setDeliveryChecklistRequired(required: boolean): Promise<v
   await setSetting(DELIVERY_CHECKLIST_REQUIRED_KEY, required ? "true" : "false");
 }
 
+export const DETAILED_STAGES_KEY = "rule_detailed_stages";
+
+/**
+ * A OS usa todas as etapas (diagnóstico, aguardando peça, teste final, pronta)?
+ * Padrão: NÃO (modo simples: Aberta → Em execução → Entregue, e dá para entregar de qualquer etapa
+ * aberta). Ligado, vale o fluxo completo de antes, para quando houver mais gente na oficina.
+ */
+export async function isDetailedStagesEnabled(): Promise<boolean> {
+  const raw = await getSetting(DETAILED_STAGES_KEY);
+  return raw === "true";
+}
+
+export async function setDetailedStagesEnabled(enabled: boolean): Promise<void> {
+  await setSetting(DETAILED_STAGES_KEY, enabled ? "true" : "false");
+}
+
 // ============================================================
 // Ciclo H — Precificação e Custos
 // ============================================================

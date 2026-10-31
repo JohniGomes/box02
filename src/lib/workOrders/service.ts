@@ -142,7 +142,7 @@ import { VehicleNotOwnedByCustomerError } from "@/lib/quotes/errors";
 import { findLastStatusChangeTarget, listAuditLogsForEntity } from "@/lib/db/repositories/auditLog";
 import { findUserById } from "@/lib/db/repositories/users";
 import { findExecutorById } from "@/lib/db/repositories/executors";
-import { isDeliveryChecklistRequired, isReceptionRequiredForExecution } from "@/lib/settings/service";
+import { isDeliveryChecklistRequired, isDetailedStagesEnabled, isReceptionRequiredForExecution } from "@/lib/settings/service";
 
 /** Máquina de estados da OS — qualquer par fora daqui é rejeitado. */
 const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
@@ -1040,7 +1040,21 @@ export async function closeWorkOrderService(
     const workOrder = await lockWorkOrderById(workOrderId, client);
     if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
 
-    assertTransitionAllowed(workOrder.status, "ENTREGUE");
+    // Modo simples (padrão, ver Configurações → Regras): entrega direta de qualquer etapa aberta.
+    // Etapas detalhadas ligadas: só a OS "Pronta" pode ser entregue, como sempre foi.
+    const skippedStages = ["ABERTA", "EM_DIAGNOSTICO", "EM_EXECUCAO", "AGUARDANDO_PECA", "TESTE_FINAL"].includes(workOrder.status);
+    if (skippedStages && !(await isDetailedStagesEnabled())) {
+      // A trava do Termo de Recepção continua valendo para quem nunca passou por "Em execução".
+      if (
+        !workOrder.receptionAcceptedAt &&
+        (workOrder.status === "ABERTA" || workOrder.status === "EM_DIAGNOSTICO") &&
+        (await isReceptionRequiredForExecution())
+      ) {
+        throw new WorkOrderReceptionNotAcceptedError();
+      }
+    } else {
+      assertTransitionAllowed(workOrder.status, "ENTREGUE");
+    }
 
     const items = await listWorkOrderItemsByWorkOrder(workOrderId, client);
     if (items.some((i) => i.status === "PLANEJADO")) {
@@ -1102,6 +1116,7 @@ export async function closeWorkOrderService(
       entityId: workOrderId,
       metadata: {
         totalCents: totals.totalCents,
+        ...(skippedStages ? { deliveredFromStatus: workOrder.status } : {}),
         ...(deliveryChecklistPending > 0 ? { deliveryChecklistPending } : {}),
       },
     });

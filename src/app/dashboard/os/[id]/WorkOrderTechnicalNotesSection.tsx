@@ -18,7 +18,7 @@ export function WorkOrderTechnicalNotesSection({
 }: {
   workOrderId: string;
   technicalNotes: string | null;
-  /** true quando status = PRONTA ou ENTREGUE — não depende de
+  /** true em qualquer status, menos OS cancelada — não depende de
    * isOpenForCancel, porque continua editável mesmo depois de ENTREGUE. */
   applicable: boolean;
 }) {
@@ -49,7 +49,7 @@ export function WorkOrderTechnicalNotesSection({
       </div>
 
       {!applicable ? (
-        <p className="text-sm text-muted">Disponível a partir do status Pronta.</p>
+        <p className="text-sm text-muted">Não disponível em OS cancelada.</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-medium text-muted" htmlFor="technicalNotes">

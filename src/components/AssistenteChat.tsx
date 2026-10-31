@@ -361,7 +361,12 @@ export function AssistenteChat() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-semibold">
-                          {[reconciliado.veiculo.modelo, reconciliado.veiculo.placa]
+                          {[
+                            [reconciliado.veiculo.marca, reconciliado.veiculo.modelo].filter(Boolean).join(" "),
+                            reconciliado.veiculo.ano,
+                            reconciliado.veiculo.cor,
+                            reconciliado.veiculo.placa,
+                          ]
                             .filter(Boolean)
                             .join(" · ")}
                         </p>
