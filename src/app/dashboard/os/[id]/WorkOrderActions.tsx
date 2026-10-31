@@ -31,18 +31,28 @@ import { WORK_ORDER_STATUS_LABEL } from "../statusLabels";
 const NEXT_STATUS: Partial<Record<WorkOrderStatus, WorkOrderStatus[]>> = {
   ABERTA: ["EM_DIAGNOSTICO", "EM_EXECUCAO"],
   EM_DIAGNOSTICO: ["EM_EXECUCAO"],
-  EM_EXECUCAO: ["AGUARDANDO_PECA", "TESTE_FINAL"],
-  AGUARDANDO_PECA: ["EM_EXECUCAO"],
+  EM_EXECUCAO: ["AGUARDANDO_PECA", "TESTE_FINAL", "PRONTA"],
+  AGUARDANDO_PECA: ["EM_EXECUCAO", "PRONTA"],
   TESTE_FINAL: ["EM_EXECUCAO", "PRONTA"],
+  PRONTA: ["EM_EXECUCAO"],
 };
 
-/** Modo simples: só "Em execução" como próximo passo (a entrega fica no botão de fechar a OS). */
+/** Modo simples: Em execução → Pronta (sem etapas no meio); a entrega fica no botão de fechar a OS. */
 const NEXT_STATUS_SIMPLE: Partial<Record<WorkOrderStatus, WorkOrderStatus[]>> = {
   ABERTA: ["EM_EXECUCAO"],
   EM_DIAGNOSTICO: ["EM_EXECUCAO"],
-  AGUARDANDO_PECA: ["EM_EXECUCAO"],
-  TESTE_FINAL: ["EM_EXECUCAO"],
+  EM_EXECUCAO: ["PRONTA"],
+  AGUARDANDO_PECA: ["EM_EXECUCAO", "PRONTA"],
+  TESTE_FINAL: ["EM_EXECUCAO", "PRONTA"],
+  PRONTA: ["EM_EXECUCAO"],
 };
+
+/** Texto do botão de cada passo (em vez do nome cru do status). */
+function statusButtonLabel(from: WorkOrderStatus, to: WorkOrderStatus): string {
+  if (to === "PRONTA") return "Marcar como Pronta";
+  if (from === "PRONTA" && to === "EM_EXECUCAO") return "Voltar para Em execução";
+  return WORK_ORDER_STATUS_LABEL[to];
+}
 
 export function WorkOrderStatusActions({
   workOrderId,
@@ -95,7 +105,7 @@ export function WorkOrderStatusActions({
                 disabled={isPending || blockedByReception}
                 className="h-11 rounded-xl border border-border px-4 text-sm font-medium disabled:opacity-60"
               >
-                {WORK_ORDER_STATUS_LABEL[opt]}
+                {statusButtonLabel(status, opt)}
               </button>
               {blockedByReception ? (
                 <p className="max-w-[160px] text-[10px] text-muted">Requer aceite de recepção registrado</p>

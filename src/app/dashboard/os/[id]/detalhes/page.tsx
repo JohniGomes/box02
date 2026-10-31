@@ -30,6 +30,7 @@ import {
   WorkOrderStatusActions,
 } from "../WorkOrderActions";
 import { AdditionalItemsSection } from "../AdditionalItemsSection";
+import { EditItemForm } from "../EditItemForm";
 import { SaveKitFromOrder } from "../SaveKitFromOrder";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
 import { WorkOrderCorrections } from "../WorkOrderCorrections";
@@ -285,6 +286,15 @@ export default async function WorkOrderDetailsPage({
                 ) : null}
                 {item.cancelReason ? (
                   <p className="mt-1 text-xs text-danger">Motivo: {item.cancelReason}</p>
+                ) : null}
+                {workOrder.status !== "CANCELADA" && item.status !== "CANCELADO" ? (
+                  <EditItemForm
+                    workOrderId={workOrder.id}
+                    itemId={item.id}
+                    description={item.description}
+                    unitPriceReais={(item.unitPriceCents / 100).toFixed(2).replace(".", ",")}
+                    canEditValue={isOpenForCancel}
+                  />
                 ) : null}
                 {executionChecklistByItemId.has(item.id) ? (
                   <div className="mt-2">

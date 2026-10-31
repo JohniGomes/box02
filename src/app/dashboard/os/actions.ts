@@ -8,6 +8,7 @@ import {
   cancelWorkOrderService,
   closeWorkOrderService,
   correctWorkOrderItemExecutorService,
+  correctWorkOrderItemService,
   createAdditionalItemService,
   createWorkOrderFromQuoteService,
   createWorkOrderWithoutQuoteService,
@@ -191,6 +192,23 @@ export async function setWorkOrderItemStatusAction(
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível atualizar o item.");
+  }
+}
+
+/** Corrige a descrição e/ou o valor de um item da OS (fica registrado quem mudou e o que era). */
+export async function correctWorkOrderItemAction(
+  workOrderId: string,
+  itemId: string,
+  input: { description?: string; unitPriceReais?: string; reason?: string },
+): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    await correctWorkOrderItemService(userId, workOrderId, itemId, input);
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath(`/dashboard/os/${workOrderId}/detalhes`);
+    return { success: true, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível corrigir o item.");
   }
 }
 
