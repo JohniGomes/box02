@@ -44,6 +44,7 @@ export interface ExtractedData {
     ordem?: string;
     quantidade?: string;
     guia?: string;
+    servico?: string;
   } | null;
   observacoes: string;
   confianca: "ALTA" | "MEDIA" | "BAIXA";
@@ -84,7 +85,8 @@ Retorne APENAS um JSON válido, sem markdown, sem explicações, com a estrutura
     "versao": "motor/versão ou null"
   } ou null,
   "pergunta": {
-    "consulta": "RESUMO_MES, A_RECEBER, LUCRO_OS, TAXA_CARTAO, OS_ABERTAS, PECAS_ACABANDO, PECA_ESTOQUE, HISTORICO_CLIENTE, AGENDA, MENSAGENS, TROCAS, RANKING_LUCRO, COMO_FAZER ou DESCONHECIDA",
+    "consulta": "RESUMO_MES, A_RECEBER, LUCRO_OS, TAXA_CARTAO, OS_ABERTAS, PECAS_ACABANDO, PECA_ESTOQUE, HISTORICO_CLIENTE, AGENDA, MENSAGENS, TROCAS, RANKING_LUCRO, COMO_FAZER, SERVICO_FEITO ou DESCONHECIDA",
+    "servico": "serviço ou peça procurado (SERVICO_FEITO), ex.: troca de óleo, correia dentada, ou null",
     "ordem": "MAIOR_LUCRO, MENOR_LUCRO, MELHOR_MARGEM ou PIOR_MARGEM (RANKING_LUCRO) ou null",
     "quantidade": "quantas OS mostrar (RANKING_LUCRO) ou null",
     "guia": "id do passo a passo (COMO_FAZER) ou null",
@@ -99,7 +101,7 @@ Retorne APENAS um JSON válido, sem markdown, sem explicações, com a estrutura
 }
 
 Regras importantes:
-- pergunta: preencha SOMENTE quando a pessoa faz uma PERGUNTA sobre o negócio (não é um lançamento nem pedido de código de peça). Use RESUMO_MES para quanto entrou/saiu/sobrou/faturou/lucro do mês (mes: ATUAL para "esse mês", ANTERIOR para "mês passado", ou AAAA-MM se citar um mês); A_RECEBER para quanto tem a receber/quem deve; LUCRO_OS para lucro/margem de uma OS (preencha "os" com o número citado); TAXA_CARTAO para taxa de cartão/maquininha; OS_ABERTAS para quais OS estão abertas/em andamento/no pátio; PECAS_ACABANDO para quais peças estão acabando/zeradas/no mínimo; PECA_ESTOQUE para saldo, custo ou último fornecedor de UMA peça (preencha "peca"; NÃO confunda com pedir código/referência de catálogo, que é consultaPeca); HISTORICO_CLIENTE para o que um cliente já fez/gastou/última visita (preencha "cliente"); AGENDA para quem está agendado (dia: HOJE, AMANHA ou a data); MENSAGENS para quantas mensagens estão pendentes de enviar; TROCAS para quais clientes estão com troca de óleo/correia/serviço chegando ou vencida; RANKING_LUCRO para comparar OS por lucro ou margem ("qual OS teve maior lucro", "as 5 mais lucrativas", "pior margem"; ordem padrão MAIOR_LUCRO; mes ATUAL se disser "do mês", ANTERIOR se "mês passado", TODOS se não citar período ou disser "de todas/sempre"); COMO_FAZER quando a pessoa pergunta COMO FAZER algo no sistema: escolha em "guia" o id mais adequado desta lista ou deixe null se nenhum servir: ${GUIAS.map((g) => `${g.id} (${g.sobre})`).join("; ")}. Se for uma pergunta sobre o negócio que não se encaixa em nenhuma, use DESCONHECIDA. Nesse caso deixe "itens" vazio. Caso contrário, use null.
+- pergunta: preencha SOMENTE quando a pessoa faz uma PERGUNTA sobre o negócio (não é um lançamento nem pedido de código de peça). Use RESUMO_MES para quanto entrou/saiu/sobrou/faturou/lucro do mês (mes: ATUAL para "esse mês", ANTERIOR para "mês passado", ou AAAA-MM se citar um mês); A_RECEBER para quanto tem a receber/quem deve; LUCRO_OS para lucro/margem de uma OS (preencha "os" com o número citado); TAXA_CARTAO para taxa de cartão/maquininha; OS_ABERTAS para quais OS estão abertas/em andamento/no pátio; PECAS_ACABANDO para quais peças estão acabando/zeradas/no mínimo; PECA_ESTOQUE para saldo, custo ou último fornecedor de UMA peça (preencha "peca"; NÃO confunda com pedir código/referência de catálogo, que é consultaPeca); HISTORICO_CLIENTE para o que um cliente já fez/gastou/última visita (preencha "cliente"); AGENDA para quem está agendado (dia: HOJE, AMANHA ou a data); MENSAGENS para quantas mensagens estão pendentes de enviar; TROCAS para quais clientes estão com troca de óleo/correia/serviço chegando ou vencida; SERVICO_FEITO para perguntar QUAIS VEÍCULOS ou clientes já fizeram um serviço ou trocaram uma peça ("quais veículos fizeram troca de óleo", "quem trocou correia"; preencha "servico" só com o essencial, por exemplo "óleo" ou "correia"; NÃO use para quem está com a troca vencida, que é TROCAS); RANKING_LUCRO para comparar OS por lucro ou margem ("qual OS teve maior lucro", "as 5 mais lucrativas", "pior margem"; ordem padrão MAIOR_LUCRO; mes ATUAL se disser "do mês", ANTERIOR se "mês passado", TODOS se não citar período ou disser "de todas/sempre"); COMO_FAZER quando a pessoa pergunta COMO FAZER algo no sistema: escolha em "guia" o id mais adequado desta lista ou deixe null se nenhum servir: ${GUIAS.map((g) => `${g.id} (${g.sobre})`).join("; ")}. Se for uma pergunta sobre o negócio que não se encaixa em nenhuma, use DESCONHECIDA. Nesse caso deixe "itens" vazio. Caso contrário, use null.
 - consultaPeca: preencha SOMENTE quando a pessoa pede o código, a referência ou o número de catálogo de uma peça para um veículo (ex.: "código do freio dianteiro do HR-V 2017"). Nesse caso deixe "itens" vazio. Em qualquer outro caso use null. Se souber a marca pelo modelo (ex.: HR-V é Honda), preencha a marca.
 - Se um campo não estiver presente ou não for legível, use null
 - Peças (ex: filtro de óleo, pastilha de freio, pneu) → tipo PECA
@@ -165,6 +167,7 @@ export const ExtractedCoreSchema = z.object({
       ordem: optText,
       quantidade: z.unknown().optional().transform((v) => (v == null || v === "" ? undefined : String(v))),
       guia: optText,
+      servico: optText,
     })
     .nullish()
     .transform((v) => (v && v.consulta ? v : null)),

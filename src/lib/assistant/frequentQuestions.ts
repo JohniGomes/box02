@@ -28,6 +28,8 @@ export const GRUPOS_PERGUNTAS: { grupo: string; perguntas: PerguntaFrequente[] }
       { rotulo: "Quem atendo hoje?", texto: "Quem eu atendo hoje?", enviar: true },
       { rotulo: "Quem atendo amanhã?", texto: "Quem eu atendo amanhã?", enviar: true },
       { rotulo: "Histórico de um cliente…", texto: "O que o cliente já fez aqui: ", enviar: false },
+      { rotulo: "Quem fez troca de óleo?", texto: "Quais veículos fizeram troca de óleo?", enviar: true },
+      { rotulo: "Quem fez um serviço…", texto: "Quais veículos fizeram ", enviar: false },
     ],
   },
   {
@@ -47,6 +49,7 @@ export const GRUPOS_PERGUNTAS: { grupo: string; perguntas: PerguntaFrequente[] }
       { rotulo: "Imprimir escolhendo o que sai", texto: "Como imprimo escolhendo o que sai no papel?", enviar: true },
       { rotulo: "Corrigir quem executou", texto: "Como corrijo quem executou um serviço?", enviar: true },
       { rotulo: "Cliente voltou (retorno)", texto: "Como abro um retorno quando o carro volta?", enviar: true },
+      { rotulo: "Serviço por KM ou tempo", texto: "Como configuro um serviço controlado por km ou por tempo?", enviar: true },
     ],
   },
   {

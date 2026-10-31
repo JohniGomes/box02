@@ -4,7 +4,7 @@ import { findWorkOrderByNumber, listDeliveredForRanking, listReceivables } from 
 import { comoFazer } from "./guides";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
 import { formatBRL } from "@/lib/money";
-import { agenda, historicoCliente, mensagensPendentes, osAbertas, pecaEstoque, pecasAcabando, trocasVencidas } from "./answersDayToDay";
+import { agenda, historicoCliente, mensagensPendentes, osAbertas, pecaEstoque, pecasAcabando, servicoFeito, trocasVencidas } from "./answersDayToDay";
 
 /**
  * Perguntas de leitura do robô. A IA só ESCOLHE a consulta (e o mês/OS citados); os números vêm
@@ -25,6 +25,7 @@ export const CONSULTAS = [
   "TROCAS",
   "RANKING_LUCRO",
   "COMO_FAZER",
+  "SERVICO_FEITO",
 ] as const;
 export type Consulta = (typeof CONSULTAS)[number];
 
@@ -46,6 +47,8 @@ export interface Pergunta {
   quantidade?: string;
   /** COMO_FAZER: id do guia escolhido pela IA. */
   guia?: string;
+  /** SERVICO_FEITO: o serviço ou peça procurado ("troca de óleo", "correia"). */
+  servico?: string;
 }
 
 export interface Resposta {
@@ -228,6 +231,8 @@ export async function responderPergunta(p: Pergunta, now: Date = new Date()): Pr
       return rankingLucro(p, now);
     case "COMO_FAZER":
       return comoFazer(p.guia);
+    case "SERVICO_FEITO":
+      return servicoFeito(p.servico);
     default:
       return desconhecida();
   }

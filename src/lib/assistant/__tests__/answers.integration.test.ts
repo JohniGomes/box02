@@ -216,6 +216,43 @@ describe("responderPergunta (só leitura)", () => {
     expect(r.aviso).toMatch(/estimativa/);
   });
 
+  it("serviço feito: acha pelo texto (sem acento/maiúscula), agrupa por veículo; curto ou inexistente avisa", async () => {
+    const actor = (await createUser({ name: "Testador", email: "sf@teste.com", passwordHash: await hashPassword("senhaTeste123") })).id;
+    const cid = (await createCustomerService(actor, { type: "PF", legalName: "Joana Óleo" })).id;
+    const vid = (await createVehicleService(actor, { customerId: cid, plate: "OLE1A23", brand: "VW", model: "Gol" })).id;
+    const os = await createWorkOrderWithoutQuoteService(actor, {
+      customerId: cid,
+      vehicleId: vid,
+      mileageAtEntry: 82000,
+      items: [
+        { type: "SERVICO", description: "Troca de ÓLEO e filtro", quantity: 1, unitPriceReais: "120,00" },
+        { type: "SERVICO", description: "Alinhamento", quantity: 1, unitPriceReais: "80,00" },
+      ],
+    });
+    await acceptReceptionForTest(actor, os.workOrder.id, {
+      receptionAcceptedName: "Cliente",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
+    });
+    await setWorkOrderStatusService(actor, os.workOrder.id, "EM_EXECUCAO");
+    await setWorkOrderItemStatusService(actor, os.workOrder.id, os.items[0].id, "EXECUTADO");
+    await setWorkOrderItemStatusService(actor, os.workOrder.id, os.items[1].id, "CANCELADO", { reason: "Não fez" });
+    await closeWorkOrderService(actor, os.workOrder.id, { deliveryAcceptedName: "Cliente" });
+
+    const r = await responderPergunta({ consulta: "SERVICO_FEITO", servico: "oleo" });
+    expect(r.titulo).toMatch(/Veículos com "oleo" \(1\)/);
+    expect(r.linhas[0].rotulo).toContain("VW Gol");
+    expect(r.linhas[0].rotulo).toContain("Joana Óleo");
+    expect(r.linhas[0].valor).toContain("82.000 km");
+    expect(r.links[0].href).toBe(`/dashboard/veiculos/${vid}`);
+
+    // item cancelado não conta como serviço feito
+    expect((await responderPergunta({ consulta: "SERVICO_FEITO", servico: "alinhamento" })).aviso).toMatch(/Não achei/);
+    expect((await responderPergunta({ consulta: "SERVICO_FEITO", servico: "ab" })).aviso).toMatch(/Qual serviço/);
+    expect((await responderPergunta({ consulta: "SERVICO_FEITO", servico: "100%" })).aviso).toMatch(/Não achei/);
+  });
+
   it("pergunta fora do que sei vira 'ainda não sei', sem inventar", async () => {
     const r = await responderPergunta({ consulta: "DESCONHECIDA" });
     expect(r.titulo).toMatch(/Ainda não sei/);

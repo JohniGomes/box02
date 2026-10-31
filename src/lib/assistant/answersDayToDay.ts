@@ -2,6 +2,7 @@ import { listYardWorkOrders } from "@/lib/db/repositories/workOrders";
 import { listPartsWithStock, type PartWithStock } from "@/lib/db/repositories/parts";
 import { listLastSuppliersForPart } from "@/lib/db/repositories/partPurchases";
 import { listAppointmentsWithNamesBetween } from "@/lib/db/repositories/appointments";
+import { listVehiclesByExecutedText } from "@/lib/db/repositories/serviceHistory";
 import { searchCustomers } from "@/lib/db/repositories/customers";
 import { getCustomerHistoryService } from "@/lib/customers/service";
 import { getMessageCenterService } from "@/lib/messages/service";
@@ -145,6 +146,35 @@ export async function agenda(dia: string | undefined, now: Date = new Date()): P
       valor: `${a.description ?? "sem descrição"}${APPOINTMENT_STATUS[a.status] ?? ""}`,
     })),
     links: [{ texto: "Abrir agendamentos", href: "/dashboard/agendamentos" }],
+  };
+}
+
+/** Quais veículos já fizeram um serviço (ou trocaram uma peça), procurando o texto na descrição dos itens entregues. */
+export async function servicoFeito(termo: string | undefined): Promise<Resposta> {
+  const term = (termo ?? "").trim();
+  if (term.length < 3) {
+    return { titulo: "Quem já fez um serviço", linhas: [], links: [], aviso: "Qual serviço? Escreva, por exemplo: quais veículos fizeram troca de óleo?" };
+  }
+  const rows = await listVehiclesByExecutedText(term, 16);
+  if (rows.length === 0) {
+    return {
+      titulo: `Serviços com "${term}"`,
+      linhas: [],
+      links: [],
+      aviso: "Não achei nenhum veículo com esse texto nas OS entregues. Tente uma palavra mais curta (por exemplo, só \"óleo\").",
+    };
+  }
+  const shown = rows.slice(0, 15);
+  return {
+    titulo: `Veículos com "${term}" (${rows.length > 15 ? "mais de 15" : rows.length})`,
+    linhas: shown.map((r) => ({
+      rotulo: `${[r.brand, r.model].filter(Boolean).join(" ") || "Veículo"}${r.plate ? ` · ${formatPlate(r.plate)}` : ""} · ${r.customerName}`,
+      valor: `última ${formatDateBR(r.lastAt)}${r.lastKm != null ? ` · ${r.lastKm.toLocaleString("pt-BR")} km` : ""}${r.times > 1 ? ` · ${r.times}x` : ""}`,
+    })),
+    links: shown.slice(0, 5).map((r) => ({ texto: `Abrir ${r.plate ? formatPlate(r.plate) : "veículo"}`, href: `/dashboard/veiculos/${r.vehicleId}` })),
+    aviso:
+      `Procurei "${term}" na descrição dos itens executados das OS entregues (serviços e peças), da entrega mais recente para a mais antiga.` +
+      (rows.length > shown.length ? " Mostrando 15." : ""),
   };
 }
 
