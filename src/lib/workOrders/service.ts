@@ -49,6 +49,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { buildEvidenceStorageKey, createSupabaseStorageClient, type StorageClient } from "@/lib/storage/supabase";
 import {
   createWorkOrderPayment,
+  setWorkOrderPaymentCardFee,
   findWorkOrderPaymentById,
   listWorkOrderPayments,
   sumWorkOrderPayments,
@@ -102,6 +103,7 @@ import {
   refundWorkOrderPaymentSchema,
   registerWorkOrderPaymentSchema,
   registerWorkOrderPaymentsSchema,
+  setPaymentCardFeeSchema,
   updateDiagnosisExplanationSchema,
   updatePreExistingDamagesSchema,
   updateWorkOrderCheckInSchema,
@@ -1393,6 +1395,65 @@ export async function registerWorkOrderPaymentService(
 }
 
 /**
+ * Taxa da maquininha repassada ao cliente e parcelas: só existem em recebimento no CARTÃO. A taxa é um
+ * valor à parte (o cliente passa no cartão valor do serviço + taxa); vazio/0 = sem taxa registrada.
+ */
+function parseCardFeeFields(
+  method: string,
+  feeRaw: string | number | undefined,
+  installmentsRaw: string | number | undefined,
+): { cardFeeCents: number | null; installments: number | null } {
+  const feeText = feeRaw === undefined ? "" : String(feeRaw).trim();
+  const installmentsText = installmentsRaw === undefined ? "" : String(installmentsRaw).trim();
+  const cardFeeCents = feeText === "" ? null : reaisToCents(feeText);
+  const installments = installmentsText === "" ? null : Number(installmentsText);
+
+  if (cardFeeCents !== null && (!Number.isFinite(cardFeeCents) || cardFeeCents < 0)) {
+    throw new Error("O valor da taxa da maquininha é inválido.");
+  }
+  if (installments !== null && (!Number.isInteger(installments) || installments < 1 || installments > 24)) {
+    throw new Error("As parcelas precisam ser um número de 1 a 24.");
+  }
+  if (method !== "CARTAO" && (cardFeeCents !== null || installments !== null)) {
+    throw new Error("Taxa da maquininha e parcelas só valem para recebimento no cartão.");
+  }
+  // Taxa 0 não é "taxa repassada": deixa como sem taxa (continua valendo a estimativa).
+  return { cardFeeCents: cardFeeCents === 0 ? null : cardFeeCents, installments };
+}
+
+/**
+ * Registra (ou corrige, ou apaga com vazio) a taxa da maquininha e as parcelas de um recebimento no cartão
+ * que já existe. Não muda o valor recebido, o saldo da OS nem os estornos.
+ */
+export async function setWorkOrderPaymentCardFeeService(
+  actorUserId: string,
+  workOrderId: string,
+  paymentId: string,
+  rawInput: unknown,
+): Promise<WorkOrderPaymentRecord> {
+  const input = setPaymentCardFeeSchema.parse(rawInput);
+  const payment = await findWorkOrderPaymentById(paymentId);
+  if (!payment || payment.workOrderId !== workOrderId) throw new WorkOrderPaymentNotFoundError();
+  const { cardFeeCents, installments } = parseCardFeeFields(payment.method, input.cardFeeReais, input.installments);
+
+  const updated = await setWorkOrderPaymentCardFee(paymentId, { cardFeeCents, installments });
+  if (!updated) throw new WorkOrderPaymentNotFoundError();
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_PAYMENT_CARD_FEE_SET",
+    entityType: "work_order",
+    entityId: workOrderId,
+    metadata: {
+      paymentId,
+      before: { cardFeeCents: payment.cardFeeCents, installments: payment.installments },
+      after: { cardFeeCents, installments },
+    },
+  });
+  return updated;
+}
+
+/**
  * Registra vários recebimentos de uma vez (ex.: parte no Pix, parte no cartão).
  * Cada forma vira um recebimento separado — igual a registrar um por um —, mas
  * tudo numa transação só: se a soma passar do saldo, nada é gravado.
@@ -1404,7 +1465,11 @@ export async function registerWorkOrderPaymentsService(
 ): Promise<WorkOrderPaymentRecord[]> {
   const input = registerWorkOrderPaymentsSchema.parse(rawInput);
   const lines = input.payments
-    .map((p) => ({ method: p.method, amountCents: reaisToCents(p.amountReais) }))
+    .map((p) => ({
+      method: p.method,
+      amountCents: reaisToCents(p.amountReais),
+      ...parseCardFeeFields(p.method, p.cardFeeReais, p.installments),
+    }))
     .filter((p) => p.amountCents !== 0);
   const discountCents = input.discountReais ? reaisToCents(input.discountReais) : 0;
   if ((lines.length === 0 && discountCents <= 0) || lines.some((l) => l.amountCents < 0) || discountCents < 0) {
@@ -1457,6 +1522,8 @@ export async function registerWorkOrderPaymentsService(
           notes: input.notes ?? null,
           registeredByUserId: actorUserId,
           receivedAt,
+          cardFeeCents: line.cardFeeCents,
+          installments: line.installments,
         },
         client,
       );
@@ -1471,6 +1538,8 @@ export async function registerWorkOrderPaymentsService(
           method: line.method,
           paymentId: payment.id,
           receivedOn: input.receivedOn ?? null,
+          ...(line.cardFeeCents !== null ? { cardFeeCents: line.cardFeeCents } : {}),
+          ...(line.installments !== null ? { installments: line.installments } : {}),
         },
       });
     }

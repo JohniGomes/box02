@@ -194,11 +194,13 @@ async function taxaCartao(month: string): Promise<Resposta> {
   return {
     titulo: `Taxa de cartão em ${monthLabel(month)}`,
     linhas: [
-      { rotulo: "Recebido no cartão", valor: formatBRL(c.byMethod.cartaoCents) },
-      { rotulo: `Taxa estimada (${String(c.cardFeePercent).replace(".", ",")}%)`, valor: formatBRL(c.cardFeeCents), destaque: true },
+      { rotulo: "Recebido no cartão (valor dos serviços)", valor: formatBRL(c.byMethod.cartaoCents) },
+      { rotulo: `Taxa estimada (${String(c.cardFeePercent).replace(".", ",")}%, só no cartão sem taxa registrada)`, valor: formatBRL(c.cardFeeCents), destaque: true },
+      ...(c.cardFeePassedCents > 0 ? [{ rotulo: "Taxa repassada ao cliente (registrada)", valor: formatBRL(c.cardFeePassedCents) }] : []),
     ],
     links: [{ texto: "Abrir o Financeiro", href: `/dashboard/financeiro?mes=${month}` }],
-    aviso: "É uma estimativa pela porcentagem das Regras, não o valor exato da maquininha.",
+    aviso:
+      "A estimativa usa a porcentagem das Regras, não o valor exato da maquininha. Onde a taxa foi repassada ao cliente e registrada no recebimento, a oficina não paga a taxa e ela não entra na estimativa.",
   };
 }
 

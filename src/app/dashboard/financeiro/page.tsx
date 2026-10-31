@@ -109,8 +109,14 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
         </ul>
         {cur.cardFeeCents > 0 ? (
           <p className="mt-2 text-xs text-muted">
-            Taxa estimada da maquininha ({String(cur.cardFeePercent).replace(".", ",")}% do cartão): {formatBRL(cur.cardFeeCents)}. Os valores acima são os
-            cheios que o cliente pagou. A taxa muda em Configurações → Regras.
+            Taxa estimada da maquininha ({String(cur.cardFeePercent).replace(".", ",")}% do cartão sem taxa registrada): {formatBRL(cur.cardFeeCents)}. Os
+            valores acima são o que o cliente pagou pelo serviço. A taxa muda em Configurações → Regras.
+          </p>
+        ) : null}
+        {cur.cardFeePassedCents > 0 ? (
+          <p className="mt-2 text-xs text-muted">
+            Taxa da maquininha repassada ao cliente neste mês: {formatBRL(cur.cardFeePassedCents)}. Ela não entra nas entradas (o cliente paga o serviço mais a
+            taxa, e a taxa fica com a maquininha).
           </p>
         ) : null}
       </section>

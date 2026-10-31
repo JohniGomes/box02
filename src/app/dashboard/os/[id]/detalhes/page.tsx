@@ -456,6 +456,8 @@ export default async function WorkOrderDetailsPage({
               method: p.method,
               notes: p.notes,
               receivedAt: p.receivedAt.toISOString(),
+              cardFeeCents: p.cardFeeCents,
+              installments: p.installments,
             })),
             refunds: paymentsSummary.refunds.map((r) => ({
               id: r.id,
