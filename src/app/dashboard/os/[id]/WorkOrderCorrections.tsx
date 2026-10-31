@@ -7,7 +7,7 @@ import { formatBRL } from "@/lib/money";
 
 export interface CorrectionEntryView {
   id: string;
-  kind: "DATA" | "REABERTURA" | "ITEM" | "SINCRONIZACAO";
+  kind: "DATA" | "REABERTURA" | "ITEM" | "SINCRONIZACAO" | "CUSTO";
   at: string;
   by: string | null;
   reason: string | null;
@@ -158,7 +158,9 @@ export function WorkOrderCorrections({
                     ? "Data de atendimento corrigida"
                     : h.kind === "ITEM"
                       ? "Item corrigido"
-                      : h.kind === "SINCRONIZACAO"
+                      : h.kind === "CUSTO"
+                        ? "Custo de item corrigido"
+                        : h.kind === "SINCRONIZACAO"
                         ? "OS atualizada com o orçamento"
                         : "OS reaberta"}{" "}
                   —{" "}

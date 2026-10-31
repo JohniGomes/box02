@@ -3,6 +3,7 @@ import { getMonthFinanceService, type MonthFinance } from "@/lib/finance/service
 import { currentMonthBr, monthLabel, parseMonth, percentChange, shiftMonth } from "@/lib/finance/month";
 import { listReceivablesService } from "@/lib/workOrders/service";
 import { marginPercentOf } from "@/lib/workOrders/margin";
+import { listPartsWithoutCost } from "@/lib/db/repositories/monthlyFinance";
 import { formatBRL } from "@/lib/money";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -64,7 +65,11 @@ function Cards({ cur, prev }: { cur: MonthFinance; prev: MonthFinance }) {
 
 export default async function FinanceiroPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const month = parseMonth((await searchParams).mes);
-  const [{ current: cur, previous: prev }, receivables] = await Promise.all([getMonthFinanceService(month), listReceivablesService()]);
+  const [{ current: cur, previous: prev }, receivables, partsWithoutCost] = await Promise.all([
+    getMonthFinanceService(month),
+    listReceivablesService(),
+    listPartsWithoutCost(month),
+  ]);
   const receivableTotal = receivables.reduce((sum, r) => sum + r.balanceCents, 0);
   const isCurrent = month === currentMonthBr();
   const totalOut = cur.expensesCents;
@@ -194,6 +199,27 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: P
                 {cur.margin.itemsWithoutCost} {cur.margin.itemsWithoutCost === 1 ? "peça executada está" : "peças executadas estão"} sem custo informado: o
                 lucro das peças pode ser menor. É só um aviso.
               </p>
+            ) : null}
+            {partsWithoutCost.length > 0 ? (
+              <details className="mt-2 rounded-lg border border-border p-3 text-sm">
+                <summary className="cursor-pointer text-xs font-medium text-accent">Ver as peças sem custo e corrigir</summary>
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {partsWithoutCost.map((p) => (
+                    <li key={p.itemId}>
+                      <Link
+                        href={`/dashboard/os/${p.workOrderId}/detalhes`}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs hover:border-accent"
+                      >
+                        <span className="min-w-0 truncate">
+                          <span className="font-mono font-semibold">{p.number}</span> · {p.customerName} · {p.description} × {p.quantity}
+                        </span>
+                        <span className="shrink-0 font-semibold">{formatBRL(p.totalCents)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11px] text-muted">Abra a OS, vá em &quot;Margem desta OS&quot; e use &quot;informar custo&quot; no item.</p>
+              </details>
             ) : null}
           </>
         )}

@@ -25,6 +25,7 @@ import {
   findWorkOrderItemByAccessToken,
   findWorkOrderItemById,
   updateWorkOrderItemTextAndPrice,
+  setWorkOrderItemUnitCost,
   insertWorkOrderItems,
   listWorkOrderItemsByWorkOrder,
   lockWorkOrderItemById,
@@ -727,9 +728,56 @@ export async function correctWorkOrderItemService(
   return updated;
 }
 
+/**
+ * Corrige o CUSTO unitário gravado num item já executado (uso interno: muda só a margem da OS e do mês).
+ * Vale em qualquer OS não cancelada, mesmo entregue ou quitada; não mexe em valor cobrado, recibo, estoque
+ * nem no custo cadastrado da peça. Pede motivo e fica registrado o custo de antes.
+ */
+export async function correctWorkOrderItemCostService(
+  actorUserId: string,
+  workOrderId: string,
+  itemId: string,
+  rawInput: { unitCostReais?: string; reason?: string },
+): Promise<WorkOrderItemRecord> {
+  const workOrder = await findWorkOrderById(workOrderId);
+  if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+  if (workOrder.status === "CANCELADA") throw new WorkOrderCorrectionError("Esta OS foi cancelada.");
+  const item = await findWorkOrderItemById(itemId);
+  if (!item || item.workOrderId !== workOrderId) throw new WorkOrderItemNotFoundError(itemId);
+  if (item.status !== "EXECUTADO") {
+    throw new WorkOrderCorrectionError("O custo só se corrige em item já executado (o custo é gravado na execução).");
+  }
+
+  const text = rawInput.unitCostReais?.trim();
+  if (!text) throw new WorkOrderCorrectionError("Informe o custo por unidade (use 0 se não houve custo).");
+  const cents = reaisToCents(text);
+  if (!Number.isFinite(cents) || cents < 0) throw new WorkOrderCorrectionError("Custo inválido.");
+  if (cents === item.unitCostCents) throw new WorkOrderCorrectionError("Nada para corrigir: o custo é o mesmo.");
+  const reason = rawInput.reason?.trim() ?? "";
+  if (reason.length < 3) throw new WorkOrderCorrectionError("Informe o motivo da correção do custo.");
+
+  const updated = await setWorkOrderItemUnitCost(itemId, cents);
+  if (!updated) throw new WorkOrderItemNotFoundError(itemId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_ITEM_COST_CORRECTED",
+    entityType: "work_order",
+    entityId: workOrderId,
+    metadata: {
+      itemId,
+      description: item.description,
+      before: { unitCostCents: item.unitCostCents },
+      after: { unitCostCents: updated.unitCostCents },
+      reason,
+    },
+  });
+  return updated;
+}
+
 export interface WorkOrderCorrectionEntry {
   id: string;
-  kind: "DATA" | "REABERTURA" | "ITEM" | "SINCRONIZACAO";
+  kind: "DATA" | "REABERTURA" | "ITEM" | "SINCRONIZACAO" | "CUSTO";
   at: Date;
   by: string | null;
   reason: string | null;
@@ -744,8 +792,9 @@ export async function listWorkOrderCorrectionsService(workOrderId: string): Prom
     "WORK_ORDER_REOPENED",
     "WORK_ORDER_ITEM_EDITED",
     "WORK_ORDER_QUOTE_SYNCED",
+    "WORK_ORDER_ITEM_COST_CORRECTED",
   ]);
-  const fmt = (v: unknown) => (typeof v === "string" || v instanceof Date ? formatDateTimeBR(v) : null);
+  const fmt =(v: unknown) => (typeof v === "string" || v instanceof Date ? formatDateTimeBR(v) : null);
   return rows.map((r) => {
     const m = r.metadata ?? {};
     if (r.action === "WORK_ORDER_QUOTE_SYNCED") {
@@ -758,6 +807,21 @@ export async function listWorkOrderCorrectionsService(workOrderId: string): Prom
         reason: null,
         from: `Orçamento versão ${n(m.fromVersionNumber)}`,
         to: `versão ${n(m.toVersionNumber)}: ${n(m.updated) + n(m.descriptionsOnly)} atualizado(s), ${n(m.removed)} cancelado(s), ${n(m.added)} novo(s)`,
+      };
+    }
+    if (r.action === "WORK_ORDER_ITEM_COST_CORRECTED") {
+      const before = (m.before ?? {}) as { unitCostCents?: number | null };
+      const after = (m.after ?? {}) as { unitCostCents?: number | null };
+      const cost = (c: number | null | undefined) => (c == null ? "sem custo" : `custo ${formatBRL(c)}`);
+      const name = typeof m.description === "string" ? `${m.description}: ` : "";
+      return {
+        id: r.id,
+        kind: "CUSTO" as const,
+        at: r.createdAt,
+        by: r.userName,
+        reason: (m.reason as string) ?? null,
+        from: `${name}${cost(before.unitCostCents)}`,
+        to: cost(after.unitCostCents),
       };
     }
     if (r.action === "WORK_ORDER_ITEM_EDITED") {
