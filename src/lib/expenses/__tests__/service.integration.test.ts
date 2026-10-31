@@ -104,8 +104,9 @@ describe("createExpenseService", () => {
 
 describe("listExpensesService — derivação de status na leitura", () => {
   it("marca como ATRASADA uma despesa pendente com vencimento no passado", async () => {
+    // 3 dias atrás: folga para não depender do fuso/horário em que o teste roda.
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setDate(yesterday.getDate() - 3);
     const pastDueDate = yesterday.toISOString().slice(0, 10);
 
     const expense = await createExpenseService(actorUserId, {
@@ -134,8 +135,9 @@ describe("listExpensesService — derivação de status na leitura", () => {
   });
 
   it("marca como PAGA uma despesa já quitada, mesmo com vencimento no passado", async () => {
+    // 3 dias atrás: folga para não depender do fuso/horário em que o teste roda.
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setDate(yesterday.getDate() - 3);
     const pastDueDate = yesterday.toISOString().slice(0, 10);
 
     const expense = await createExpenseService(actorUserId, {

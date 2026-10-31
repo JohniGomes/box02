@@ -3,13 +3,26 @@ import { currentMonthBr, monthLabel, parseMonth, percentChange, shiftMonth } fro
 import { findWorkOrderByNumber, listReceivables } from "@/lib/db/repositories/workOrders";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
 import { formatBRL } from "@/lib/money";
+import { agenda, historicoCliente, mensagensPendentes, osAbertas, pecaEstoque, pecasAcabando, trocasVencidas } from "./answersDayToDay";
 
 /**
  * Perguntas de leitura do robô. A IA só ESCOLHE a consulta (e o mês/OS citados); os números vêm
  * do banco por estas funções, formatados aqui. Nada daqui altera dados.
  */
 
-export const CONSULTAS = ["RESUMO_MES", "A_RECEBER", "LUCRO_OS", "TAXA_CARTAO"] as const;
+export const CONSULTAS = [
+  "RESUMO_MES",
+  "A_RECEBER",
+  "LUCRO_OS",
+  "TAXA_CARTAO",
+  "OS_ABERTAS",
+  "PECAS_ACABANDO",
+  "PECA_ESTOQUE",
+  "HISTORICO_CLIENTE",
+  "AGENDA",
+  "MENSAGENS",
+  "TROCAS",
+] as const;
 export type Consulta = (typeof CONSULTAS)[number];
 
 export interface Pergunta {
@@ -18,6 +31,12 @@ export interface Pergunta {
   mes?: string;
   /** Número da OS como a pessoa falou ("OS-20", "20", "OS-000020"). */
   os?: string;
+  /** Nome da peça (PECA_ESTOQUE). */
+  peca?: string;
+  /** Nome do cliente (HISTORICO_CLIENTE). */
+  cliente?: string;
+  /** "HOJE", "AMANHA" ou "AAAA-MM-DD" (AGENDA). */
+  dia?: string;
 }
 
 export interface Resposta {
@@ -47,7 +66,7 @@ function desconhecida(): Resposta {
     titulo: "Ainda não sei responder isso",
     linhas: [],
     links: [],
-    aviso: "Hoje eu respondo sobre dinheiro: resumo do mês, quanto tem a receber, lucro de uma OS e taxa de cartão. Toque em uma pergunta pronta ou reescreva.",
+    aviso: "Eu respondo sobre: dinheiro (resumo do mês, a receber, lucro de uma OS, taxa de cartão), OS na oficina, peças (acabando, saldo, último fornecedor), histórico de cliente, agenda, mensagens e trocas. Toque em uma pergunta pronta ou reescreva.",
   };
 }
 
@@ -135,6 +154,20 @@ export async function responderPergunta(p: Pergunta, now: Date = new Date()): Pr
       return lucroOs(p.os);
     case "TAXA_CARTAO":
       return taxaCartao(resolveMonth(p.mes, now));
+    case "OS_ABERTAS":
+      return osAbertas();
+    case "PECAS_ACABANDO":
+      return pecasAcabando();
+    case "PECA_ESTOQUE":
+      return pecaEstoque(p.peca);
+    case "HISTORICO_CLIENTE":
+      return historicoCliente(p.cliente);
+    case "AGENDA":
+      return agenda(p.dia, now);
+    case "MENSAGENS":
+      return mensagensPendentes();
+    case "TROCAS":
+      return trocasVencidas();
     default:
       return desconhecida();
   }

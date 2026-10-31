@@ -14,7 +14,7 @@ import {
   type ReconciledData,
 } from "@/app/dashboard/assistente/actions";
 import type { Resposta } from "@/lib/assistant/answers";
-import { PERGUNTAS_FREQUENTES } from "@/lib/assistant/frequentQuestions";
+import { GRUPOS_PERGUNTAS } from "@/lib/assistant/frequentQuestions";
 import { PartCodesPanel } from "@/app/dashboard/estoque/ficha/PartCodesPanel";
 import { useRouter } from "next/navigation";
 
@@ -209,7 +209,7 @@ export function AssistenteChat() {
             {(etapa === "idle" || etapa === "analisando") && (
               <>
                 <p className="text-xs text-muted">
-                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente. Também dá para pedir o código de uma peça (ex.: &quot;código do freio dianteiro do HR-V 2017&quot;) ou perguntar sobre dinheiro (ex.: &quot;quanto tenho a receber?&quot;).
+                  Digite ou fale (🎤) o que aconteceu, ou tire uma foto da anotação/nota fiscal. O sistema identifica o cliente, veículo e peças automaticamente. Também dá para pedir o código de uma peça (ex.: &quot;código do freio dianteiro do HR-V 2017&quot;) ou perguntar sobre dinheiro, OS, estoque, clientes, agenda e mensagens (ex.: &quot;quanto tenho a receber?&quot;).
                 </p>
                 {contexto ? (
                   <div className="flex items-center justify-between gap-2 rounded-lg bg-yellow-100 px-3 py-2 text-xs text-yellow-900">
@@ -254,22 +254,29 @@ export function AssistenteChat() {
                   />
                 </div>
                 {erro && <p className="text-xs text-red-500">{erro}</p>}
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-[11px] font-medium text-muted">Perguntas frequentes</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PERGUNTAS_FREQUENTES.map((q) => (
-                      <button
-                        key={q.rotulo}
-                        type="button"
-                        disabled={etapa === "analisando"}
-                        onClick={() => (q.enviar ? handleEnviarTexto(q.texto) : setTexto(q.texto))}
-                        className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted/10 disabled:opacity-40"
-                      >
-                        {q.rotulo}
-                      </button>
+                <details className="rounded-lg border border-border p-2">
+                  <summary className="cursor-pointer text-xs font-semibold">Perguntas frequentes (toque para abrir)</summary>
+                  <div className="mt-2 flex max-h-56 flex-col gap-2 overflow-y-auto">
+                    {GRUPOS_PERGUNTAS.map((g) => (
+                      <div key={g.grupo} className="flex flex-col gap-1">
+                        <p className="text-[11px] font-medium text-muted">{g.grupo}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.perguntas.map((q) => (
+                            <button
+                              key={q.rotulo}
+                              type="button"
+                              disabled={etapa === "analisando"}
+                              onClick={() => (q.enviar ? handleEnviarTexto(q.texto) : setTexto(q.texto))}
+                              className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted/10 disabled:opacity-40"
+                            >
+                              {q.rotulo}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
+                </details>
               </>
             )}
 
