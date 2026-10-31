@@ -190,6 +190,19 @@ export async function findWorkOrderById(
   return result.rows[0] ?? null;
 }
 
+/** OS pelo número exato ("OS-000020"). */
+export async function findWorkOrderByNumber(
+  number: string,
+): Promise<{ id: string; number: string; customerName: string } | null> {
+  const result = await pool.query<{ id: string; number: string; customerName: string }>(
+    `SELECT wo.id, wo.number, c."legalName" AS "customerName"
+     FROM work_orders wo INNER JOIN customers c ON c.id = wo."customerId"
+     WHERE wo.number = $1 LIMIT 1`,
+    [number],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function lockWorkOrderById(
   id: string,
   client: PoolClient,

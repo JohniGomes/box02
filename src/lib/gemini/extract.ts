@@ -32,6 +32,8 @@ export interface ExtractedData {
     ano?: number;
     versao?: string;
   } | null;
+  /** Preenchido só quando a pessoa FAZ UMA PERGUNTA sobre o negócio (o sistema responde com os números do banco). */
+  pergunta?: { consulta: string; mes?: string; os?: string } | null;
   observacoes: string;
   confianca: "ALTA" | "MEDIA" | "BAIXA";
   textoOriginal: string;
@@ -70,11 +72,17 @@ Retorne APENAS um JSON válido, sem markdown, sem explicações, com a estrutura
     "ano": "número ou null",
     "versao": "motor/versão ou null"
   } ou null,
+  "pergunta": {
+    "consulta": "RESUMO_MES, A_RECEBER, LUCRO_OS, TAXA_CARTAO ou DESCONHECIDA",
+    "mes": "ATUAL, ANTERIOR ou AAAA-MM, ou null",
+    "os": "número da OS citada (ex.: OS-20) ou null"
+  } ou null,
   "observacoes": "qualquer outra informação relevante",
   "confianca": "ALTA, MEDIA ou BAIXA dependendo da legibilidade/clareza"
 }
 
 Regras importantes:
+- pergunta: preencha SOMENTE quando a pessoa faz uma PERGUNTA sobre o negócio (não é um lançamento nem pedido de código de peça). Use RESUMO_MES para quanto entrou/saiu/sobrou/faturou/lucro do mês (mes: ATUAL para "esse mês", ANTERIOR para "mês passado", ou AAAA-MM se citar um mês); A_RECEBER para quanto tem a receber/quem deve; LUCRO_OS para lucro/margem de uma OS (preencha "os" com o número citado); TAXA_CARTAO para taxa de cartão/maquininha. Se for uma pergunta sobre o negócio que não se encaixa em nenhuma, use DESCONHECIDA. Nesse caso deixe "itens" vazio. Caso contrário, use null.
 - consultaPeca: preencha SOMENTE quando a pessoa pede o código, a referência ou o número de catálogo de uma peça para um veículo (ex.: "código do freio dianteiro do HR-V 2017"). Nesse caso deixe "itens" vazio. Em qualquer outro caso use null. Se souber a marca pelo modelo (ex.: HR-V é Honda), preencha a marca.
 - Se um campo não estiver presente ou não for legível, use null
 - Peças (ex: filtro de óleo, pastilha de freio, pneu) → tipo PECA
@@ -129,6 +137,14 @@ export const ExtractedCoreSchema = z.object({
     })
     .nullish()
     .transform((v) => (v && v.peca ? v : null)),
+  pergunta: z
+    .object({
+      consulta: z.string().nullish().transform((v) => (v ?? "").trim().toUpperCase()),
+      mes: optText,
+      os: optText,
+    })
+    .nullish()
+    .transform((v) => (v && v.consulta ? v : null)),
   observacoes: z.string().nullish().transform((v) => v ?? ""),
   confianca: z.enum(["ALTA", "MEDIA", "BAIXA"]).catch("BAIXA"),
 });
