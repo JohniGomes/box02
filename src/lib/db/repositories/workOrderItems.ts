@@ -204,7 +204,7 @@ export async function setWorkOrderItemStatus(
 /** Corrige o texto e/ou o valor de um item sem mudar status, estoque nem execução. `undefined` = não mexe. */
 export async function updateWorkOrderItemTextAndPrice(
   id: string,
-  change: { description?: string; unitPriceCents?: number; totalCents?: number },
+  change: { description?: string; unitPriceCents?: number; totalCents?: number; quantity?: number },
   db: Queryable = pool,
 ): Promise<WorkOrderItemRecord | null> {
   const result = await db.query<WorkOrderItemRecord>(
@@ -212,12 +212,22 @@ export async function updateWorkOrderItemTextAndPrice(
       description = COALESCE($2, description),
       "unitPriceCents" = COALESCE($3, "unitPriceCents"),
       "totalCents" = COALESCE($4, "totalCents"),
+      quantity = COALESCE($5, quantity),
       "updatedAt" = NOW()
     WHERE id = $1
     RETURNING ${COLUMNS}`,
-    [id, change.description ?? null, change.unitPriceCents ?? null, change.totalCents ?? null],
+    [id, change.description ?? null, change.unitPriceCents ?? null, change.totalCents ?? null, change.quantity ?? null],
   );
   return result.rows[0] ?? null;
+}
+
+/** Aponta um item da OS para o item correspondente da versão do orçamento que passou a valer. */
+export async function setWorkOrderItemSourceQuoteItem(
+  id: string,
+  sourceQuoteItemId: string,
+  db: Queryable = pool,
+): Promise<void> {
+  await db.query(`UPDATE work_order_items SET "sourceQuoteItemId" = $2, "updatedAt" = NOW() WHERE id = $1`, [id, sourceQuoteItemId]);
 }
 
 /** Desfaz a execução: o item volta para "Planejado" sem executor nem custo gravado. */

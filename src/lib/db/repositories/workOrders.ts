@@ -167,6 +167,50 @@ export async function createWorkOrder(
   return result.rows[0];
 }
 
+/**
+ * Passa a OS a valer pela versão nova do orçamento (qual versão, e opcionalmente desconto e acréscimo).
+ * Os totais de desconto/acréscimo são recalculados ao vivo a partir do tipo e do valor.
+ */
+export async function setWorkOrderQuoteSource(
+  id: string,
+  input: {
+    sourceQuoteVersionId: string;
+    adjustments?: {
+      discountType: QuoteAdjustmentType | null;
+      discountValue: number | null;
+      discountReason: string | null;
+      surchargeType: QuoteAdjustmentType | null;
+      surchargeValue: number | null;
+    };
+  },
+  db: Queryable = pool,
+): Promise<WorkOrderRecord | null> {
+  const adj = input.adjustments;
+  const result = await db.query<WorkOrderRecord>(
+    `UPDATE work_orders SET
+       "sourceQuoteVersionId" = $2,
+       "discountType" = CASE WHEN $3::boolean THEN $4 ELSE "discountType" END,
+       "discountValue" = CASE WHEN $3::boolean THEN $5 ELSE "discountValue" END,
+       "discountReason" = CASE WHEN $3::boolean THEN $6 ELSE "discountReason" END,
+       "surchargeType" = CASE WHEN $3::boolean THEN $7 ELSE "surchargeType" END,
+       "surchargeValue" = CASE WHEN $3::boolean THEN $8 ELSE "surchargeValue" END,
+       "updatedAt" = NOW()
+     WHERE id = $1
+     RETURNING ${COLUMNS}`,
+    [
+      id,
+      input.sourceQuoteVersionId,
+      adj !== undefined,
+      adj?.discountType ?? null,
+      adj?.discountValue ?? null,
+      adj?.discountReason ?? null,
+      adj?.surchargeType ?? null,
+      adj?.surchargeValue ?? null,
+    ],
+  );
+  return result.rows[0] ?? null;
+}
+
 /** Retornos (OS abertas a partir desta), da mais antiga para a mais nova. */
 export async function listReturnsOfWorkOrder(
   originalId: string,

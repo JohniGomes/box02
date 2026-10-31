@@ -7,7 +7,7 @@ import { formatBRL } from "@/lib/money";
 
 export interface CorrectionEntryView {
   id: string;
-  kind: "DATA" | "REABERTURA" | "ITEM";
+  kind: "DATA" | "REABERTURA" | "ITEM" | "SINCRONIZACAO";
   at: string;
   by: string | null;
   reason: string | null;
@@ -154,7 +154,14 @@ export function WorkOrderCorrections({
             {history.map((h) => (
               <li key={h.id} className="rounded-xl border border-border bg-background p-3 text-xs">
                 <p className="font-medium">
-                  {h.kind === "DATA" ? "Data de atendimento corrigida" : h.kind === "ITEM" ? "Item corrigido" : "OS reaberta"} —{" "}
+                  {h.kind === "DATA"
+                    ? "Data de atendimento corrigida"
+                    : h.kind === "ITEM"
+                      ? "Item corrigido"
+                      : h.kind === "SINCRONIZACAO"
+                        ? "OS atualizada com o orçamento"
+                        : "OS reaberta"}{" "}
+                  —{" "}
                   {new Date(h.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                   {h.by ? ` · ${h.by}` : ""}
                 </p>
