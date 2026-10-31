@@ -4,6 +4,15 @@ import { hashPassword } from "@/lib/auth/password";
 import { createUser } from "@/lib/db/repositories/users";
 import { createCustomerService } from "@/lib/customers/service";
 import { createAppointmentService } from "@/lib/appointments/service";
+import { createVehicleService } from "@/lib/vehicles/service";
+import {
+  closeWorkOrderService,
+  createWorkOrderWithoutQuoteService,
+  setWorkOrderItemStatusService,
+  setWorkOrderStatusService,
+} from "@/lib/workOrders/service";
+import { acceptReceptionForTest } from "@/lib/workOrders/__tests__/acceptHelper";
+import { GUIAS } from "../guides";
 import { normalizeWorkOrderNumber, resolveMonth, responderPergunta } from "../answers";
 import { resolveDay } from "../answersDayToDay";
 
@@ -111,7 +120,79 @@ describe("dia a dia (etapa 2)", () => {
   });
 });
 
+describe("guias e ranking (etapa 3)", () => {
+  let actorUserId: string;
+  let customerId: string;
+  let vehicleId: string;
+
+  async function deliver(price: string): Promise<string> {
+    const os = await createWorkOrderWithoutQuoteService(actorUserId, {
+      customerId,
+      vehicleId,
+      mileageAtEntry: 1000,
+      items: [{ type: "SERVICO", description: "Serviço", quantity: 1, unitPriceReais: price }],
+    });
+    await acceptReceptionForTest(actorUserId, os.workOrder.id, {
+      receptionAcceptedName: "Cliente",
+      receptionAwareness1: true,
+      receptionAwareness2: true,
+      receptionAwareness3: true,
+    });
+    await setWorkOrderStatusService(actorUserId, os.workOrder.id, "EM_EXECUCAO");
+    await setWorkOrderItemStatusService(actorUserId, os.workOrder.id, os.items[0].id, "EXECUTADO");
+    await setWorkOrderStatusService(actorUserId, os.workOrder.id, "TESTE_FINAL");
+    await setWorkOrderStatusService(actorUserId, os.workOrder.id, "PRONTA");
+    await closeWorkOrderService(actorUserId, os.workOrder.id, { deliveryAcceptedName: "Cliente" });
+    return os.workOrder.number;
+  }
+
+  beforeAll(async () => {
+    actorUserId = (await createUser({ name: "Testador", email: "rk@teste.com", passwordHash: await hashPassword("senhaTeste123") })).id;
+    customerId = (await createCustomerService(actorUserId, { type: "PF", legalName: "Rita Souza" })).id;
+    vehicleId = (await createVehicleService(actorUserId, { customerId, plate: "RNK1A23", brand: "Fiat", model: "Uno" })).id;
+  });
+
+  it("guias: ids únicos, todos com passos; guia desconhecido lista os que existem", async () => {
+    const ids = GUIAS.map((g) => g.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const g of GUIAS) expect(g.passos.length).toBeGreaterThan(1);
+
+    const ok = await responderPergunta({ consulta: "COMO_FAZER", guia: "cancelar_os" });
+    expect(ok.titulo).toMatch(/Cancelar uma OS/);
+    expect(ok.passos?.join(" ")).toContain("Cancelar OS");
+
+    const nao = await responderPergunta({ consulta: "COMO_FAZER", guia: "NAO_EXISTE" });
+    expect(nao.titulo).toMatch(/Ainda não tenho/);
+    expect(nao.linhas.length).toBe(GUIAS.length);
+    expect((await responderPergunta({ consulta: "COMO_FAZER" })).titulo).toMatch(/Ainda não tenho/);
+  });
+
+  it("ranking sem OS entregues avisa; com OS ordena por lucro e por margem", async () => {
+    expect((await responderPergunta({ consulta: "RANKING_LUCRO", mes: "TODOS" })).aviso).toMatch(/Nenhuma OS entregue/);
+
+    const barata = await deliver("200,00");
+    const cara = await deliver("500,00");
+
+    const maior = await responderPergunta({ consulta: "RANKING_LUCRO", mes: "TODOS", ordem: "MAIOR_LUCRO" });
+    expect(maior.linhas.map((l) => l.rotulo.split(" · ")[0])).toEqual([`1. ${cara}`, `2. ${barata}`]);
+    expect(maior.linhas[0].valor).toContain("500,00");
+    expect(maior.aviso).toMatch(/Comparei 2 OS/);
+
+    const menor = await responderPergunta({ consulta: "RANKING_LUCRO", mes: "TODOS", ordem: "MENOR_LUCRO", quantidade: "1" });
+    expect(menor.linhas).toHaveLength(1);
+    expect(menor.linhas[0].rotulo).toContain(barata);
+
+    const doMes = await responderPergunta({ consulta: "RANKING_LUCRO", mes: "ATUAL" });
+    expect(doMes.linhas.length).toBe(2);
+    const outroMes = await responderPergunta({ consulta: "RANKING_LUCRO", mes: "2020-01" });
+    expect(outroMes.aviso).toMatch(/Nenhuma OS entregue/);
+  });
+});
+
 describe("responderPergunta (só leitura)", () => {
+  // Os grupos acima deixam OS e clientes no banco; aqui o teste parte do zero.
+  beforeAll(cleanAll);
+
   it("resumo do mês sem movimento mostra zeros e o link do Financeiro", async () => {
     const r = await responderPergunta({ consulta: "RESUMO_MES", mes: "2026-10" });
     expect(r.titulo).toBe("Financeiro de outubro de 2026");

@@ -1,6 +1,7 @@
 import { getMonthFinanceService } from "@/lib/finance/service";
 import { currentMonthBr, monthLabel, parseMonth, percentChange, shiftMonth } from "@/lib/finance/month";
-import { findWorkOrderByNumber, listReceivables } from "@/lib/db/repositories/workOrders";
+import { findWorkOrderByNumber, listDeliveredForRanking, listReceivables } from "@/lib/db/repositories/workOrders";
+import { comoFazer } from "./guides";
 import { getWorkOrderMarginService } from "@/lib/workOrders/marginService";
 import { formatBRL } from "@/lib/money";
 import { agenda, historicoCliente, mensagensPendentes, osAbertas, pecaEstoque, pecasAcabando, trocasVencidas } from "./answersDayToDay";
@@ -22,6 +23,8 @@ export const CONSULTAS = [
   "AGENDA",
   "MENSAGENS",
   "TROCAS",
+  "RANKING_LUCRO",
+  "COMO_FAZER",
 ] as const;
 export type Consulta = (typeof CONSULTAS)[number];
 
@@ -37,11 +40,19 @@ export interface Pergunta {
   cliente?: string;
   /** "HOJE", "AMANHA" ou "AAAA-MM-DD" (AGENDA). */
   dia?: string;
+  /** RANKING_LUCRO: MAIOR_LUCRO, MENOR_LUCRO, MELHOR_MARGEM ou PIOR_MARGEM. */
+  ordem?: string;
+  /** RANKING_LUCRO: quantas OS mostrar (padrão 5). */
+  quantidade?: string;
+  /** COMO_FAZER: id do guia escolhido pela IA. */
+  guia?: string;
 }
 
 export interface Resposta {
   titulo: string;
   linhas: { rotulo: string; valor: string; destaque?: boolean }[];
+  /** Passo a passo numerado (guias "como usar o sistema"). */
+  passos?: string[];
   links: { texto: string; href: string }[];
   /** Observação em destaque (limite do número, o que não deu para achar, etc.). */
   aviso?: string;
@@ -66,7 +77,7 @@ function desconhecida(): Resposta {
     titulo: "Ainda não sei responder isso",
     linhas: [],
     links: [],
-    aviso: "Eu respondo sobre: dinheiro (resumo do mês, a receber, lucro de uma OS, taxa de cartão), OS na oficina, peças (acabando, saldo, último fornecedor), histórico de cliente, agenda, mensagens e trocas. Toque em uma pergunta pronta ou reescreva.",
+    aviso: "Eu respondo sobre: dinheiro (resumo do mês, a receber, lucro e ranking de OS, taxa de cartão), OS na oficina, peças (acabando, saldo, último fornecedor), histórico de cliente, agenda, mensagens, trocas e como usar o sistema (cancelar OS, registrar compra, desconto, desfazer execução…). Toque em uma pergunta pronta ou reescreva.",
   };
 }
 
@@ -130,6 +141,51 @@ async function lucroOs(os: string | undefined): Promise<Resposta> {
   };
 }
 
+const ORDENS = ["MAIOR_LUCRO", "MENOR_LUCRO", "MELHOR_MARGEM", "PIOR_MARGEM"] as const;
+type Ordem = (typeof ORDENS)[number];
+const ORDEM_TEXTO: Record<Ordem, string> = {
+  MAIOR_LUCRO: "maior lucro",
+  MENOR_LUCRO: "menor lucro",
+  MELHOR_MARGEM: "melhor margem",
+  PIOR_MARGEM: "pior margem",
+};
+
+/** Ranking das OS entregues por lucro ou margem (mesma conta da margem da OS). */
+async function rankingLucro(p: Pergunta, now: Date): Promise<Resposta> {
+  const todos = (p.mes ?? "").trim().toUpperCase() === "TODOS";
+  const month = todos ? null : resolveMonth(p.mes, now);
+  const ordem: Ordem = (ORDENS as readonly string[]).includes((p.ordem ?? "").toUpperCase()) ? ((p.ordem ?? "").toUpperCase() as Ordem) : "MAIOR_LUCRO";
+  const wanted = Math.min(10, Math.max(1, Number.parseInt(p.quantidade ?? "", 10) || 5));
+  const periodo = month ? monthLabel(month) : "todas as OS entregues";
+
+  const list = await listDeliveredForRanking(month);
+  if (list.length === 0) return { titulo: `OS por lucro (${periodo})`, linhas: [], links: [], aviso: "Nenhuma OS entregue nesse período." };
+
+  const rows = await Promise.all(
+    list.map(async (w) => ({ ...w, m: await getWorkOrderMarginService(w.id) })),
+  );
+  const byProfit = ordem === "MAIOR_LUCRO" || ordem === "MENOR_LUCRO";
+  const key = (r: (typeof rows)[number]) => (byProfit ? r.m.profitCents : (r.m.marginPercent ?? Number.NEGATIVE_INFINITY));
+  const asc = ordem === "MENOR_LUCRO" || ordem === "PIOR_MARGEM";
+  const sorted = [...rows].filter((r) => byProfit || r.m.marginPercent != null).sort((a, b) => (asc ? key(a) - key(b) : key(b) - key(a)));
+  const top = sorted.slice(0, wanted);
+
+  const semCusto = top.filter((r) => r.m.itemsWithoutCost > 0).length;
+  return {
+    titulo: `OS com ${ORDEM_TEXTO[ordem]} · ${periodo}`,
+    linhas: top.map((r, i) => ({
+      rotulo: `${i + 1}. ${r.number} · ${r.customerName}${r.m.itemsWithoutCost > 0 ? ` (${r.m.itemsWithoutCost} ${r.m.itemsWithoutCost === 1 ? "item sem custo" : "itens sem custo"})` : ""}`,
+      valor: `${formatBRL(r.m.profitCents)}${r.m.marginPercent != null ? ` (${r.m.marginPercent}%)` : ""}`,
+      destaque: i === 0,
+    })),
+    links: top.slice(0, 5).map((r) => ({ texto: `Abrir ${r.number}`, href: `/dashboard/os/${r.id}` })),
+    aviso:
+      `Comparei ${rows.length} OS entregues.` +
+      (semCusto > 0 ? ` Em ${semCusto} da lista falta custo em algum item, então o lucro real pode ser menor.` : "") +
+      (list.length >= 300 ? " Olhei só as 300 mais recentes." : ""),
+  };
+}
+
 async function taxaCartao(month: string): Promise<Resposta> {
   const { current: c } = await getMonthFinanceService(month);
   return {
@@ -168,6 +224,10 @@ export async function responderPergunta(p: Pergunta, now: Date = new Date()): Pr
       return mensagensPendentes();
     case "TROCAS":
       return trocasVencidas();
+    case "RANKING_LUCRO":
+      return rankingLucro(p, now);
+    case "COMO_FAZER":
+      return comoFazer(p.guia);
     default:
       return desconhecida();
   }
