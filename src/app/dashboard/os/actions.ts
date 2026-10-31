@@ -21,6 +21,7 @@ import {
   correctApprovedAdditionalItemService,
   undoWorkOrderItemExecutionService,
   generateAdditionalItemLinkService,
+  getWorkOrderService,
   setWorkOrderItemStatusService,
   setWorkOrderStatusService,
 } from "@/lib/workOrders/service";
@@ -190,6 +191,46 @@ export async function setWorkOrderItemStatusAction(
     return { success: true, workOrderId };
   } catch (err) {
     return friendlyError(err, "Não foi possível atualizar o item.");
+  }
+}
+
+/**
+ * Atalho ao entregar: marca todos os itens ainda "planejados" como executados. Cada item segue o mesmo
+ * caminho do botão do item (inclusive a baixa de estoque); o que não puder (falta de peça etc.) fica
+ * de fora e a mensagem diz quais, sem desfazer os que deram certo.
+ */
+export async function markAllPlannedExecutedAction(
+  workOrderId: string,
+  executedBy: string,
+): Promise<ActionResult & { done?: number }> {
+  try {
+    const userId = await requireUserId();
+    const data = await getWorkOrderService(workOrderId);
+    if (!data) return { success: false, error: "OS não encontrada." };
+    const planned = data.items.filter((i) => i.status === "PLANEJADO");
+    const rawInput = executedBy ? parseExecutorValue(executedBy) : undefined;
+    let done = 0;
+    const failed: string[] = [];
+    for (const item of planned) {
+      try {
+        await setWorkOrderItemStatusService(userId, workOrderId, item.id, "EXECUTADO", rawInput);
+        done += 1;
+      } catch (err) {
+        failed.push(err instanceof InsufficientStockError ? `${item.description} (falta peça no estoque)` : item.description);
+      }
+    }
+    revalidatePath(`/dashboard/os/${workOrderId}`);
+    if (failed.length > 0) {
+      return {
+        success: false,
+        done,
+        workOrderId,
+        error: `${done} item(ns) marcado(s). Não deu para marcar: ${failed.join("; ")}. Resolva esses pelo botão do próprio item.`,
+      };
+    }
+    return { success: true, done, workOrderId };
+  } catch (err) {
+    return friendlyError(err, "Não foi possível marcar os itens.");
   }
 }
 

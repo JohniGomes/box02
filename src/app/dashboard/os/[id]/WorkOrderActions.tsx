@@ -9,6 +9,7 @@ import {
   correctWorkOrderItemExecutorAction,
   executeItemWithStockEntryAction,
   getItemStockEntryDefaultsAction,
+  markAllPlannedExecutedAction,
   setWorkOrderItemStatusAction,
   setWorkOrderStatusAction,
   undoWorkOrderItemExecutionAction,
@@ -35,14 +36,25 @@ const NEXT_STATUS: Partial<Record<WorkOrderStatus, WorkOrderStatus[]>> = {
   TESTE_FINAL: ["EM_EXECUCAO", "PRONTA"],
 };
 
+/** Modo simples: só "Em execução" como próximo passo (a entrega fica no botão de fechar a OS). */
+const NEXT_STATUS_SIMPLE: Partial<Record<WorkOrderStatus, WorkOrderStatus[]>> = {
+  ABERTA: ["EM_EXECUCAO"],
+  EM_DIAGNOSTICO: ["EM_EXECUCAO"],
+  AGUARDANDO_PECA: ["EM_EXECUCAO"],
+  TESTE_FINAL: ["EM_EXECUCAO"],
+};
+
 export function WorkOrderStatusActions({
   workOrderId,
   status,
   receptionAccepted,
   receptionRequired = true,
+  detailedStages = false,
 }: {
   workOrderId: string;
   status: WorkOrderStatus;
+  /** Regra em Configurações → Regras: ligada = todas as etapas; desligada (padrão) = modo simples. */
+  detailedStages?: boolean;
   /** Antecipação de UI (UX-10) — reflete o mesmo dado que o servidor já
    * usa para o gate real (Ciclo F). Nunca recalcula a regra: só lê se o
    * aceite existe ou não, e desabilita/explica antes do clique. A
@@ -54,7 +66,7 @@ export function WorkOrderStatusActions({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const options = NEXT_STATUS[status] ?? [];
+  const options = (detailedStages ? NEXT_STATUS : NEXT_STATUS_SIMPLE)[status] ?? [];
 
   if (options.length === 0) return null;
 
@@ -414,6 +426,74 @@ export function WorkOrderItemExecutorInfo({
           </button>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Atalho ao entregar: marca de uma vez todos os itens ainda "planejados" como executados, com os
+ * executores escolhidos. Item a item, igual ao botão de cada item: se algum parar (por exemplo, falta
+ * de peça no estoque), os outros seguem e a tela mostra o que ficou.
+ */
+export function MarkAllExecutedButton({
+  workOrderId,
+  plannedCount,
+  users,
+  currentUserId,
+}: {
+  workOrderId: string;
+  plannedCount: number;
+  users: ActiveUserOption[];
+  currentUserId: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const defaultExecutor = defaultExecutorOptionId(users, currentUserId);
+  const [executorChoice, setExecutorId] = useRememberedChoice("box02.lastExecutor", defaultExecutor);
+  const executorId = sanitizeExecutorValue(executorChoice, users, defaultExecutor);
+  const [message, setMessage] = useState<string | null>(null);
+
+  function run() {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await markAllPlannedExecutedAction(workOrderId, executorId);
+      setMessage(result.error ?? null);
+      if (result.success || result.done) router.refresh();
+      if (result.success) setOpen(false);
+    });
+  }
+
+  if (plannedCount === 0) return null;
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="h-11 rounded-xl border border-border text-sm font-medium">
+        Marcar todos os {plannedCount} itens planejados como executados
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
+      <p className="text-sm font-semibold">Marcar {plannedCount} item(ns) como executados</p>
+      <p className="text-xs text-muted">
+        Cada peça dá baixa no estoque, como no botão de cada item. Se faltar peça em algum, ele fica de fora e você resolve depois.
+      </p>
+      <ExecutorPicker options={users} value={executorId} onChange={setExecutorId} />
+      {message ? <p className="rounded-lg bg-accent/10 p-2 text-xs">{message}</p> : null}
+      <div className="flex gap-2">
+        <button
+          onClick={run}
+          disabled={isPending}
+          className="h-10 flex-1 rounded-xl bg-accent text-sm font-semibold text-accent-foreground disabled:opacity-50"
+        >
+          {isPending ? "Marcando…" : "Marcar todos"}
+        </button>
+        <button onClick={() => setOpen(false)} className="h-10 flex-1 rounded-xl border border-border text-sm">
+          Voltar
+        </button>
+      </div>
     </div>
   );
 }

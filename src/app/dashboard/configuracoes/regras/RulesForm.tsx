@@ -13,6 +13,12 @@ interface RuleDef {
 
 const RULES: RuleDef[] = [
   {
+    key: "detailedStages",
+    title: "Usar as etapas detalhadas da OS",
+    on: "Ligado: a OS passa por Em diagnóstico, Aguardando peça, Teste final e Pronta antes de ser entregue (fluxo completo, bom para quando houver mais gente na oficina).",
+    off: "Desligado (modo simples): a OS fica Aberta → Em execução → Entregue, e o botão de entregar aparece em qualquer etapa aberta. Nada é apagado: as OS que já estão em outras etapas continuam normais.",
+  },
+  {
     key: "reception",
     title: "Exigir o Termo de Recepção aceito para iniciar a execução da OS",
     on: "Ligado: a OS só passa para \"Em execução\" depois que o termo for aceito (como sempre foi).",

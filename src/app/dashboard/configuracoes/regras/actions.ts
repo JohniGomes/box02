@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { setCardFeePercent, setDeliveryChecklistRequired, setReceptionRequiredForExecution } from "@/lib/settings/service";
+import {
+  setCardFeePercent,
+  setDeliveryChecklistRequired,
+  setDetailedStagesEnabled,
+  setReceptionRequiredForExecution,
+} from "@/lib/settings/service";
 import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 
 export interface RulesActionResult {
@@ -13,7 +18,7 @@ export interface RulesActionResult {
 /** Regras que podem ser ligadas/desligadas. As que protegem os números (estoque
  * nunca negativo, pagamento acima do saldo, itens planejados ao entregar) NÃO
  * estão aqui de propósito: ficam sempre ligadas. */
-export type RuleKey = "reception" | "deliveryChecklist";
+export type RuleKey = "reception" | "deliveryChecklist" | "detailedStages";
 
 const RULES: Record<RuleKey, { set: (v: boolean) => Promise<void>; audit: string; entityId: string }> = {
   reception: {
@@ -25,6 +30,11 @@ const RULES: Record<RuleKey, { set: (v: boolean) => Promise<void>; audit: string
     set: setDeliveryChecklistRequired,
     audit: "RULE_DELIVERY_CHECKLIST_REQUIRED_UPDATED",
     entityId: "rule_delivery_checklist_required",
+  },
+  detailedStages: {
+    set: setDetailedStagesEnabled,
+    audit: "RULE_DETAILED_STAGES_UPDATED",
+    entityId: "rule_detailed_stages",
   },
 };
 
