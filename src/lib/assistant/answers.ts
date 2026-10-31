@@ -117,7 +117,7 @@ async function aReceber(): Promise<Resposta> {
       { rotulo: `Total (${rows.length} OS)`, valor: formatBRL(total), destaque: true },
       ...shown.map((r) => ({ rotulo: `${r.number} · ${r.customerName}`, valor: formatBRL(r.balanceCents) })),
     ],
-    links: shown.slice(0, 5).map((r) => ({ texto: `Abrir ${r.number}`, href: `/dashboard/os/${r.id}` })),
+    links: shown.slice(0, 5).map((r) => ({ texto: `Receber ${r.number}`, href: `/dashboard/recebimentos/${r.id}` })),
     aviso: rows.length > shown.length ? `Mostrando as 10 mais antigas; há mais ${rows.length - shown.length}.` : undefined,
   };
 }
