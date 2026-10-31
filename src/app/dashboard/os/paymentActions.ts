@@ -74,6 +74,7 @@ export async function registerWorkOrderPaymentsAction(
     await registerWorkOrderPaymentsService(userId, workOrderId, input);
     revalidatePath(`/dashboard/os/${workOrderId}`);
     revalidatePath("/dashboard");
+    revalidatePath("/dashboard/recebimentos");
     return { success: true };
   } catch (err) {
     if (err instanceof ZodError) {
@@ -116,6 +117,7 @@ export async function setPaymentCardFeeAction(
     await setWorkOrderPaymentCardFeeService(userId, workOrderId, paymentId, input);
     revalidatePath(`/dashboard/os/${workOrderId}`);
     revalidatePath("/dashboard/financeiro");
+    revalidatePath("/dashboard/recebimentos");
     return { success: true };
   } catch (err) {
     if (err instanceof WorkOrderPaymentNotFoundError) return { success: false, error: err.message };
@@ -142,6 +144,7 @@ export async function refundWorkOrderPaymentAction(
     const userId = await requireUserId();
     await refundWorkOrderPaymentService(userId, workOrderId, paymentId, input);
     revalidatePath(`/dashboard/os/${workOrderId}`);
+    revalidatePath("/dashboard/recebimentos");
     return { success: true };
   } catch (err) {
     if (err instanceof ZodError) {

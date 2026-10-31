@@ -142,9 +142,12 @@ export function WorkOrderPaymentsSection({
   workOrderId,
   summary,
   entryDate,
+  sectionId = "recebimentos",
 }: {
   workOrderId: string;
   summary: WorkOrderPaymentsSummaryView;
+  /** Âncora da seção (várias podem aparecer na mesma página, na aba Recebimentos). */
+  sectionId?: string;
   /** Data de entrada da OS (AAAA-MM-DD, horário de Brasília), para avisar de recebimento anterior. */
   entryDate?: string;
 }) {
@@ -210,7 +213,7 @@ export function WorkOrderPaymentsSection({
     "h-12 rounded-xl border border-border bg-background px-4 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 
   return (
-    <section id="recebimentos" className="rounded-2xl border border-border bg-surface p-5">
+    <section id={sectionId} className="rounded-2xl border border-border bg-surface p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-accent">Recebimentos</h2>
         {summary.paidCents > 0 ? (
@@ -218,6 +221,9 @@ export function WorkOrderPaymentsSection({
             Ver recibo →
           </Link>
         ) : null}
+        <Link href="/dashboard/recebimentos" className="text-xs font-medium text-muted underline">
+          Caixa
+        </Link>
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_CLASS[summary.status]}`}>
           {STATUS_LABEL[summary.status]}
         </span>
