@@ -55,6 +55,12 @@ export function PurchasePaymentFields({
         <option value="DEPOIS">Vou pagar depois (lança a despesa em aberto)</option>
         <option value="NENHUM">Não lançar despesa</option>
       </select>
+      {value.mode === "NENHUM" ? (
+        <p className="rounded-lg bg-yellow-100 p-2 text-xs text-yellow-800">
+          Atenção: a peça entra no estoque, mas esta compra não vira despesa. O Financeiro não vai mostrar esse gasto.
+          Use esta opção só se a compra já foi lançada em Despesas.
+        </p>
+      ) : null}
       {value.mode === "PAGO" ? (
         <div className="grid grid-cols-2 gap-2">
           <select
