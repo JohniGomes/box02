@@ -15,7 +15,7 @@ export interface VehicleWithServiceRow {
 }
 
 // Tira o acento antes de baixar a caixa, para funcionar mesmo que o banco não saiba minúscula de letra acentuada (Ó, Ç…).
-const NORM = (expr: string) =>
+export const NORM = (expr: string) =>
   `lower(translate(${expr}, 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'))`;
 
 /**
