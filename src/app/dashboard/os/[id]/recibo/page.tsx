@@ -8,6 +8,8 @@ import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { PrintPanelButton } from "@/components/PrintPanelButton";
 import { formatDateBR } from "@/lib/dateBr";
+import { getVehicleQrTokenService } from "@/lib/vehicles/qr";
+import { publicOrigin, qrSvg, vehiclePublicUrl } from "@/lib/vehicles/qrSvg";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -72,6 +74,10 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   );
   const footerDate = lastPaymentAt ?? serviceDate;
 
+  // QR Car do veículo (só sai no papel se o veículo já tem QR e a caixinha estiver marcada).
+  const qrToken = await getVehicleQrTokenService(workOrder.vehicleId);
+  const qrMarkup = qrToken ? await qrSvg(vehiclePublicUrl(await publicOrigin(), qrToken)) : null;
+
   const customerPhone = customer?.whatsapp ?? customer?.phone ?? null;
   let whatsappHref: string | null = null;
   if (customerPhone && summary && summary.paidCents > 0) {
@@ -112,6 +118,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
               { id: "itemPrices", label: "Valor e quantidade de cada item", defaultOn: true },
               { id: "discount", label: "Desconto e acréscimo", defaultOn: true },
               { id: "payments", label: "Formas de pagamento", defaultOn: true },
+              { id: "qr", label: "QR Car do veículo (histórico e lembretes)", defaultOn: true },
             ]}
           />
         </div>
@@ -245,6 +252,27 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
               BOX 02 — Centro Automotivo · Anápolis/GO, {formatDate(footerDate)}
             </div>
           </div>
+
+          {qrMarkup ? (
+            <div
+              data-print-section="qr"
+              className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4"
+            >
+              <div className="w-24 shrink-0 bg-white p-1 [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: qrMarkup }} />
+              <p className="text-xs">
+                <span className="block text-sm font-semibold">Histórico e lembretes do seu carro</span>
+                Aponte a câmera do celular para ver o que já fizemos e quando chegam as próximas trocas.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted print:hidden">
+              Este veículo ainda não tem QR Car.{" "}
+              <Link href={`/dashboard/veiculos/${workOrder.vehicleId}`} className="font-medium text-accent underline">
+                Gerar na ficha do veículo
+              </Link>{" "}
+              para ele sair no recibo.
+            </p>
+          )}
         </>
       )}
     </div>

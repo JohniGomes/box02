@@ -125,6 +125,20 @@ export const GUIAS: Guia[] = [
     link: { texto: "Abrir Mensagens", href: "/dashboard/mensagens" },
   },
   {
+    id: "QR_CAR",
+    titulo: "Gerar e imprimir o QR Car de um veículo",
+    sobre: "QR Code do carro, etiqueta com QR, página do cliente com histórico e próximas trocas, QR no recibo",
+    passos: [
+      "Abra a ficha do veículo (Veículos → toque no carro).",
+      "No cartão \"QR Car\", toque em \"Gerar QR Car\".",
+      "Para colar no carro ou entregar ao cliente, toque em \"Imprimir etiqueta\" e imprima.",
+      "No recibo, a caixinha \"QR Car do veículo\" (no painel de imprimir) coloca o QR no papel, desde que o veículo já tenha QR.",
+      "Para ver como o cliente vê, toque em \"Ver como o cliente vê\".",
+    ],
+    aviso:
+      "A página mostra só o carro, o histórico de serviços e as próximas trocas: sem CPF, telefone, nome do cliente nem valores. Se a etiqueta cair em mãos erradas, use \"Gerar novo QR\" (o antigo para de funcionar) ou \"Desativar QR\". Para os botões de WhatsApp da página funcionarem, preencha o WhatsApp da oficina em Configurações → Regras.",
+  },
+  {
     id: "CODIGO_PECA",
     titulo: "Descobrir o código de uma peça",
     sobre: "achar o código ou referência de uma peça de um veículo",

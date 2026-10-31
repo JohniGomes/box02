@@ -6,6 +6,9 @@ import { formatPlate } from "@/lib/validation/plate";
 import { VehicleStatusActions, TransferVehicleAction } from "./VehicleActions";
 import { listLastServicesForVehicle } from "@/lib/db/repositories/serviceIntervals";
 import { computeNextDue } from "@/lib/vehicles/nextService";
+import { getVehicleQrTokenService } from "@/lib/vehicles/qr";
+import { publicOrigin, qrSvg, vehiclePublicUrl } from "@/lib/vehicles/qrSvg";
+import { QrCarActions } from "./QrCarActions";
 
 export default async function VehicleDetailPage({
   params,
@@ -21,6 +24,10 @@ export default async function VehicleDetailPage({
     .map((row) => computeNextDue(row, vehicle.mileage))
     .filter((d): d is NonNullable<typeof d> => d !== null)
     .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
+
+  const qrToken = await getVehicleQrTokenService(vehicle.id);
+  const qrUrl = qrToken ? vehiclePublicUrl(await publicOrigin(), qrToken) : null;
+  const qrSvgMarkup = qrUrl ? await qrSvg(qrUrl) : null;
 
   const yearLine = [vehicle.yearManufacture, vehicle.yearModel]
     .filter((y): y is number => Boolean(y))
@@ -84,6 +91,25 @@ export default async function VehicleDetailPage({
           <Row label="Chassi" value={vehicle.chassis ?? "—"} muted={!vehicle.chassis} />
           <Row label="RENAVAM" value={vehicle.renavam ?? "—"} muted={!vehicle.renavam} />
         </dl>
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+        <div>
+          <h2 className="text-sm font-semibold">QR Car</h2>
+          <p className="text-xs text-muted">
+            Uma página do carro para o cliente abrir pelo celular: histórico de serviços e próximas trocas. Não mostra CPF, telefone,
+            nome do cliente nem valores.
+          </p>
+        </div>
+        {qrUrl && qrSvgMarkup ? (
+          <div
+            className="mx-auto w-44 rounded-xl border border-border bg-white p-2 [&>svg]:h-auto [&>svg]:w-full"
+            // SVG gerado pelo servidor a partir do nosso link; não vem de texto digitado por ninguém.
+            dangerouslySetInnerHTML={{ __html: qrSvgMarkup }}
+          />
+        ) : null}
+        {qrUrl ? <p className="break-all text-center text-xs text-muted">{qrUrl}</p> : null}
+        <QrCarActions vehicleId={vehicle.id} url={qrUrl} />
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-5">
