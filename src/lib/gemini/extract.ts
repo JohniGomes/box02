@@ -136,11 +136,16 @@ export const ExtractedCoreSchema = z.object({
 interface ExtractOptions {
   runner?: GeminiRunner;
   models?: string[];
+  /** Veículo de que a conversa já estava tratando (ex.: "Honda HR-V 2017"), para pedidos como "agora a pastilha traseira". */
+  contexto?: string;
 }
 
 export async function extractFromText(text: string, opts: ExtractOptions = {}): Promise<ExtractedData> {
+  const contexto = opts.contexto?.trim().slice(0, 120);
   const prompt = `${PROMPT_SISTEMA}
-
+${contexto ? `
+Contexto da conversa: o veículo de que já se falava é "${contexto}". Se o texto abaixo não citar outro veículo, use este.
+` : ""}
 Texto para analisar:
 ${text}`;
   const parsed = await generateJson(prompt, ExtractedCoreSchema, opts);

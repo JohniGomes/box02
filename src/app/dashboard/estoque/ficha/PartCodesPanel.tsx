@@ -16,11 +16,14 @@ export function PartCodesPanel({
   part,
   onUseCode,
   compact,
+  onNewQuestion,
 }: {
   vehicle: { marca: string; modelo: string; ano: string; versao: string };
   part: string;
   /** Em espaço estreito (robô flutuante): um card por linha, sem moldura própria. */
   compact?: boolean;
+  /** No robô: botão no fim dos cards para voltar e fazer outra pergunta (mantém o veículo). */
+  onNewQuestion?: () => void;
   /** Quando informado, cada card ganha "Usar como SKU" (só preenche o campo; quem grava é a pessoa). */
   onUseCode?: (code: string, marca: string) => void;
 }) {
@@ -149,6 +152,11 @@ export function PartCodesPanel({
               Consultar de novo
             </button>
           </div>
+          {onNewQuestion ? (
+            <button type="button" onClick={onNewQuestion} className="h-11 rounded-xl border border-border text-sm font-semibold">
+              Nova pergunta
+            </button>
+          ) : null}
         </div>
       ) : null}
     </section>
