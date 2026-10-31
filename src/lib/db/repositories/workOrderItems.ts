@@ -201,6 +201,25 @@ export async function setWorkOrderItemStatus(
   return result.rows[0] ?? null;
 }
 
+/** Corrige o texto e/ou o valor de um item sem mudar status, estoque nem execução. `undefined` = não mexe. */
+export async function updateWorkOrderItemTextAndPrice(
+  id: string,
+  change: { description?: string; unitPriceCents?: number; totalCents?: number },
+  db: Queryable = pool,
+): Promise<WorkOrderItemRecord | null> {
+  const result = await db.query<WorkOrderItemRecord>(
+    `UPDATE work_order_items SET
+      description = COALESCE($2, description),
+      "unitPriceCents" = COALESCE($3, "unitPriceCents"),
+      "totalCents" = COALESCE($4, "totalCents"),
+      "updatedAt" = NOW()
+    WHERE id = $1
+    RETURNING ${COLUMNS}`,
+    [id, change.description ?? null, change.unitPriceCents ?? null, change.totalCents ?? null],
+  );
+  return result.rows[0] ?? null;
+}
+
 /** Desfaz a execução: o item volta para "Planejado" sem executor nem custo gravado. */
 export async function resetWorkOrderItemToPlanned(id: string, db: Queryable = pool): Promise<WorkOrderItemRecord | null> {
   const result = await db.query<WorkOrderItemRecord>(

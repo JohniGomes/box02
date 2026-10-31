@@ -24,6 +24,7 @@ import {
 import {
   findWorkOrderItemByAccessToken,
   findWorkOrderItemById,
+  updateWorkOrderItemTextAndPrice,
   insertWorkOrderItems,
   listWorkOrderItemsByWorkOrder,
   lockWorkOrderItemById,
@@ -148,10 +149,13 @@ import { isDeliveryChecklistRequired, isDetailedStagesEnabled, isReceptionRequir
 const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   ABERTA: ["EM_DIAGNOSTICO", "EM_EXECUCAO", "CANCELADA"],
   EM_DIAGNOSTICO: ["EM_EXECUCAO", "CANCELADA"],
-  EM_EXECUCAO: ["AGUARDANDO_PECA", "TESTE_FINAL", "CANCELADA"],
-  AGUARDANDO_PECA: ["EM_EXECUCAO", "CANCELADA"],
+  // "Pronta" também vale direto de Em execução / Aguardando peça (sem obrigar o Teste final), e dá para
+  // voltar de Pronta para Em execução se faltou algo. A entrega continua saindo de qualquer etapa aberta
+  // no modo simples (ver closeWorkOrderService).
+  EM_EXECUCAO: ["AGUARDANDO_PECA", "TESTE_FINAL", "PRONTA", "CANCELADA"],
+  AGUARDANDO_PECA: ["EM_EXECUCAO", "PRONTA", "CANCELADA"],
   TESTE_FINAL: ["EM_EXECUCAO", "PRONTA", "CANCELADA"],
-  PRONTA: ["ENTREGUE", "CANCELADA"],
+  PRONTA: ["EM_EXECUCAO", "ENTREGUE", "CANCELADA"],
   ENTREGUE: [], // reabertura chega na Sub-etapa 3, por uma ação própria — não por esta transição genérica
   CANCELADA: [],
 };
@@ -451,7 +455,7 @@ export async function setWorkOrderStatusService(
 
   const extra: Parameters<typeof setWorkOrderStatus>[2] = {};
   if (newStatus === "EM_EXECUCAO" && !existing.startedAt) extra.startedAt = new Date();
-  if (newStatus === "TESTE_FINAL") extra.completedAt = new Date();
+  if (newStatus === "TESTE_FINAL" || (newStatus === "PRONTA" && !existing.completedAt)) extra.completedAt = new Date();
 
   const updated = await setWorkOrderStatus(workOrderId, newStatus, extra);
   if (!updated) throw new WorkOrderNotFoundError(workOrderId);
@@ -647,9 +651,83 @@ export async function reopenWorkOrderService(
   });
 }
 
+/**
+ * Corrige a descrição e/ou o valor de um item da OS (inclusive os que vieram do orçamento).
+ * - Descrição: vale em qualquer status da OS (mesmo entregue), sem mexer em valores nem estoque.
+ * - Valor: só com a OS aberta e o item não cancelado, com motivo; itens adicionais usam o fluxo próprio
+ *   (precisam da autorização do cliente). Quantidade não muda aqui (mexe no estoque).
+ * Sempre fica registrado quem mudou, quando, o que era e o que ficou.
+ */
+export async function correctWorkOrderItemService(
+  actorUserId: string,
+  workOrderId: string,
+  itemId: string,
+  rawInput: { description?: string; unitPriceReais?: string; reason?: string },
+): Promise<WorkOrderItemRecord> {
+  const workOrder = await findWorkOrderById(workOrderId);
+  if (!workOrder) throw new WorkOrderNotFoundError(workOrderId);
+  const item = await findWorkOrderItemById(itemId);
+  if (!item || item.workOrderId !== workOrderId) throw new WorkOrderItemNotFoundError(itemId);
+
+  const description = rawInput.description?.trim();
+  if (description !== undefined && description.length < 2) {
+    throw new WorkOrderCorrectionError("A descrição precisa ter pelo menos 2 letras.");
+  }
+  const descriptionChanged = description !== undefined && description !== item.description;
+
+  let newUnitPriceCents: number | undefined;
+  const priceText = rawInput.unitPriceReais?.trim();
+  if (priceText) {
+    const cents = reaisToCents(priceText);
+    if (!Number.isFinite(cents) || cents < 0) throw new WorkOrderCorrectionError("Valor inválido.");
+    if (cents !== item.unitPriceCents) newUnitPriceCents = cents;
+  }
+
+  if (!descriptionChanged && newUnitPriceCents === undefined) {
+    throw new WorkOrderCorrectionError("Nada para corrigir: o texto e o valor são os mesmos.");
+  }
+
+  const reason = rawInput.reason?.trim() ?? "";
+  if (newUnitPriceCents !== undefined) {
+    if (workOrder.status === "ENTREGUE" || workOrder.status === "CANCELADA") {
+      throw new WorkOrderCorrectionError(
+        'Esta OS já foi fechada: para mudar valores, use "Reabrir OS" nas correções da OS.',
+      );
+    }
+    if (item.status === "CANCELADO") throw new WorkOrderCorrectionError("Este item foi cancelado.");
+    if (item.origin === "ADICIONAL_DURANTE_EXECUCAO") {
+      throw new WorkOrderCorrectionError('O valor de um adicional se corrige em "Adicionais" (precisa da autorização do cliente).');
+    }
+    if (reason.length < 3) throw new WorkOrderCorrectionError("Informe o motivo da mudança de valor.");
+  }
+
+  const totalCents = newUnitPriceCents !== undefined ? lineTotalCents(Number(item.quantity), newUnitPriceCents) : undefined;
+  const updated = await updateWorkOrderItemTextAndPrice(itemId, {
+    description: descriptionChanged ? description : undefined,
+    unitPriceCents: newUnitPriceCents,
+    totalCents,
+  });
+  if (!updated) throw new WorkOrderItemNotFoundError(itemId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    action: "WORK_ORDER_ITEM_EDITED",
+    entityType: "work_order",
+    entityId: workOrderId,
+    metadata: {
+      itemId,
+      before: { description: item.description, unitPriceCents: item.unitPriceCents, totalCents: item.totalCents },
+      after: { description: updated.description, unitPriceCents: updated.unitPriceCents, totalCents: updated.totalCents },
+      ...(reason ? { reason } : {}),
+    },
+  });
+
+  return updated;
+}
+
 export interface WorkOrderCorrectionEntry {
   id: string;
-  kind: "DATA" | "REABERTURA";
+  kind: "DATA" | "REABERTURA" | "ITEM";
   at: Date;
   by: string | null;
   reason: string | null;
@@ -662,10 +740,25 @@ export async function listWorkOrderCorrectionsService(workOrderId: string): Prom
   const rows = await listAuditLogsForEntity("work_order", workOrderId, [
     "WORK_ORDER_SERVICE_DATE_CORRECTED",
     "WORK_ORDER_REOPENED",
+    "WORK_ORDER_ITEM_EDITED",
   ]);
   const fmt = (v: unknown) => (typeof v === "string" || v instanceof Date ? formatDateTimeBR(v) : null);
   return rows.map((r) => {
     const m = r.metadata ?? {};
+    if (r.action === "WORK_ORDER_ITEM_EDITED") {
+      const before = (m.before ?? {}) as { description?: string; unitPriceCents?: number };
+      const after = (m.after ?? {}) as { description?: string; unitPriceCents?: number };
+      const text = (b: typeof before) => `${b.description ?? "—"}${b.unitPriceCents != null ? ` (${formatBRL(b.unitPriceCents)})` : ""}`;
+      return {
+        id: r.id,
+        kind: "ITEM" as const,
+        at: r.createdAt,
+        by: r.userName,
+        reason: (m.reason as string) ?? null,
+        from: text(before),
+        to: text(after),
+      };
+    }
     if (r.action === "WORK_ORDER_REOPENED") {
       return {
         id: r.id,
