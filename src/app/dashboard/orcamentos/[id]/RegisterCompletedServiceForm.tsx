@@ -4,9 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { registerCompletedServiceAction } from "../actions";
-import { defaultExecutorOptionId } from "@/lib/executors/value";
+import { defaultExecutorOptionId, sanitizeExecutorValue } from "@/lib/executors/value";
 import { useRememberedChoice } from "@/lib/useRemembered";
 import { LastMileageHint } from "@/components/LastMileageHint";
+import { ExecutorPicker } from "@/components/ExecutorPicker";
+import { CardFeeFields } from "@/components/CardFeeFields";
+import { applyCardFeePatch } from "@/lib/cardFee";
+import { buildCompletedServicePayments } from "@/lib/workOrders/completedServicePayments";
 
 type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO" | "OUTRO";
 
@@ -20,11 +24,17 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
 interface PaymentRow {
   key: string;
   method: PaymentMethod;
+  /** Valor DO SERVIÇO (abate o saldo da OS). */
   amount: string;
+  /** Cartão: taxa % da maquininha (sobre o valor passado no cartão). */
+  rate: string;
+  /** Cartão: valor total passado no cartão. */
+  gross: string;
+  installments: string;
 }
 
 function newRow(amount = ""): PaymentRow {
-  return { key: Math.random().toString(36).slice(2), method: "PIX", amount };
+  return { key: Math.random().toString(36).slice(2), method: "PIX", amount, rate: "", gross: "", installments: "" };
 }
 
 function centsToField(cents: number): string {
@@ -60,12 +70,11 @@ export function RegisterCompletedServiceForm({
   const [serviceTime, setServiceTime] = useState("");
   const [mileage, setMileage] = useState(defaultMileage);
   // `executors` = opções do seletor (nomes da lista de executores; se estiver
-  // vazia, usuários ativos). O valor escolhido é enviado como `executedBy`.
-  const [executedBy, setExecutedBy] = useRememberedChoice(
-    "box02.lastExecutor",
-    defaultExecutorOptionId(executors, currentUserId),
-    executors.map((e) => e.id),
-  );
+  // vazia, usuários ativos). Pode marcar mais de um (executaram juntos); o valor
+  // enviado como `executedBy` é a lista dos marcados separada por vírgula.
+  const defaultExecutor = defaultExecutorOptionId(executors, currentUserId);
+  const [executorChoice, setExecutedBy] = useRememberedChoice("box02.lastExecutor", defaultExecutor);
+  const executedBy = sanitizeExecutorValue(executorChoice, executors, defaultExecutor);
   const [deliveryName, setDeliveryName] = useState(customerName);
   const [rows, setRows] = useState<PaymentRow[]>([newRow(centsToField(totalCents))]);
   const [error, setError] = useState<string | null>(null);
@@ -94,9 +103,7 @@ export function RegisterCompletedServiceForm({
       mileageAtEntry: mileage,
       executedBy,
       deliveryAcceptedName: deliveryName,
-      payments: rows
-        .filter((r) => reaisToCents(r.amount || "0") > 0)
-        .map((r) => ({ method: r.method, amountReais: r.amount })),
+      payments: buildCompletedServicePayments(rows),
     });
 
     setSubmitting(false);
@@ -127,8 +134,9 @@ export function RegisterCompletedServiceForm({
         <h2 className="text-sm font-semibold">Serviço já concluído e pago</h2>
         <p className="mt-1 text-xs text-muted">
           Cria a OS já entregue, com os itens executados e os pagamentos lançados, na data real do serviço.
-          Se o orçamento ainda não foi aprovado, ele é aprovado por inteiro automaticamente. Em seguida abre o
-          recibo para enviar ao cliente.
+          Se o orçamento ainda não foi aprovado, ele é aprovado por inteiro automaticamente. No cartão dá para
+          informar parcelas e a taxa da maquininha, e o pagamento pode ser parcial ou ficar para depois. Em
+          seguida abre o recibo para enviar ao cliente.
         </p>
       </div>
 
@@ -180,21 +188,8 @@ export function RegisterCompletedServiceForm({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" htmlFor="rcsExecutor">
-            Quem executou
-          </label>
-          <select
-            id="rcsExecutor"
-            value={executedBy}
-            onChange={(e) => setExecutedBy(e.target.value)}
-            className={inputClass}
-          >
-            {executors.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
+          <span className="text-sm font-medium">Quem executou</span>
+          <ExecutorPicker options={executors} value={executedBy} onChange={setExecutedBy} />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" htmlFor="rcsDelivery">
@@ -215,33 +210,41 @@ export function RegisterCompletedServiceForm({
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">Pagamento</span>
         {rows.map((row) => (
-          <div key={row.key} className="flex gap-2">
-            <select
-              value={row.method}
-              onChange={(e) => updateRow(row.key, { method: e.target.value as PaymentMethod })}
-              className={`${inputClass} w-36`}
-            >
-              {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
-                <option key={m} value={m}>
-                  {METHOD_LABEL[m]}
-                </option>
-              ))}
-            </select>
-            <input
-              value={row.amount}
-              onChange={(e) => updateRow(row.key, { amount: e.target.value })}
-              inputMode="decimal"
-              placeholder="0,00"
-              className={`${inputClass} min-w-0 flex-1`}
-            />
-            {rows.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
-                className="px-2 text-xs font-medium text-danger"
+          <div key={row.key} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <select
+                value={row.method}
+                onChange={(e) => updateRow(row.key, { method: e.target.value as PaymentMethod })}
+                className={`${inputClass} w-36`}
               >
-                Remover
-              </button>
+                {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
+                  <option key={m} value={m}>
+                    {METHOD_LABEL[m]}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={row.amount}
+                onChange={(e) => updateRow(row.key, { amount: e.target.value })}
+                inputMode="decimal"
+                placeholder="0,00"
+                className={`${inputClass} min-w-0 flex-1`}
+              />
+              {rows.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                  className="px-2 text-xs font-medium text-danger"
+                >
+                  Remover
+                </button>
+              ) : null}
+            </div>
+            {row.method === "CARTAO" ? (
+              <CardFeeFields
+                row={row}
+                onChange={(patch) => setRows((prev) => prev.map((r) => (r.key === row.key ? applyCardFeePatch(r, patch) : r)))}
+              />
             ) : null}
           </div>
         ))}
@@ -268,6 +271,13 @@ export function RegisterCompletedServiceForm({
           <span>{remainingCents < 0 ? "Pago a mais" : "Falta pagar"}</span>
           <span className={remainingCents < 0 ? "text-danger" : ""}>{formatBRL(Math.abs(remainingCents))}</span>
         </div>
+        {remainingCents > 0 ? (
+          <p className="mt-2 text-xs text-muted">
+            {paidCents <= 0
+              ? "Nenhum pagamento lançado: o valor total fica em “A receber” da OS."
+              : "Pagamento parcial: o que falta fica em “A receber” da OS."}
+          </p>
+        ) : null}
       </div>
 
       {error ? (
@@ -288,13 +298,7 @@ export function RegisterCompletedServiceForm({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={
-            submitting ||
-            !serviceDate ||
-            paidCents <= 0 ||
-            remainingCents < 0 ||
-            deliveryName.trim().length < 2
-          }
+          disabled={submitting || !serviceDate || remainingCents < 0 || deliveryName.trim().length < 2}
           className="h-12 flex-1 rounded-xl bg-accent text-base font-semibold text-accent-foreground disabled:opacity-50"
         >
           {submitting ? "Registrando…" : "Registrar e gerar recibo"}

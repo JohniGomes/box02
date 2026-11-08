@@ -17,10 +17,12 @@ import { recordAuditLog } from "@/lib/db/repositories/auditLog";
 import { registerInternalQuoteDecisionService } from "@/lib/quotes/service";
 import { QuoteNotFoundError } from "@/lib/quotes/errors";
 import { computeQuoteTotals, reaisToCents } from "@/lib/money";
+import { assertExecutorChoiceValid } from "@/lib/executors/validateChoice";
 import {
   closeWorkOrderService,
   createWorkOrderFromQuoteService,
-  registerWorkOrderPaymentService,
+  parseCardFeeFields,
+  registerWorkOrderPaymentsService,
   setWorkOrderItemStatusService,
 } from "./service";
 import { InvalidExecutorUserError, QuoteNotApprovedError } from "./errors";
@@ -60,8 +62,13 @@ export const registerCompletedServiceSchema = z.object({
     .array(
       z.object({
         method: z.enum(["DINHEIRO", "PIX", "CARTAO", "OUTRO"], { message: "Selecione a forma de pagamento" }),
+        /** Valor DO SERVIÇO (abate o saldo). Pagamento parcial é permitido. */
         amountReais: z.union([z.string(), z.number()]),
         notes: optionalText,
+        /** Cartão: taxa da maquininha repassada ao cliente (valor à parte). */
+        cardFeeReais: z.union([z.string(), z.number()]).optional(),
+        /** Cartão: número de parcelas. */
+        installments: z.union([z.string(), z.number()]).optional(),
       }),
     )
     // Pode ficar vazio: o serviço entra como entregue e o valor fica em "A receber".
@@ -136,16 +143,14 @@ export async function registerCompletedServiceFromQuoteService(
   let version = await findQuoteVersionByNumber(quoteId, quote.currentVersionNumber);
   if (!version) throw new QuoteNotFoundError(quoteId);
 
-  // Quem executou: nome da lista de executores OU usuário ativo (validado antes
-  // de criar qualquer coisa).
+  // Quem executou: um nome da lista de executores, um usuário ativo, ou mais de
+  // um marcado junto (validado antes de criar qualquer coisa).
   const executorChoice = parseExecutorValue(input.executedBy);
-  if (executorChoice.executorId) {
-    const executor = await findExecutorById(executorChoice.executorId);
-    if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
-  } else {
-    const executor = await findUserById(executorChoice.executedByUserId ?? "");
-    if (!executor || executor.status !== "ATIVO") throw new InvalidExecutorUserError();
-  }
+  await assertExecutorChoiceValid(
+    input.executedBy,
+    { executor: findExecutorById, user: findUserById },
+    () => new InvalidExecutorUserError(),
+  );
 
   // Se a OS deste orçamento já foi criada (ex.: pelo botão "Criar OS a partir
   // deste orçamento"), continua dela em vez de criar outra. Procura em
@@ -170,6 +175,15 @@ export async function registerCompletedServiceFromQuoteService(
   const paymentsCents = input.payments.map((p) => ({ ...p, cents: reaisToCents(p.amountReais) }));
   if (paymentsCents.some((p) => p.cents <= 0)) {
     throw new RetroactiveServiceError("Cada pagamento precisa ter valor maior que zero.");
+  }
+  // Taxa da maquininha e parcelas: valida agora (só cartão, parcelas de 1 a 24),
+  // antes de criar a OS, para não deixar nada pela metade.
+  for (const p of paymentsCents) {
+    try {
+      parseCardFeeFields(p.method, p.cardFeeReais, p.installments);
+    } catch (err) {
+      throw new RetroactiveServiceError(err instanceof Error ? err.message : "Taxa ou parcelas inválidas.");
+    }
   }
 
   // O que vai ser executado/cobrado: os itens da OS existente, ou os itens
@@ -307,9 +321,16 @@ export async function registerCompletedServiceFromQuoteService(
 
     step = "lançamento dos pagamentos";
     for (const p of paymentsCents) {
-      await registerWorkOrderPaymentService(actorUserId, workOrder.id, {
-        amountReais: p.amountReais,
-        method: p.method,
+      // Um recebimento por linha, já com a taxa da maquininha e as parcelas (cartão).
+      await registerWorkOrderPaymentsService(actorUserId, workOrder.id, {
+        payments: [
+          {
+            amountReais: p.amountReais,
+            method: p.method,
+            cardFeeReais: p.cardFeeReais,
+            installments: p.installments,
+          },
+        ],
         notes: p.notes,
       });
     }
