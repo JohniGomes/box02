@@ -9,18 +9,30 @@ export async function recordAuditLog(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   const id = createId();
-  await pool.query(
-    `INSERT INTO audit_logs (id, "userId", action, "entityType", "entityId", metadata)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
-      id,
-      input.userId ?? null,
-      input.action,
-      input.entityType,
-      input.entityId ?? null,
-      input.metadata ? JSON.stringify(input.metadata) : null,
-    ],
-  );
+  const sql = `INSERT INTO audit_logs (id, "userId", action, "entityType", "entityId", metadata)
+     VALUES ($1, $2, $3, $4, $5, $6)`;
+  const params = (userId: string | null, metadata?: Record<string, unknown>) => [
+    id,
+    userId,
+    input.action,
+    input.entityType,
+    input.entityId ?? null,
+    metadata ? JSON.stringify(metadata) : null,
+  ];
+
+  try {
+    await pool.query(sql, params(input.userId ?? null, input.metadata));
+  } catch (err) {
+    // O registro de auditoria nunca pode derrubar a operação: se o usuário não
+    // existe mais, grava sem usuário (a coluna aceita vazio) e guarda o id
+    // original nos detalhes. Qualquer outro erro continua sendo lançado.
+    const e = err as { code?: string; constraint?: string };
+    if (input.userId && e.code === "23503" && e.constraint === "audit_logs_userId_fkey") {
+      await pool.query(sql, params(null, { ...input.metadata, userIdNaoEncontrado: input.userId }));
+      return;
+    }
+    throw err;
+  }
 }
 
 /** Último status para o qual a OS foi mudada pelo fluxo normal (de/para gravados no histórico). */

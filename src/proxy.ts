@@ -2,7 +2,8 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
 export default auth((req) => {
-  const isLoggedIn = !!req.auth;
+  // Sessão sem usuário (usuário removido/inativado) também vai para o login.
+  const isLoggedIn = !!req.auth?.user;
   const isOnDashboard = req.nextUrl.pathname.startsWith("/dashboard");
 
   if (isOnDashboard && !isLoggedIn) {
