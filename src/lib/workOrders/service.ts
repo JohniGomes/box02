@@ -1475,7 +1475,7 @@ export async function registerWorkOrderPaymentService(
  * Taxa da maquininha repassada ao cliente e parcelas: só existem em recebimento no CARTÃO. A taxa é um
  * valor à parte (o cliente passa no cartão valor do serviço + taxa); vazio/0 = sem taxa registrada.
  */
-function parseCardFeeFields(
+export function parseCardFeeFields(
   method: string,
   feeRaw: string | number | undefined,
   installmentsRaw: string | number | undefined,

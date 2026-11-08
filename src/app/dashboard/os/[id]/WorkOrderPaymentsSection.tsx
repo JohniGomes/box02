@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { formatBRL, reaisToCents } from "@/lib/money";
 import { useRememberedChoice } from "@/lib/useRemembered";
 import { refundWorkOrderPaymentAction, registerWorkOrderPaymentsAction, setPaymentCardFeeAction } from "../paymentActions";
-import { effectivePercent, feeFromNet, netFromGross, parseFeePercent } from "@/lib/cardFee";
+import { applyCardFeePatch, cardFeeOfRow, effectivePercent, feeFromNet, parseFeePercent } from "@/lib/cardFee";
+import { CardFeeFields } from "@/components/CardFeeFields";
 import { formatDateBR } from "@/lib/dateBr";
 
 const METHOD_LABEL: Record<string, string> = {
@@ -57,59 +58,6 @@ function newPayRow(key: string, method: string, amount: string): PayRow {
 }
 
 const toReais = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
-
-/** Taxa repassada (centavos) desta linha: pelo valor passado no cartão, ou pela % sobre o valor do serviço. */
-function cardFeeOfRow(row: PayRow): number {
-  if (row.method !== "CARTAO") return 0;
-  const net = reaisToCents(row.amount || "0");
-  const gross = reaisToCents(row.gross || "0");
-  const rate = parseFeePercent(row.rate);
-  if (gross > 0) return Math.max(0, gross - net);
-  if (rate && rate > 0 && net > 0) return feeFromNet(net, rate);
-  return 0;
-}
-
-/** Ao mexer na taxa ou no valor passado no cartão: se vierem os dois, o valor do serviço sai deles (bruto × (1 − taxa)). */
-function applyCardFeePatch(row: PayRow, patch: Partial<Pick<PayRow, "rate" | "gross" | "installments">>): PayRow {
-  const next = { ...row, ...patch };
-  const rate = parseFeePercent(next.rate);
-  const gross = reaisToCents(next.gross || "0");
-  if (("rate" in patch || "gross" in patch) && rate && rate > 0 && gross > 0) {
-    next.amount = toReais(netFromGross(gross, rate));
-  }
-  return next;
-}
-
-/** Campos da taxa da maquininha para um recebimento no cartão (opcionais). */
-function CardFeeFields({ row, onChange }: { row: PayRow; onChange: (patch: Partial<Pick<PayRow, "rate" | "gross" | "installments">>) => void }) {
-  const net = reaisToCents(row.amount || "0");
-  const fee = cardFeeOfRow(row);
-  const small = "h-10 min-w-0 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent";
-  return (
-    <details className="rounded-xl border border-border bg-surface px-3 py-2" open={Boolean(row.rate || row.gross || row.installments)}>
-      <summary className="cursor-pointer text-xs font-medium">Taxa da maquininha repassada ao cliente (opcional)</summary>
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
-          Taxa (%)
-          <input value={row.rate} onChange={(e) => onChange({ rate: e.target.value })} inputMode="decimal" placeholder="6,69" className={small} />
-        </label>
-        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
-          Passou no cartão (R$)
-          <input value={row.gross} onChange={(e) => onChange({ gross: e.target.value })} inputMode="decimal" placeholder="1.250,68" className={small} />
-        </label>
-        <label className="flex flex-col gap-0.5 text-[11px] text-muted">
-          Parcelas
-          <input value={row.installments} onChange={(e) => onChange({ installments: e.target.value })} inputMode="numeric" placeholder="4" className={small} />
-        </label>
-      </div>
-      <p className="mt-2 text-[11px] text-muted">
-        {fee > 0
-          ? `Taxa ${formatBRL(fee)} · o cliente passa ${formatBRL(net + fee)} no cartão · ${formatBRL(net)} é o valor do serviço (abate o saldo da OS).`
-          : "Preencha a taxa % (ela incide sobre o valor passado no cartão) ou o valor passado no cartão. O campo de valor acima é sempre o valor do serviço."}
-      </p>
-    </details>
-  );
-}
 
 /** Ciclo M */
 export interface WorkOrderPaymentRefundView {
