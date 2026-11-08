@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/authenticate";
+import { isSessionUserValid } from "@/lib/auth/sessionUser";
+import { findUserById } from "@/lib/db/repositories/users";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -41,6 +43,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
+      // Sessão de usuário que não existe mais (ou foi inativado) conta como
+      // "não logado": o sistema manda para o login em vez de gravar pela metade.
+      if (!(await isSessionUserValid(token.id as string | undefined, findUserById))) {
+        return { ...session, user: undefined } as unknown as typeof session;
+      }
       if (session.user) {
         (session.user as { roles?: string[] }).roles =
           (token.roles as string[] | undefined) ?? [];
