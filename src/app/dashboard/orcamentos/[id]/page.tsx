@@ -8,6 +8,7 @@ import {
   getQuoteCancellationImpactService,
   getQuoteCancellationInfoService,
   listQuoteWorkOrdersService,
+  nextQuoteVersionNumber,
 } from "@/lib/quotes/service";
 import { WORK_ORDER_STATUS_LABEL } from "../../os/statusLabels";
 import type { WorkOrderStatus } from "@/lib/db/repositories/workOrders";
@@ -386,6 +387,7 @@ export default async function QuoteDetailPage({
           <NewVersionButton
             quoteId={quote.id}
             currentVersionNumber={version.versionNumber}
+            nextVersionNumber={nextQuoteVersionNumber(version.versionNumber, allVersions)}
             workOrderNumbers={workOrders.map((w) => w.number)}
           />
         ) : null}
