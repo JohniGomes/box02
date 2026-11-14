@@ -383,6 +383,14 @@ export async function sendQuoteVersionService(
   return updated as QuoteVersionRecord;
 }
 
+/** Próximo número de versão: maior número já usado (mesmo cancelado) + 1. */
+export function nextQuoteVersionNumber(
+  currentVersionNumber: number,
+  versions: ReadonlyArray<{ versionNumber: number }>,
+): number {
+  return Math.max(currentVersionNumber, ...versions.map((v) => v.versionNumber)) + 1;
+}
+
 export async function createNewQuoteVersionService(
   actorUserId: string,
   quoteId: string,
@@ -399,7 +407,10 @@ export async function createNewQuoteVersionService(
   }
 
   const previousItems = await listQuoteItemsByVersion(currentVersion.id);
-  const newVersionNumber = quote.currentVersionNumber + 1;
+  // O número novo olha TODAS as versões (inclusive as descartadas/canceladas): depois de
+  // descartar a versão 2, a próxima é a 3, senão bate na versão 2 que ficou no histórico.
+  const existingVersions = await listQuoteVersionsByQuote(quoteId);
+  const newVersionNumber = nextQuoteVersionNumber(quote.currentVersionNumber, existingVersions);
   const validUntil = await resolveValidUntil();
 
   const result = await withTransaction(async (client) => {

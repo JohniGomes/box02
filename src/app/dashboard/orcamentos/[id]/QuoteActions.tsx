@@ -73,10 +73,13 @@ export function SendQuoteButton({ quoteId }: { quoteId: string }) {
 export function NewVersionButton({
   quoteId,
   currentVersionNumber,
+  nextVersionNumber,
   workOrderNumbers,
 }: {
   quoteId: string;
   currentVersionNumber: number;
+  /** Maior número de versão já usado + 1 (conta também as descartadas). */
+  nextVersionNumber?: number;
   workOrderNumbers: string[];
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -95,7 +98,7 @@ export function NewVersionButton({
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
       <p className="text-sm">
-        Criar a versão {currentVersionNumber + 1}? Ela começa como <strong>rascunho</strong>, com os mesmos itens, e
+        Criar a versão {nextVersionNumber ?? currentVersionNumber + 1}? Ela começa como <strong>rascunho</strong>, com os mesmos itens, e
         passa a ser a versão em uso. A versão {currentVersionNumber} fica guardada como está.
       </p>
       {workOrderNumbers.length > 0 ? (
