@@ -33,6 +33,7 @@ import { RegisterApprovalForm } from "./RegisterApprovalForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { PrintPanelButton } from "@/components/PrintPanelButton";
 import { formatDateBR, formatDateTimeBR } from "@/lib/dateBr";
+import { groupItemsForDisplay } from "@/lib/quotes/blocks";
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   SERVICO: "Serviço",
@@ -194,19 +195,49 @@ export default async function QuoteDetailPage({
       <section className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="mb-3 text-sm font-semibold">Itens</h2>
         <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <li key={item.id} className="rounded-xl border border-border bg-background p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[item.type]}</span>
-                <span data-print-section="itemPrices" className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
-              </div>
-              <p className="text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
-              {item.notes ? <p data-print-section="itemNotes" className="whitespace-pre-line text-xs text-muted">{item.notes}</p> : null}
-              <p data-print-section="itemPrices" className="text-xs text-muted">
-                {Number(item.quantity)} × {formatBRL(item.unitPriceCents)}
-              </p>
-            </li>
-          ))}
+          {groupItemsForDisplay(items).map((entry) =>
+            entry.kind === "single" ? (
+              <li key={entry.item.id} className="rounded-xl border border-border bg-background p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[entry.item.type]}</span>
+                  <span data-print-section="itemPrices" className="text-sm font-semibold">{formatBRL(entry.item.totalCents)}</span>
+                </div>
+                <p className="text-sm">{entry.item.description}{entry.item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
+                {entry.item.notes ? <p data-print-section="itemNotes" className="whitespace-pre-line text-xs text-muted">{entry.item.notes}</p> : null}
+                <p data-print-section="itemPrices" className="text-xs text-muted">
+                  {Number(entry.item.quantity)} × {formatBRL(entry.item.unitPriceCents)}
+                </p>
+              </li>
+            ) : (
+              <li key={entry.key} className="rounded-xl border border-border bg-background p-3 break-inside-avoid">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted">{ITEM_TYPE_LABEL[entry.head.type]}</span>
+                  <span data-print-section="itemPrices" className="text-sm font-semibold">{formatBRL(entry.totalCents)}</span>
+                </div>
+                <p className="text-sm font-medium">{entry.head.description}</p>
+                {entry.head.notes ? <p data-print-section="itemNotes" className="whitespace-pre-line text-xs text-muted">{entry.head.notes}</p> : null}
+                {entry.head.totalCents > 0 ? (
+                  <p data-print-section="itemPrices" className="text-xs text-muted">
+                    {ITEM_TYPE_LABEL[entry.head.type]}: {Number(entry.head.quantity)} × {formatBRL(entry.head.unitPriceCents)}
+                  </p>
+                ) : null}
+                <ul className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
+                  {entry.children.map((child) => (
+                    <li key={child.id} className="flex items-start justify-between gap-2 text-xs">
+                      <span>
+                        <span className="text-muted">{ITEM_TYPE_LABEL[child.type]}: </span>
+                        {child.description}
+                        {child.customerSupplied ? <span className="ml-1 text-muted">(peça do cliente — sem cobrança)</span> : null}
+                        <span data-print-section="itemPrices" className="text-muted"> · {Number(child.quantity)} × {formatBRL(child.unitPriceCents)}</span>
+                        {child.notes ? <span data-print-section="itemNotes" className="block whitespace-pre-line text-muted">{child.notes}</span> : null}
+                      </span>
+                      <span data-print-section="itemPrices" className="shrink-0 font-medium">{formatBRL(child.totalCents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ),
+          )}
         </ul>
 
         <div className="mt-4 rounded-xl bg-background p-4 text-sm">
