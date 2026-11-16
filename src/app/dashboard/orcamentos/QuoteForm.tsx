@@ -605,7 +605,7 @@ export function QuoteItemsEditor({
                   type: "PECA",
                   partId: part.id,
                   serviceId: undefined,
-                  description: part.label,
+                  description: part.customerLabel,
                   unitPriceReais: part.suggestedPriceReais ?? "",
                   slot: false,
                 })
@@ -617,7 +617,7 @@ export function QuoteItemsEditor({
                   type: "PECA",
                   partId: part.id,
                   serviceId: undefined,
-                  description: part.label,
+                  description: part.customerLabel,
                   quantity: String(quantity),
                   unitPriceReais: part.suggestedPriceReais ?? "",
                 })

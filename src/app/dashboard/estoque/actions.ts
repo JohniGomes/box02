@@ -1,5 +1,6 @@
 "use server";
 
+import { customerFacingPartName } from "@/lib/parts/naming";
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
@@ -96,6 +97,8 @@ export async function setPartStatusAction(partId: string, status: PartStatus): P
 export interface PartPickerOption {
   id: string;
   label: string;
+  /** Nome para o cliente (orçamento): o nome curto/genérico da peça, ou o próprio nome se não houver. */
+  customerLabel: string;
   unit: string;
   currentStock: number;
   suggestedPriceReais: string | null;
@@ -107,6 +110,7 @@ async function toPickerOption(p: PartWithStock): Promise<PartPickerOption> {
   return {
     id: p.id,
     label: p.sku ? `${p.name} (${p.sku})` : p.name,
+    customerLabel: customerFacingPartName(p),
     unit: p.unit,
     currentStock: p.currentStock,
     suggestedPriceReais: suggested ? centsToReais(suggested.cents) : null,

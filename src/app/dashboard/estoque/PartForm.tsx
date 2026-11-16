@@ -21,7 +21,7 @@ export function PartForm({
 }) {
   const router = useRouter();
   const [values, setValues] = useState<PartFormValues>(
-    initialValues ?? { name: "", sku: "", unit: "un", costReais: "", minStock: "", markupPercent: "", notes: "", isConsumable: false },
+    initialValues ?? { name: "", sku: "", unit: "un", costReais: "", minStock: "", markupPercent: "", notes: "", isConsumable: false, customerName: "" },
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -100,6 +100,7 @@ export function PartForm({
       markupPercent: values.markupPercent,
       notes: values.notes,
       isConsumable: values.isConsumable,
+      customerName: values.customerName,
     };
 
     let result: InventoryActionResult;
@@ -131,6 +132,21 @@ export function PartForm({
           className={inputClass}
           placeholder="Ex.: Filtro de óleo"
         />
+      </Field>
+
+      <Field label="Nome para o cliente (opcional)" htmlFor="customerName" error={fieldErrors.customerName}>
+        <input
+          id="customerName"
+          value={values.customerName}
+          onChange={(e) => update("customerName", e.target.value)}
+          className={inputClass}
+          placeholder='Ex.: "Velas de ignição" ou "Filtro de ar"'
+        />
+        <p className="mt-1 text-xs text-muted">
+          É o nome que aparece no orçamento. Deixe a marca só onde ela importa para o cliente (óleo, fluido, bateria,
+          pneu, pastilha). Em branco = o orçamento usa o nome acima. O nome acima (código, aplicação) fica só para a
+          equipe.
+        </p>
       </Field>
 
       <div className="grid grid-cols-2 gap-3">

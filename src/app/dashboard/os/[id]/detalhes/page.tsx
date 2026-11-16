@@ -17,6 +17,7 @@ import { listExecutorOptionsService } from "@/lib/executors/service";
 import { findQuoteVersionById } from "@/lib/db/repositories/quoteVersions";
 import { findQuoteById } from "@/lib/db/repositories/quotes";
 import { formatBRL } from "@/lib/money";
+import { findPartById } from "@/lib/db/repositories/parts";
 import { formatPlate } from "@/lib/validation/plate";
 import { formatDocument } from "@/lib/validation/document";
 import { WORK_ORDER_STATUS_CLASS, WORK_ORDER_STATUS_LABEL, workOrderStatusToActiveMethodStage, isAtVerificamosBarrier } from "../../statusLabels";
@@ -105,6 +106,14 @@ export default async function WorkOrderDetailsPage({
   const quoteSync = isOpenForCancel && workOrder.sourceQuoteVersionId ? await getQuoteSyncPreviewService(workOrder.id) : null;
   const canManageAdditionals = isOpenForCancel;
   const baseItems = items.filter((i) => i.origin !== "ADICIONAL_DURANTE_EXECUCAO");
+  // Nome técnico das peças (código, aplicação): o orçamento mostra o nome curto para o cliente,
+  // mas a equipe precisa ver qual peça do estoque foi usada.
+  const technicalPartIds = [...new Set(baseItems.filter((i) => i.type === "PECA" && i.partId).map((i) => i.partId as string))];
+  const technicalPartNames = new Map<string, string>(
+    (await Promise.all(technicalPartIds.map((id) => findPartById(id))))
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .map((p) => [p.id, p.name] as [string, string]),
+  );
   const additionalItems = items.filter((i) => i.origin === "ADICIONAL_DURANTE_EXECUCAO");
 
   function toChecklistView(
@@ -277,6 +286,9 @@ export default async function WorkOrderDetailsPage({
                   <span className="text-sm font-semibold">{formatBRL(item.totalCents)}</span>
                 </div>
                 <p className="text-sm">{item.description}{item.customerSupplied ? <span className="ml-1 text-xs text-muted">(peça do cliente — sem cobrança)</span> : null}</p>
+                {item.partId && technicalPartNames.get(item.partId) && technicalPartNames.get(item.partId) !== item.description ? (
+                  <p className="text-xs text-muted">Peça no estoque: {technicalPartNames.get(item.partId)}</p>
+                ) : null}
                 <div className="mt-1 flex items-center justify-between">
                   <p className="text-xs text-muted">
                     {Number(item.quantity)} × {formatBRL(item.unitPriceCents)} ·{" "}

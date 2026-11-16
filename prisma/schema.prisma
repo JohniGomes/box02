@@ -1242,6 +1242,10 @@ model Part {
   /// Insumo (uso interno): fica no estoque, mas não é oferecido nos orçamentos.
   isConsumable Boolean @default(false)
 
+  /// Nome curto e genérico que aparece no orçamento (ex.: "Velas de ignição"). Nulo = usa `name`.
+  /// O nome técnico (código, aplicação) fica em `name`, só para a equipe.
+  customerName String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

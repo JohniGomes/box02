@@ -10,6 +10,7 @@ export interface PartFormValues {
   markupPercent: string;
   notes: string;
   isConsumable: boolean;
+  customerName: string;
 }
 
 /** Transformação pura — vive fora do "use client" de propósito, pra
@@ -25,5 +26,6 @@ export function partRecordToFormValues(part: PartRecord): PartFormValues {
     markupPercent: part.markupPercent !== null ? String(part.markupPercent) : "",
     notes: part.notes ?? "",
     isConsumable: part.isConsumable,
+    customerName: part.customerName ?? "",
   };
 }
