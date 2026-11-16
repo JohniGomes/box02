@@ -335,7 +335,10 @@ function BlockSection({
                         {item.customerSupplied ? " (peça do cliente — sem cobrança)" : ""}
                         {item.notes ? <span className="block whitespace-pre-line">{item.notes}</span> : null}
                       </span>
-                      <span className="shrink-0">{formatBRL(item.totalCents)}</span>
+                      <span className="shrink-0">
+                        {/* Linha de R$ 0 dentro de um bloco com valor (ex.: mão de obra da troca de óleo): o cliente vê "incluso", não "R$ 0,00". */}
+                        {item.totalCents === 0 && block.totalCents > 0 && !item.customerSupplied ? "incluso" : formatBRL(item.totalCents)}
+                      </span>
                     </li>
                   ))}
                 </ul>
