@@ -36,6 +36,8 @@ export const createPartSchema = z.object({
   markupPercent: optionalPercent,
   notes: optionalTrimmed,
   isConsumable: z.boolean().optional(),
+  /** Nome curto e genérico para o cliente (ex.: "Velas de ignição"). */
+  customerName: optionalTrimmed,
 });
 
 export const updatePartSchema = createPartSchema;

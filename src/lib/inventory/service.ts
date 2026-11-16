@@ -53,6 +53,7 @@ export async function createPartService(rawInput: unknown): Promise<PartRecord> 
     markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
     isConsumable: input.isConsumable,
+    customerName: input.customerName ?? null,
   });
 }
 
@@ -145,6 +146,7 @@ export async function updatePartService(partId: string, rawInput: unknown): Prom
     markupPercent: input.markupPercent ?? null,
     notes: input.notes ?? null,
     isConsumable: input.isConsumable,
+    customerName: input.customerName ?? null,
   });
   if (!updated) throw new PartNotFoundError(partId);
   return updated;
